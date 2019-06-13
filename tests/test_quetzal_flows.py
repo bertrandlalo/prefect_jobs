@@ -43,7 +43,7 @@ def test_create_workspace():
                                       password='secret',
                                       insecure=True,
                                       exist_ok=True)
-    with Flow('test_query_success flow') as flow:
+    with Flow('test_create_workspace flow') as flow:
         create_task(temporary=True)
 
     state = flow.run()
@@ -56,7 +56,7 @@ def test_retrieve_workspace():
                                       password='secret',
                                       insecure=True,
                                       exist_ok=True)
-    with Flow('test_query_success flow') as flow:
+    with Flow('test_retrieve_workspace flow') as flow:
         id1 = create_task(name='iguazu-unit-tests', temporary=True)
         id2 = create_task(name='iguazu-unit-tests', temporary=True)
 
@@ -73,7 +73,7 @@ def test_create_duplicate_workspace():
                                       password='secret',
                                       insecure=True,
                                       exist_ok=False)
-    with Flow('test_query_success flow') as flow:
+    with Flow('test_create_duplicate_workspace flow') as flow:
         id1 = create_task(name='iguazu-unit-tests', temporary=True)
         id2 = create_task(name='iguazu-unit-tests', temporary=True)
 
