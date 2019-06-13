@@ -1,7 +1,7 @@
 numpy
 scipy
 pandas
-pytables
+tables
 tqdm
 pip
 rpy2
