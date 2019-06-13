@@ -9,3 +9,4 @@ tzlocal
 simplegeneric
 prefect
 graphviz
+git+https://github.com/quetz-al/quetzal-client.git@v0.2.0#egg=quetzal-client

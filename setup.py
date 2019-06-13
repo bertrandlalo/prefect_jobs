@@ -18,6 +18,7 @@ dependencies = [
     "prefect",
     "graphviz",
     "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils#egg=dsu",
+    "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@v0.2.0#egg=quetzal-client"
  ]
 build_dependencies = dependencies + ['pytest-runner']
 test_dependencies = ['pytest']
