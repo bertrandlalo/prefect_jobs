@@ -1,0 +1,23 @@
+name: iguazu-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  # Python dependencies
+  - python>=3.7
+  - jupyter
+  - matplotlib
+  - numpy
+  - scipy
+  - pandas
+  - pytables
+  - tqdm
+  - pip
+  - rpy2
+  - tzlocal
+  - simplegeneric
+  - prefect
+  - pip:
+    - graphviz
+#    - git+https://github.com/OpenMindInnovation/datascience_utils
+

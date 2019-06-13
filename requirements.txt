@@ -1,0 +1,11 @@
+numpy
+scipy
+pandas
+pytables
+tqdm
+pip
+rpy2
+tzlocal
+simplegeneric
+prefect
+graphviz
