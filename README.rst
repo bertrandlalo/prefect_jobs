@@ -16,9 +16,9 @@ Install this package by adding the following line to your
     dependencies:
     - pip
     - pip:
-        - git+ssh://git@github.com/OpenMindInnovation/iguazu.git@vX.Y.Z#egg=dsu
+        - git+ssh://git@github.com/OpenMindInnovation/iguazu.git@vX.Y.Z#egg=iguazu
         # or
-        - git+https://github.com/OpenMindInnovation/iguazu.git@vX.Y.Z#egg=dsu
+        - git+https://github.com/OpenMindInnovation/iguazu.git@vX.Y.Z#egg=iguazu
 
 where ``vX.Y.Z`` is the exact version number that you need.
 
