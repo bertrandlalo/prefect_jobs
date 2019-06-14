@@ -1,0 +1,150 @@
+import pandas as pd
+import numpy as np
+from datascience_utils.signal_quality import label_bad_from_amplitude
+from datascience_utils.filters import scipy_filter_signal, scipy_scale_signal
+from datascience_utils.cvxEDA import apply_cvxEDA
+from datascience_utils.peaks import OfflinePeak
+from sklearn.preprocessing import RobustScaler
+
+
+def galvanic_clean(data, events, column_name, warmup_duration, glitch_params, interpolation_params, lowpass_params,
+                        scaling_params, corrupted_maxratio):
+    """
+     Preprocess the galvanic data and detect bad quality samples.
+     It should be noted that some steps here are specific to the device we use, ie. Nexus from MindMedia.
+     Eg. When the amplifier saturates (ie. Voltage above 2V, ie. resistance too low), Nexus will return 0.0, but other
+     devices might have different behaviors.
+        The pipeline will:
+        - detect bad samples based on 'glitch_params"
+        - remove the bad samples and evaluate the corruption ratio. If too high, then raise an error.
+        - interpolate the missing signal using 'interpolation' method
+        - inverse the signal to access galvanic conductance (G=1/R)
+        - lowpass the resulting signal
+        - scale the signal on the whole session using 'scaling' method.
+
+    Parameters
+    ----------
+    data: DataFrame containing the raw GSR in channel given by column_name.
+    events: DataFrame with 2 columns: [label, data], containing string labels and serialized meta giving the context of the labels.
+    column_name: column where the data of interest are located.
+    warmup_duration: duration (in s) to select before and after the vr session (to avoid side effects in the future
+    processing steps, ie. that we can then set to bad ).
+    glitch_params: dict of keywords arguments to detect bad samples.
+    interpolation_params: dict of keywords arguments to interpolate the missing (bad) samples.
+    lowpass_params:  dict of keywords arguments to lowpass the data.
+    scaling_params: dict of keywords arguments to scale the data.
+    corrupted_maxratio: maximum acceptable ratio of corrupted (bad) samples.
+
+    Returns
+    -------
+    data with columns: ['F', 'F_clean', 'F_clean_inversed', 'F_clean_inversed_lowpassed',
+                        'F_clean_inversed_lowpassed_zscored', 'bad']
+    """
+
+    begins = events.index[0] - np.timedelta64(1, 's') * warmup_duration  # begin 30 seconds before the beginning of the session
+    ends = events.index[-1] + np.timedelta64(1, 's') * warmup_duration  # end 30 seconds after the beginning of the session
+
+
+    # troncate dataframe on session times
+    data = data[begins:ends]
+    data = data.loc[:, [column_name]]
+    # add a column "bad" with rejection boolean on amplitude criteria
+    label_bad_from_amplitude(data, column_name=column_name, output_column="bad", inplace=True,
+                             **glitch_params)
+
+    # label 0.0 values as bad
+    data.loc[data.loc[:, column_name] == 0.0, "bad"] = True
+
+    # make a copy of the signal with suffix "_clean", mask bad samples
+    data_clean = data[[column_name]].copy().add_suffix('_clean')
+    data_clean.mask(data.bad, inplace=True)
+
+    # estimate the corrupted ratio
+    # if too many samples were dropped, raise an error
+    corrupted_ratio = data.bad.mean()
+    if corrupted_ratio > corrupted_maxratio:
+        raise Exception("AO saturation of {corrupted_ratio} exceeds {maxratio}.".format(corrupted_ratio=corrupted_ratio, maxratio=corrupted_maxratio))
+
+    # interpolate the signal
+    data_clean.interpolate(**interpolation_params, inplace=True)
+
+    # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
+    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed")
+
+    # lowpass filter signal
+    scipy_filter_signal(data_clean_inversed, columns=[column_name + "_clean_inversed"], btype='lowpass',
+                        **lowpass_params, suffix="lowpassed", inplace=True)
+
+    # scale signal on the all session
+    scipy_scale_signal(data_clean_inversed, columns=[column_name + "_clean_inversed_lowpassed"], suffix="zscored",
+                       inplace=True, **scaling_params)
+
+    # return preprocessed data
+    data = pd.concat([data, data_clean, data_clean_inversed], axis=1)
+    return data
+
+def galvanic_cvx(data, column_name, warmup_duration, glitch_params, cvxeda_params=None):
+    """
+
+    Parameters
+    ----------
+    data: DataFrame containing the preprocessed GSR in channel given by column_name.
+    column_name: column where the data of interest are located.
+    warmup_duration: duration at beginning and end of the data to label as 'bad'==True.
+    glitch_params: dict of keywords arguments to detect bad samples.
+    cvxeda_params: dict of keywords arguments to apply cvxEDA algorithm.
+
+    Returns
+    -------
+    data with columns: ['F_clean_inversed_lowpassed_zscored_SCR',
+                        'F_clean_inversed_lowpassed_zscored°SCL', 'bad']
+    """
+    cvxeda_params = cvxeda_params or {}
+    # extract SCR and SCL component using deconvolution toolbox cvxEDA
+    data = apply_cvxEDA(data, column_name=column_name, kwargs=cvxeda_params)
+
+    # add a column "bad" with rejection boolean on amplitude criteria
+    label_bad_from_amplitude(data, column_name=column_name + "_SCR",
+                             output_column="bad", inplace=True, **glitch_params)
+    # set warmup period to "bad"
+    warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
+    data.loc[:data.index[0] + warm_up_timedelta, "bad"] = True
+    data.loc[data.index[-1] - warm_up_timedelta:, "bad"] = True
+    return data
+
+
+def galvanic_scrpeaks(data, column_name, warmup_duration, peaks_params, glitch_params):
+    """
+
+    Parameters
+    ----------
+    data: DataFrame containing the deconvoluted GSR in channel given by column_name.
+    column_name: column where the data of interest are located.
+    warmup_duration: duration at beginning and end of the data to label as 'bad'==True.
+    peaks_params: dict of keywords arguments to detect peaks and define their characteristics.
+    glitch_params: dict of keywords arguments to detect false detected peaks.
+
+    Returns
+    -------
+     data with columns: ['SCR', 'SCR_peaks_detected', 'SCR_peaks_increase-duration',
+                                'SCR_peaks_increase-amplitude',
+                                'SCR_peaks_recovery-duration', 'bad']
+    """
+    warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
+    data = data.loc[:, [column_name]]
+    data = data[data.index[0]+warm_up_timedelta:data.index[-1]-warm_up_timedelta]
+    data.columns = ["SCR"]  # rename the column for simplicity purpose
+    scaler = RobustScaler(with_centering=True, quantile_range=(5, 95.0))
+    peakdetector = OfflinePeak(data, column_name="SCR", scaler=scaler, **peaks_params)
+    peakdetector.simulation()
+
+    data = peakdetector._data.loc[:,
+                       ['SCR', 'peaks', 'peaks_left_locals', 'peaks_left_prominences', 'peaks_width_heights']].loc[
+                       peakdetector.peaks[0], :]
+    data.columns = ['SCR', 'SCR_peaks_detected', 'SCR_peaks_increase-duration',
+                                'SCR_peaks_increase-amplitude',
+                                'SCR_peaks_recovery-duration']
+
+    label_bad_from_amplitude(data, column_name="SCR_peaks_increase-duration", output_column="bad",
+                             inplace=True, **glitch_params)
+    return data
