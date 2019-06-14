@@ -1,11 +1,14 @@
 import datetime
+import functools
 import random
 import string
-from typing import Any, Mapping, List, Optional
+from typing import Dict, List, Optional
 
-from prefect import Task
+from prefect import context, Task
 from prefect.engine import signals
 from quetzal.client import QuetzalAPIException, helpers
+
+from iguazu.helpers.files import QuetzalFile
 
 
 class QuetzalBaseTask(Task):
@@ -41,9 +44,9 @@ class QuetzalBaseTask(Task):
     """
 
     def __init__(self,
-                 url: str = None,
-                 username: str = None,
-                 password: str = None,
+                 url: Optional[str] = None,
+                 username: Optional[str] = None,
+                 password: Optional[str] = None,
                  insecure: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
@@ -51,13 +54,15 @@ class QuetzalBaseTask(Task):
 
     @property
     def client(self):
+        if 'quetzal_client' in context:
+            return context.quetzal_client
         return self._client
 
     def run(self) -> None:
         raise RuntimeError('QuetzalBaseTask is an abstract Task')
 
 
-class QueryTask(QuetzalBaseTask):
+class Query(QuetzalBaseTask):
     """ Perform a query on Quetzal and return all its results
 
     This task uses the :py:ref:`quetzal.client.helpers.query` function to
@@ -68,7 +73,10 @@ class QueryTask(QuetzalBaseTask):
 
     """
 
-    def run(self, query: str, workspace_id: int = None) -> List[Mapping[str, Any]]:
+    def run(self,
+            query: str,
+            workspace_id: Optional[int] = None,
+            id_column: Optional[str] = None) -> List[QuetzalFile]:
         """ Perform the Quetzal SQL query
 
         Parameters
@@ -78,6 +86,8 @@ class QueryTask(QuetzalBaseTask):
         workspace_id: int
             Workspace where the query should be executed. If not set, it uses
             the global workspace.
+        id_column: str
+            Name of the column on the query that represents a Quetzal file id.
 
         Returns
         -------
@@ -88,15 +98,21 @@ class QueryTask(QuetzalBaseTask):
         # TODO: manage username, password et al from context?
         self.logger.debug('Querying Quetzal with SQL=%s', query)
         try:
-            results, total = helpers.query(self.client, workspace_id, query)
+            rows, total = helpers.query(self.client, workspace_id, query)
         except QuetzalAPIException as ex:
             self.logger.warning('Quetzal query task failed: %s', ex.title)
             raise
         self.logger.debug('Query gave %d results', total)
+        # Convert to QuetzalFile
+        id_column = id_column or 'id'
+        results = [
+            QuetzalFile(metadata=meta, workspace_id=workspace_id, id_key=id_column)
+            for meta in rows
+        ]
         return results
 
 
-class CreateWorkspaceTask(QuetzalBaseTask):
+class CreateWorkspace(QuetzalBaseTask):
     """ Create or retrieve a Quetzal workspace
 
     Attributes
@@ -113,11 +129,11 @@ class CreateWorkspaceTask(QuetzalBaseTask):
         self.exist_ok = exist_ok  # TODO: decide: should this be here or a run parameter?
 
     def run(self,
-            name: str = None,
-            description: str = None,
-            families: Mapping[str, Optional[int]] = None,
+            name: Optional[str] = None,
+            description: Optional[str] = None,
+            families: Optional[Dict[str, Optional[int]]] = None,
             temporary: bool = False) -> int:
-        """
+        """ Create a Quetzal workspace, or retrieve it if it already exists
 
         Parameters
         ----------
@@ -204,3 +220,33 @@ class CreateWorkspaceTask(QuetzalBaseTask):
             if version is not None and version > families[name]:
                 raise signals.FAIL('Workspace does not meet family version '
                                    'requirement')
+
+
+class _WorkspaceOperation(QuetzalBaseTask):
+
+    _known_operations = dict(
+        commit=helpers.workspace.commit,
+        scan=helpers.workspace.scan,
+        delete=helpers.workspace.delete,
+    )
+
+    def __init__(self, operation: str, **kwargs):
+        if operation not in _WorkspaceOperation._known_operations:
+            raise ValueError(f'Invalid workspace operation "{operation}"')
+        super().__init__(**kwargs)
+        self._operation = operation
+
+    def run(self, workspace_id: str) -> int:
+        function = _WorkspaceOperation._known_operations[self._operation]
+        details = function(self.client, wid=workspace_id, wait=True)
+        return details.id
+
+
+CommitWorkspace = functools.partial(_WorkspaceOperation, 'commit')
+CommitWorkspace.__doc__ = """Commit the metadata and new files on a Quetzal workspace"""
+
+ScanWorkspace = functools.partial(_WorkspaceOperation, 'scan')
+ScanWorkspace.__doc__ = """Update the metadata view of a Quetzal workspace"""
+
+DeleteWorkspace = functools.partial(_WorkspaceOperation, 'delete')
+DeleteWorkspace.__doc__ = """Delete a workspace"""
