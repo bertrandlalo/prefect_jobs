@@ -51,7 +51,7 @@ def etl_galvanic_clean(io_filenames,  tranform_params, force=False,
         data.to_hdf(store, output_path)
         store.get_node(output_path)._v_attrs['meta'] = meta
     if data.empty:
-        raise signals.FAIL(message="cleaning failed") #TODO: I'm not sure how to handle failures
+        raise signals.SKIP(message="cleaning failed") #TODO: I'm not sure how to handle failures
     return str(output_filename)
 
 
@@ -97,7 +97,7 @@ def etl_galvanic_cvx(io_filenames,  tranform_params, force=False, input_paths = 
         data.to_hdf(store, output_path)
         store.get_node(output_path)._v_attrs['meta'] = meta
     if data.empty:
-        raise signals.FAIL(message=str("cvx failed")) #TODO: I'm not sure how to handle failures
+        raise signals.SKIP(message=str("cvx failed")) #TODO: I'm not sure how to handle failures
     return str(output_filename)
 
 
@@ -147,5 +147,5 @@ def etl_galvanic_scrpeaks(io_filenames,  tranform_params, force=False,
         data.to_hdf(store, output_path)
         store.get_node(output_path)._v_attrs['meta'] = meta
     if data.empty:
-        raise signals.FAIL(message="scrpeaks failed") #TODO: I'm not sure how to handle failures
+        raise signals.SKIP(message="scrpeaks failed") #TODO: I'm not sure how to handle failures
     return str(output_filename)
