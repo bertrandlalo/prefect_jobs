@@ -16,6 +16,7 @@ def auto_download(parameter_name):
     def decorator(func):
         # Try to guess if func is a member function or a normal function and
         # also verify parameter_name is in the signature
+        func = getattr(func, '__wrapped__', func)
         signature = inspect.getfullargspec(func)
         if parameter_name not in signature.args and parameter_name not in signature.kwonlyargs:
             raise ValueError(f'Parameter "{parameter_name}" not found in signature')
