@@ -2,13 +2,16 @@ import datetime
 import functools
 import random
 import string
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
 from quetzal.client import QuetzalAPIException, helpers
 
 from iguazu.helpers.files import QuetzalFile
+
+
+ResultSetType = Dict[str, Dict[str, Any]]
 
 
 class QuetzalBaseTask(Task):
@@ -50,16 +53,30 @@ class QuetzalBaseTask(Task):
                  insecure: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
-        self._client = helpers.get_client(url, username, password, insecure)
+        self._client_args = dict(
+            url=url, username=username, password=password, insecure=insecure,
+        )
+        self._client = None
 
     @property
     def client(self):
-        if 'quetzal_client' in context:
-            return context.quetzal_client
+        if 'quetzal_client' in context:  #TODO: change order context < task
+            return helpers.get_client(**context.quetzal_client)
+        elif self._client is None:
+            self._client = helpers.get_client(**self._client_args)
         return self._client
 
     def run(self) -> None:
         raise RuntimeError('QuetzalBaseTask is an abstract Task')
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_client']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._client = None
 
 
 class Query(QuetzalBaseTask):
@@ -76,7 +93,7 @@ class Query(QuetzalBaseTask):
     def run(self,
             query: str,
             workspace_id: Optional[int] = None,
-            id_column: Optional[str] = None) -> List[QuetzalFile]:
+            id_column: Optional[str] = None) -> List[ResultSetType]:
         """ Perform the Quetzal SQL query
 
         Parameters
@@ -95,21 +112,45 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
+        print(list(context))
         # TODO: manage username, password et al from context?
-        self.logger.debug('Querying Quetzal with SQL=%s', query)
+        self.logger.debug('Querying Quetzal at %s with SQL=%s',
+                          self.client.configuration.host,
+                          query)
         try:
             rows, total = helpers.query(self.client, workspace_id, query)
         except QuetzalAPIException as ex:
             self.logger.warning('Quetzal query task failed: %s', ex.title)
             raise
         self.logger.debug('Query gave %d results', total)
-        # Convert to QuetzalFile
-        id_column = id_column or 'id'
-        results = [
-            QuetzalFile(metadata=meta, workspace_id=workspace_id, id_key=id_column)
-            for meta in rows
-        ]
-        return results
+        return rows
+
+
+class ConvertToFileProxy(Task):
+
+    def __init__(self, id_key: str = 'id', **kwargs):
+        super().__init__(**kwargs)
+        self.id_key = id_key
+
+    def run(self,
+            rows: Union[ResultSetType, List[ResultSetType]],
+            workspace_id: Optional[int],  # Note: We do not provide a default, user must set None if they mean it
+            id_key: Optional[str] = None,
+            ) -> Union[QuetzalFile, List[QuetzalFile]]:
+        is_list = isinstance(rows, list)
+        if not is_list:
+            rows = [rows]
+        id_key = id_key or self.id_key
+        file_proxies = []
+        for row in rows:
+            if id_key not in row:
+                raise RuntimeError('Input row does not have expected id key')
+            file = QuetzalFile(file_id=row[id_key], workspace_id=workspace_id)
+            file_proxies.append(file)
+
+        if not is_list:
+            return file_proxies[0]
+        return file_proxies
 
 
 class CreateWorkspace(QuetzalBaseTask):

@@ -1,8 +1,11 @@
 from prefect import Flow, Parameter
+from prefect.utilities.tasks import unmapped
 from quetzal.client.helpers import get_client
 import prefect
 
-from iguazu.tasks.quetzal import CreateWorkspace, DeleteWorkspace, Query, ScanWorkspace
+from iguazu.helpers.files import FileProxy
+from iguazu.tasks.quetzal import CreateWorkspace, ConvertToFileProxy, DeleteWorkspace, Query, ScanWorkspace
+
 
 
 def test_query_success():
@@ -37,6 +40,28 @@ def test_query_auth_fail():
     )
     state = flow.run(parameters=parameters)
     assert state.is_failed()
+
+
+def test_query_convert():
+    query_task = Query(url='https://localhost/api/v1',
+                       username='admin',
+                       password='secret',
+                       insecure=True)
+    convert_task = ConvertToFileProxy('id')
+
+    with Flow('test_query_success flow') as flow:
+        sql = Parameter('input_sql')
+        rows = query_task(query=sql)
+        proxies = convert_task(rows, workspace_id=None)
+        proxies_map = convert_task.map(rows, workspace_id=unmapped(None))
+
+    parameters = dict(
+        input_sql='SELECT * FROM base LIMIT 5',
+    )
+    state = flow.run(parameters=parameters)
+    assert state.is_successful()
+    assert all([isinstance(p, FileProxy) for p in state.result[proxies].result])
+    assert all([isinstance(p, FileProxy) for p in state.result[proxies_map].result])
 
 
 def test_create_workspace():

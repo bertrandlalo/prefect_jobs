@@ -1,8 +1,11 @@
+from typing import List, Union
 import pathlib
 import os
 
 from prefect import task, context
-logger = context.get("logger")
+
+
+from iguazu.helpers.files import LocalFile
 
 
 @task()
@@ -19,13 +22,31 @@ def list_files(basedir, pattern="**/*.hdf5"):
     -------
     files: a list of files matching the specified pattern.
     """
+    logger = context.get("logger")
     path = pathlib.Path(basedir)
     #regex = re.compile(regex)
-   #files = [file for file in path.glob('**/*') if regex.match(file.name)]
+    #files = [file for file in path.glob('**/*') if regex.match(file.name)]
     files = [file for file in path.glob(pattern)]
     #files.sort()
-    print("List {N} files to process.".format(N=str(len(files))))
+    logger.info('list_files on basedir %s found %d files to process',
+                basedir, len(files))
     return files
+
+
+@task
+def convert_to_file_proxy(rows: Union[str, List[str]]) -> Union[LocalFile, List[LocalFile]]:
+    is_list = isinstance(rows, list)
+    if not is_list:
+        rows = [rows]
+    file_proxies = []
+    for row in rows:
+        file = LocalFile(row)
+        file_proxies.append(file)
+
+    if not is_list:
+        return file_proxies[0]
+    return file_proxies
+
 
 @task()
 def io_filenames(filename, output_dir=None):
