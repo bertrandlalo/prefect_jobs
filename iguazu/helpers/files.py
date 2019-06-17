@@ -26,7 +26,7 @@ class FileProxy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def make_child(self, filename=None, path=None, name_suffix=None, temporary=None):
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'FileProxy':
         # TODO: change extension
         pass
 
@@ -52,6 +52,7 @@ class QuetzalFile(FileProxy):
         if self._local_path is None:
             download_dir = get_data_dir()
             logger.debug('Downloading %s -> %s', self._file_id, download_dir)
+            import ipdb; ipdb.set_trace(context=21)
             filename = helpers.file.download(self.client,
                                              self._file_id,
                                              self._wid,
@@ -75,36 +76,45 @@ class QuetzalFile(FileProxy):
             return helpers.get_client(**context.quetzal_client)
         return helpers.get_client(**self._client_kwargs)
 
-    def make_child(self, filename=None, path=None, name_suffix=None, temporary=False):  # TODO: define what gets inherited
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'QuetzalFile':
+        # TODO: define what metadata gets inherited!
         if 'temp_dir' not in context:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
         temp_dir = pathlib.Path(context.temp_dir)
 
         # Create a new file with the help of pathlib
-        name_suffix = name_suffix or ''
+        # First, the path
         base_metadata = self.metadata['base']
         if path is None:
-            original = pathlib.PosixPath(base_metadata['path']) / base_metadata['filename']
+            new = temp_dir / pathlib.PosixPath(base_metadata['path'])
         else:
-            original = pathlib.PosixPath(path) / base_metadata['filename']
+            new = temp_dir / pathlib.Path(path)
+        # Then, the filename
         if filename is None:
-            new = temp_dir / original.with_name(original.stem + name_suffix + ''.join(original.suffixes))
+            new = new / base_metadata['filename']
         else:
-            new = temp_dir /original.with_name(filename)
+            new = new / filename
+        # Adjust the suffix and extension
+        suffix = suffix or ''
+        extension = extension or new.suffix
+        new = new.with_name(new.stem + suffix + extension)
 
+        # Create new child proxy class and propagate metadata
         child = QuetzalFile(file_id=None,
                             workspace_id=self._wid,
                             **self._client_kwargs)
         child._metadata = copy.deepcopy(self._metadata)
         child._metadata.pop('base', None)
-        child._metadata['base']['id'] = None
-        child._metadata['base']['filename'] = new.stem
-        child._metadata['base']['path'] = str(new.relative_to(temp_dir))
-        # TODO: link child to parent
+        child._metadata['base']['filename'] = new.name
+        child._metadata['base']['path'] = str(new.relative_to(temp_dir).parent)
+        # unset all id columns
+        for family in child._metadata:
+            child._metadata[family]['id'] = None
+        # link child to parent
+        child._metadata['links']['parent'] = base_metadata['id']
 
         child._local_path = new
-
         return child
 
     def upload(self):
@@ -118,6 +128,12 @@ class QuetzalFile(FileProxy):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._local_path = None
+
+    def __repr__(self):
+        base_metadata = self.metadata.get('base', {})
+        fid = base_metadata.get('id', 'unindentified')
+        filename = base_metadata.get('filename', 'unnamed')
+        return f'QuetzalFile<id={fid}, filename={filename}>'
 
 
 class LocalFile(FileProxy):
@@ -134,31 +150,43 @@ class LocalFile(FileProxy):
     @property
     def metadata(self) -> Dict[str, Dict[str, Any]]:
         if not self._metadata:
-            self._metadata['base']['filename'] = str(self._file.stem)
+            self._metadata['base']['filename'] = str(self._file.name)
             self._metadata['base']['path'] = str(self._file.parent)
         return self._metadata
 
-    def make_child(self, filename=None, path=None, name_suffix=None, temporary=False):  # TODO: define what gets inherited
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'LocalFile':
         if 'temp_dir' not in context:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
         temp_dir = pathlib.Path(context.temp_dir)
 
         # Create a new file with the help of pathlib
-        name_suffix = name_suffix or ''
+        # First, the path
         base_metadata = self.metadata['base']
         if path is None:
-            original = pathlib.PosixPath(base_metadata['path']) / base_metadata['filename']
+            new = temp_dir / pathlib.PosixPath(base_metadata['path'])
         else:
-            original = pathlib.PosixPath(path) / base_metadata['filename']
+            new = temp_dir / pathlib.Path(path)
+        # Then, the filename
         if filename is None:
-            new = temp_dir / original.with_name(original.stem + name_suffix + ''.join(original.suffixes))
+            new = new / base_metadata['filename']
         else:
-            new = temp_dir /original.with_name(filename)
+            new = new / filename
+        # Adjust the suffix and extension
+        suffix = suffix or ''
+        extension = extension or new.suffix
+        new = new.with_name(new.stem + suffix + extension)
 
+        # Create new child proxy class and propagate metadata
         child = LocalFile(new)
         return child
 
     def upload(self):
         # Upload on local file does nothing
         pass
+
+    def __repr__(self):
+        base_metadata = self.metadata.get('base', {})
+        filename = base_metadata.get('filename', 'unnamed')
+        return f'LocalFile<filename={filename}>'
+
