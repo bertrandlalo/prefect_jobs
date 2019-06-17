@@ -7,6 +7,9 @@ from datascience_utils.peaks import OfflinePeak
 from sklearn.preprocessing import RobustScaler
 
 
+from iguazu.exceptions import FailedPrecondition
+
+
 def galvanic_clean(data, events, column_name, warmup_duration, glitch_params, interpolation_params, lowpass_params,
                         scaling_params, corrupted_maxratio):
     """
@@ -40,6 +43,7 @@ def galvanic_clean(data, events, column_name, warmup_duration, glitch_params, in
     data with columns: ['F', 'F_clean', 'F_clean_inversed', 'F_clean_inversed_lowpassed',
                         'F_clean_inversed_lowpassed_zscored', 'bad']
     """
+    assert events.index.is_monotonic  # TODO: think about raising an exception here
 
     begins = events.index[0] - np.timedelta64(1, 's') * warmup_duration  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + np.timedelta64(1, 's') * warmup_duration  # end 30 seconds after the beginning of the session
@@ -108,6 +112,7 @@ def galvanic_cvx(data, column_name, warmup_duration, glitch_params, cvxeda_param
                              output_column="bad", inplace=True, **glitch_params)
     # set warmup period to "bad"
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
+    # TODO: this does not do what it's supposed to do; it should be a slice!
     data.loc[:data.index[0] + warm_up_timedelta, "bad"] = True
     data.loc[data.index[-1] - warm_up_timedelta:, "bad"] = True
     return data
