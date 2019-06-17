@@ -125,6 +125,7 @@ class CleanSignal(prefect.Task):
             #       only way I think this is possible is by making a new signal
             #       that derives from PrefectStateSignal and that uses a new
             #       custom state class as well.
+            #       Another solution could be to use a custom state handler
             return output
 
         signal_file = signal.file.resolve()

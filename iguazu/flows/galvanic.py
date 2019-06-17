@@ -138,6 +138,5 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
         flow.visualize(flow_state=flow_state)
 
 
-
 if __name__ == '__main__':    # __name__ is the process id, that decides for what the process is supposed to work on
     cli()

@@ -7,9 +7,6 @@ from datascience_utils.peaks import OfflinePeak
 from sklearn.preprocessing import RobustScaler
 
 
-from iguazu.exceptions import FailedPrecondition
-
-
 def galvanic_clean(data, events, column_name, warmup_duration, glitch_params, interpolation_params, lowpass_params,
                         scaling_params, corrupted_maxratio):
     """
