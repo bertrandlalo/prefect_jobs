@@ -7,6 +7,7 @@ pip
 rpy2
 tzlocal
 simplegeneric
+Click
 prefect
 graphviz
 git+https://github.com/quetz-al/quetzal-client.git@d62ff60#egg=quetzal-client

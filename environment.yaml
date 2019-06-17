@@ -16,6 +16,7 @@ dependencies:
   - rpy2
   - tzlocal
   - simplegeneric
+  - Click
   - prefect
   - pip:
     - graphviz

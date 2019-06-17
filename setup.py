@@ -15,6 +15,7 @@ dependencies = [
     "rpy2",
     "tzlocal",
     "simplegeneric",
+    "click",
     "prefect",
     "graphviz",
     "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils#egg=dsu",
