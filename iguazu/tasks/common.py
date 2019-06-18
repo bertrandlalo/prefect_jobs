@@ -34,13 +34,13 @@ def list_files(basedir, pattern="**/*.hdf5"):
 
 
 @task
-def convert_to_file_proxy(rows: Union[str, List[str]]) -> Union[LocalFile, List[LocalFile]]:
+def convert_to_file_proxy(rows: Union[str, List[str]], dir: str) -> Union[LocalFile, List[LocalFile]]:
     is_list = isinstance(rows, list)
     if not is_list:
         rows = [rows]
     file_proxies = []
     for row in rows:
-        file = LocalFile(row)
+        file = LocalFile(row, dir)
         file_proxies.append(file)
 
     if not is_list:
