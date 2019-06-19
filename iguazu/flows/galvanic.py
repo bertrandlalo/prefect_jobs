@@ -119,7 +119,7 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
             raw_signals = convert_query(rows, workspace_id=None)
         else:
             rows = list_files(query)
-            raw_signals = convert_to_file_proxy(rows, dir=base_dir)
+            raw_signals = convert_to_file_proxy(rows, file_dir=base_dir)
 
         clean_signals = clean_signal.map(signal=raw_signals,
                                          events=raw_signals)
