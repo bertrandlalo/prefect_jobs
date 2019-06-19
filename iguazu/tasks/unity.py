@@ -6,7 +6,7 @@ from prefect.engine import signals
 import prefect
 import pandas as pd
 
-from iguazu.functions.vr_unity_events import report_sequences
+from iguazu.functions.unity import report_sequences
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.helpers.files import FileProxy
 
@@ -46,7 +46,7 @@ class ReportSequences(prefect.Task):
         #
         # In the following lines, we are not following these ideas yet. Maybe later.
         events_group = self.events_group or '/unity/events/unity_events'
-        output_group = self.output_group or '/offline/sequences_report'
+        output_group = self.output_group or '/unity/sequences_report'
 
         # Our current force detection code
         if not self.force and path_exists_in_hdf5(output.file, output_group):
