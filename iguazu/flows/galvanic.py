@@ -9,7 +9,8 @@ import click
 from iguazu.tasks.common import list_files, convert_to_file_proxy
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
 from iguazu.tasks.quetzal import Query, ConvertToFileProxy
-from iguazu.tasks.vr_unity_events import ReportSequences
+from iguazu.tasks.unity import ReportSequences
+from iguazu.tasks.summarize import ExtractFeatures
 
 
 @click.command()
@@ -24,16 +25,15 @@ from iguazu.tasks.vr_unity_events import ReportSequences
 @click.option('--force', is_flag=True,
               help='Whether to force the processing if the path already exists in the output file. ')
 def cli(base_dir, output_dir, executor_type, visualize_flow, force):
-
     """ Run the HDF5 pipeline on the specified FILENAMES.
     Do not specify any FILENAMES to run on *all* files found on DATAFOLDER.
     """
     if executor_type == 'dask':
-        executor = DaskExecutor(local_processes=True)#, memory_limit=30 * 2 ** 30)
+        executor = DaskExecutor(local_processes=True)  # , memory_limit=30 * 2 ** 30)
         # executor = DaskExecutor('localhost:8786')
     elif executor_type == "synchronous":
         executor = SynchronousExecutor()
-    else: # default
+    else:  # default
         executor = LocalExecutor()
 
     # Context/global arguments
@@ -95,6 +95,41 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
         ),
         force=force,
     )
+    extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
+                                           report_group="/unity/sequences_report",
+                                           output_group="/gsr/features/scr",
+                                           feature_definitions={
+                                               "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
+                                                       "divide_by_duration": True, "empty_policy": 0.0,
+                                                       "drop_bad_samples": True},
+                                               "median": {"class": "numpy.nanmedian",
+                                                          "columns": ['SCR_peaks_increase-duration',
+                                                                      'SCR_peaks_increase-amplitude'],
+                                                          "divide_by_duration": False, "empty_policy": "bad",
+                                                          "drop_bad_samples": True}})
+
+    scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
+    extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
+                                           report_group="/unity/sequences_report",
+                                           output_group="/gsr/features/scl",
+                                           feature_definitions={
+                                               "median": {"class": "numpy.nanmedian", "columns": scl_columns,
+                                                          "divide_by_duration": False, "empty_policy": "bad",
+                                                          "drop_bad_samples": True},
+                                               "std": {"class": "numpy.nanstd", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                               "ptp": {"class": "numpy.ptp", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                               "linregress": {"custom": "linregress", "columns": scl_columns,
+                                                              "divide_by_duration": False, "empty_policy": "bad",
+                                                              "drop_bad_samples": True},
+                                               "auc": {"custom": "auc", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                           })
+
     report_sequences = ReportSequences(sequences=None)
     # Flow/runtime arguments
     mode = 'local'  # TODO: move to click
@@ -127,6 +162,9 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
         cvx = apply_cvx.map(clean_signals)
         scr = detect_scr_peaks.map(cvx)
         sequences_reports = report_sequences.map(events=input_files)
+        scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
+        scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
+
     # Flow execution
     t0 = time.time()
     with raise_on_exception(), context(**context_args):
@@ -139,5 +177,5 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
         flow.visualize(flow_state=flow_state)
 
 
-if __name__ == '__main__':    # __name__ is the process id, that decides for what the process is supposed to work on
+if __name__ == '__main__':  # __name__ is the process id, that decides for what the process is supposed to work on
     cli()
