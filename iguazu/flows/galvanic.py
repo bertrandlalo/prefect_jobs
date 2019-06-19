@@ -9,6 +9,7 @@ import click
 from iguazu.tasks.common import list_files, convert_to_file_proxy
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
 from iguazu.tasks.quetzal import Query, ConvertToFileProxy
+from iguazu.tasks.vr_unity_events import ReportSequences
 
 
 @click.command()
@@ -94,7 +95,7 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
         ),
         force=force,
     )
-
+    report_sequences = ReportSequences(sequences=None)
     # Flow/runtime arguments
     mode = 'local'  # TODO: move to click
     flow_parameters = dict()
@@ -116,16 +117,16 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
 
         if mode == 'quetzal':
             rows = quetzal_query(query)
-            raw_signals = convert_query(rows, workspace_id=None)
+            input_files = convert_query(rows, workspace_id=None)
         else:
             rows = list_files(query)
-            raw_signals = convert_to_file_proxy(rows, file_dir=base_dir)
+            input_files = convert_to_file_proxy(rows, file_dir=base_dir)
 
-        clean_signals = clean_signal.map(signal=raw_signals,
-                                         events=raw_signals)
+        clean_signals = clean_signal.map(signal=input_files,
+                                         events=input_files)
         cvx = apply_cvx.map(clean_signals)
         scr = detect_scr_peaks.map(cvx)
-
+        sequences_reports = report_sequences.map(events=input_files)
     # Flow execution
     t0 = time.time()
     with raise_on_exception(), context(**context_args):
