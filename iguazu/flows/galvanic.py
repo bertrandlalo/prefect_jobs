@@ -1,35 +1,48 @@
 import os
 import time
+import tempfile
+import traceback
 
-from prefect.utilities.debug import raise_on_exception
 from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
+from prefect.engine.state import Mapped, Failed
+from prefect.tasks.control_flow import switch, merge
+from prefect.utilities.debug import raise_on_exception
 from prefect import Flow, Parameter, context
 import click
+import pandas as pd
 
-from iguazu.tasks.common import list_files, convert_to_file_proxy
+from iguazu.tasks.common import ListFiles
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
-from iguazu.tasks.quetzal import Query, ConvertToFileProxy
+from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
 
 
 @click.command()
 @click.option('-b', '--base-dir', type=click.Path(file_okay=False, dir_okay=True, exists=True),
-              required=True, help='Path from where the files with raw data are read. ')
+              required=False, help='Path from where the files with raw data are read. ')
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=True, help='Path where the files with processed data are saved. ')
+              required=False, help='Path where the files with processed data are saved. ')
+@click.option('--data-source', type=click.Choice(['local', 'quetzal']),
+              default='local', help='Data source that provides input files for this flow.')
 @click.option('--executor-type', type=click.Choice(['local', 'synchronous', 'dask']),
               default='local', help='Type of executor to run the flow. Default is local.')
+@click.option('--executor-address', required=False,
+              help='Address for a remote executor. Only used when --executor-type=dask.')
 @click.option('--visualize-flow', is_flag=True,
               help='Whether to visualize the flow graphs')
 @click.option('--force', is_flag=True,
               help='Whether to force the processing if the path already exists in the output file. ')
-def cli(base_dir, output_dir, executor_type, visualize_flow, force):
+@click.option('--raise/--no-raise', 'raise_exc', is_flag=True, default=False,
+              help='Raise the exceptions encountered during execution when scheduler is local')
+def cli(base_dir, output_dir, data_source, executor_type, executor_address, visualize_flow, force, raise_exc):
 
     """ Run the HDF5 pipeline on the specified FILENAMES.
     Do not specify any FILENAMES to run on *all* files found on DATAFOLDER.
     """
     if executor_type == 'dask':
-        executor = DaskExecutor(local_processes=True)#, memory_limit=30 * 2 ** 30)
-        # executor = DaskExecutor('localhost:8786')
+        if executor_address:
+            executor = DaskExecutor(executor_address)
+        else:
+            executor = DaskExecutor(local_processes=True)
     elif executor_type == "synchronous":
         executor = SynchronousExecutor()
     else: # default
@@ -38,17 +51,33 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
     # Context/global arguments
     context_args = dict(
         quetzal_client=dict(
-            url=os.getenv('QUETZAL_URL', 'https://quetzal.omind.me/api/v1'),
-            username=os.getenv('QUETZAL_USER', ''),
-            password=os.getenv('QUETZAL_PASSWORD', ''),
+            url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
+            username=os.getenv('QUETZAL_USER', 'admin'),
+            password=os.getenv('QUETZAL_PASSWORD', 'secret'),
             insecure=True,
         ),
-        temp_dir=output_dir,
+        temp_dir=output_dir or tempfile.mkdtemp(),
+        raise_on_exception=raise_exc,
     )
 
     # Tasks and task arguments
-    quetzal_query = Query(name='Query quetzal')
-    convert_query = ConvertToFileProxy(id_key='id')
+    list_files = ListFiles(as_proxy=True)
+    quetzal_create = CreateWorkspace(
+        workspace_name='iguazu-dev-7',
+        exist_ok=True,
+        families=dict(
+            iguazu=None,
+            galvanic=None,
+            omi=None
+        ),
+    )
+    quetzal_scan = ScanWorkspace(
+        name='Update workspace SQL views',
+    )
+    quetzal_query = Query(
+        name='Query quetzal',
+        as_proxy=True,
+    )
     clean_signal = CleanSignal(
         warmup_duration=30,
         glitch_kwargs=dict(
@@ -96,35 +125,46 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
     )
 
     # Flow/runtime arguments
-    mode = 'local'  # TODO: move to click
-    flow_parameters = dict()
-    if mode == 'quetzal':
-        flow_parameters['query'] = """
-        SELECT * FROM base
-        WHERE filename LIKE '%.hdf5'
-        LIMIT 10
-        """
-    elif mode == 'local':
-        flow_parameters['query'] = base_dir
-    else:
-        raise ValueError(f'Unknown mode "{mode}"')
+    flow_parameters = dict(
+        basedir=base_dir,
+        data_source=data_source,
+        sql="""
+            SELECT id, filename FROM base
+            LEFT JOIN iguazu USING (id)
+            WHERE 
+            base.filename LIKE '%.hdf5' AND 
+            iguazu.id IS NULL
+            LIMIT 2
+        """,
+    )
 
     # Flow definition
-    with Flow('test') as flow:
+    with Flow('galvanic-feature-extraction-flow') as flow:
+        sql = Parameter('sql')
+        basedir = Parameter('basedir')
+        data_source = Parameter('data_source')
 
-        query = Parameter('query')
+        # For file data source: extract files
+        local_files_dataset = list_files(basedir)
 
-        if mode == 'quetzal':
-            rows = quetzal_query(query)
-            raw_signals = convert_query(rows, workspace_id=None)
-        else:
-            rows = list_files(query)
-            raw_signals = convert_to_file_proxy(rows)
+        # For quetzal data source: query files
+        wid = quetzal_create()
+        wid_bis = quetzal_scan(wid)
+        remote_files_dataset = quetzal_query(query=sql, workspace_id=wid_bis)
 
+        # conditional on the local or quetzal data source
+        switch(condition=data_source,
+               cases={'local': local_files_dataset, 'quetzal': wid})
+        raw_signals = merge(local_files_dataset, remote_files_dataset)
+
+        # Galvanic flow
         clean_signals = clean_signal.map(signal=raw_signals,
                                          events=raw_signals)
         cvx = apply_cvx.map(clean_signals)
         scr = detect_scr_peaks.map(cvx)
+
+    if visualize_flow:
+        flow.visualize()
 
     # Flow execution
     t0 = time.time()
@@ -136,6 +176,49 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
 
     if visualize_flow:
         flow.visualize(flow_state=flow_state)
+
+    task_rows = []
+    exceptions = []
+    if isinstance(flow_state.result, Exception):
+        exceptions.append(flow_state.result)
+
+    else:
+        for t in flow_state.result:
+            state = flow_state.result[t]
+            if isinstance(state, Mapped):
+                for i, s in enumerate(state.map_states):
+                    task_rows.append({
+                        'task': type(s).__name__,
+                        'name': f'{t.name}[{i}]',
+                        'status': type(s).__name__.upper(),
+                        'message': s.message,
+                        'exception': s.result if isinstance(s, Failed) else '',
+                    })
+                    if isinstance(s, Failed):
+                        exceptions.append(s.result)
+            else:
+                task_rows.append({
+                    'task': type(t).__name__,
+                    'name': t.name,
+                    'status': type(state).__name__.upper(),
+                    'message': state.message,
+                    'exception': t.result if isinstance(t, Failed) else '',
+                })
+                if isinstance(t, Failed):
+                    exceptions.append(t.result)
+
+        df = pd.DataFrame.from_records(task_rows)
+        if not df.empty:
+            df = df[['status', 'task', 'name', 'message', 'exception']]
+            df.columns = [col.upper() for col in df.columns]
+            print(df.to_string(index=False))
+
+    if exceptions:
+        print('\n\n\nEncountered the following exceptions:')
+        for i, exc in enumerate(exceptions, 1):
+            print(f'Exception {i} / {len(exceptions)}:')
+            traceback.print_tb(exc.__traceback__)
+            print('\n')
 
 
 if __name__ == '__main__':    # __name__ is the process id, that decides for what the process is supposed to work on
