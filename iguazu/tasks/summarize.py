@@ -99,7 +99,7 @@ class ExtractFeatures(prefect.Task):
                 }
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail: %s', ex)
-                report = pd.DataFrame()
+                features = pd.DataFrame()
                 meta = {
                     'source': 'iguazu',
                     'task_name': self.__class__.__name__,
@@ -118,7 +118,7 @@ class ExtractFeatures(prefect.Task):
         output_file = output.file
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
-            report.to_hdf(output_store, output_group)
+            features.to_hdf(output_store, output_group)
             output_store.get_node(output_group)._v_attrs['meta'] = {
                 'galvanic': meta,
             }
