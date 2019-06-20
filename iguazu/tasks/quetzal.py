@@ -12,7 +12,7 @@ from quetzal.client import QuetzalAPIException, helpers
 from iguazu.helpers.files import QuetzalFile
 
 
-ResultSetType = Dict[str, Dict[str, Any]]
+ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 
 
 class QuetzalBaseTask(Task):
@@ -91,6 +91,10 @@ class Query(QuetzalBaseTask):
 
     """
 
+    def __init__(self, as_proxy: bool = False, **kwargs):
+        super().__init__(**kwargs)
+        self._as_proxy = as_proxy
+
     def run(self,
             query: str,
             workspace_id: Optional[int] = None,
@@ -124,6 +128,11 @@ class Query(QuetzalBaseTask):
             self.logger.warning('Quetzal query task failed: %s', ex.title)
             raise
         self.logger.debug('Query gave %d results', total)
+
+        if self._as_proxy:
+            proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
+            return proxies
+
         return rows
 
 
