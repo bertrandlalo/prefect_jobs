@@ -14,6 +14,8 @@ import pandas as pd
 from iguazu.tasks.common import ListFiles
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
+from iguazu.tasks.unity import ReportSequences
+from iguazu.tasks.summarize import ExtractFeatures
 
 
 @click.command()
@@ -34,7 +36,6 @@ from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
 @click.option('--raise/--no-raise', 'raise_exc', is_flag=True, default=False,
               help='Raise the exceptions encountered during execution when scheduler is local')
 def cli(base_dir, output_dir, data_source, executor_type, executor_address, visualize_flow, force, raise_exc):
-
     """ Run the HDF5 pipeline on the specified FILENAMES.
     Do not specify any FILENAMES to run on *all* files found on DATAFOLDER.
     """
@@ -45,7 +46,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             executor = DaskExecutor(local_processes=True)
     elif executor_type == "synchronous":
         executor = SynchronousExecutor()
-    else: # default
+    else:  # default
         executor = LocalExecutor()
 
     # Context/global arguments
@@ -84,10 +85,10 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             scaling='robust',
             nu=1,
             range=(-0.02, +0.02),
-            rejection_win=20,
+            rejection_win=35,
         ),
         interpolation_kwargs=dict(
-            method='cubic',
+            method='linear',
         ),
         lowpass_kwargs=dict(
             Wn=[35],
@@ -123,7 +124,42 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         ),
         force=force,
     )
+    extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
+                                           report_group="/unity/sequences_report",
+                                           output_group="/gsr/features/scr",
+                                           feature_definitions={
+                                               "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
+                                                       "divide_by_duration": True, "empty_policy": 0.0,
+                                                       "drop_bad_samples": True},
+                                               "median": {"class": "numpy.nanmedian",
+                                                          "columns": ['SCR_peaks_increase-duration',
+                                                                      'SCR_peaks_increase-amplitude'],
+                                                          "divide_by_duration": False, "empty_policy": "bad",
+                                                          "drop_bad_samples": True}})
 
+    scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
+    extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
+                                           report_group="/unity/sequences_report",
+                                           output_group="/gsr/features/scl",
+                                           feature_definitions={
+                                               "median": {"class": "numpy.nanmedian", "columns": scl_columns,
+                                                          "divide_by_duration": False, "empty_policy": "bad",
+                                                          "drop_bad_samples": True},
+                                               "std": {"class": "numpy.nanstd", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                               "ptp": {"class": "numpy.ptp", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                               "linregress": {"custom": "linregress", "columns": scl_columns,
+                                                              "divide_by_duration": False, "empty_policy": "bad",
+                                                              "drop_bad_samples": True},
+                                               "auc": {"custom": "auc", "columns": scl_columns,
+                                                       "divide_by_duration": False, "empty_policy": "bad",
+                                                       "drop_bad_samples": True},
+                                           })
+
+    report_sequences = ReportSequences(sequences=None)
     # Flow/runtime arguments
     flow_parameters = dict(
         basedir=base_dir,
@@ -162,6 +198,9 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                                          events=raw_signals)
         cvx = apply_cvx.map(clean_signals)
         scr = detect_scr_peaks.map(cvx)
+        sequences_reports = report_sequences.map(events=input_files)
+        scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
+        scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
 
     if visualize_flow:
         flow.visualize()
@@ -177,6 +216,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
     if visualize_flow:
         flow.visualize(flow_state=flow_state)
 
+    # TODO: refactor this report somewhere else!
     task_rows = []
     exceptions = []
     if isinstance(flow_state.result, Exception):
@@ -221,5 +261,5 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             print('\n')
 
 
-if __name__ == '__main__':    # __name__ is the process id, that decides for what the process is supposed to work on
+if __name__ == '__main__':  # __name__ is the process id, that decides for what the process is supposed to work on
     cli()

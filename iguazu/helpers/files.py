@@ -152,9 +152,11 @@ class QuetzalFile(FileProxy):
 
 class LocalFile(FileProxy):
 
-    def __init__(self, file):
+    def __init__(self, file, dir):
         super().__init__()
         self._file = pathlib.Path(file)
+        self._base_dir = pathlib.Path(dir)
+        self._relative_dir = self._file.relative_to(dir).parent
         self._metadata = collections.defaultdict(dict)
 
     @property
@@ -169,6 +171,22 @@ class LocalFile(FileProxy):
         return self._metadata
 
     def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'LocalFile':
+        """ Creates a child FileProxy that inherits from its parent's metadata.
+
+        Parameters
+        ----------
+        filename: name of the FileProxy to create. If None, the a suffix is added to the parent's FileProxy
+        and the direction is given in the context by 'temp_dir'.
+        path: path relative to temp_dir where the child FileProxy is created (eg. "/preprocessed/galvanic") . If None, the relative path is the same
+        as it's parent relative to base_dir.
+        suffix: suffix to add at the end of the filename (eg. "_clean"). If None, nothing is added.
+        extension: extension of the child FileProxy (eg. "hdf5", "csv", "png", ... ) . If None, the extension is the same as it's parent.
+        temporary: not implemented yet.
+
+        Returns
+        -------
+
+        """
         if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
@@ -178,7 +196,7 @@ class LocalFile(FileProxy):
         # First, the path
         base_metadata = self.metadata['base']
         if path is None:
-            new = temp_dir / pathlib.PosixPath(base_metadata['path'])
+            new = temp_dir / self._relative_dir
         else:
             new = temp_dir / pathlib.Path(path)
         # Then, the filename
@@ -192,7 +210,7 @@ class LocalFile(FileProxy):
         new = new.with_name(new.stem + suffix + extension)
 
         # Create new child proxy class and propagate metadata
-        child = LocalFile(new)
+        child = LocalFile(new, dir=temp_dir)
         return child
 
     def upload(self):
