@@ -87,10 +87,15 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
         raise Exception("AO saturation of {corrupted_ratio} exceeds {maxratio}.".format(corrupted_ratio=corrupted_ratio, maxratio=corrupted_maxratio))
 
     # interpolate the signal
-    data_clean.interpolate(**interpolation_kwargs, inplace=True)
+    begins = data_clean.first_valid_index()
+    ends = data_clean.last_valid_index()
+    data_clean = data_clean[begins:ends]
 
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
-    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed").dropna()
+    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed")
+
+
+    data_clean_inversed.interpolate(**interpolation_kwargs, inplace=True)
 
     # lowpass filter signal
     scipy_filter_signal(data_clean_inversed, columns=[column + "_clean_inversed"], btype='lowpass',
@@ -133,7 +138,8 @@ def galvanic_cvx(data, column, warmup_duration, glitch_params, cvxeda_params=Non
     """
     cvxeda_params = cvxeda_params or {}
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
-    data = apply_cvxEDA(data, column_name=column, kwargs=cvxeda_params)
+
+    data = apply_cvxEDA(data[[column]].dropna(), column_name=column, kwargs=cvxeda_params)
 
     # add a column "bad" with rejection boolean on amplitude criteria
     label_bad_from_amplitude(data, column_name=column + "_SCR",
@@ -194,3 +200,11 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, glitch_kwargs
     label_bad_from_amplitude(data, column_name="SCR_peaks_increase-duration", output_column="bad",
                              inplace=True, **glitch_kwargs)
     return data
+
+
+# def galvanic_baseline_correction(features, ):
+#     pass
+
+f = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-03-29.14.36.17_df30e76534f6aa2f53cb9bbe3a4d9dd135c5c2da8ce8b7645bb8fdd6461c3b2a_clean_cvx_features.hdf5"
+features = pd.read_hdf(f, "/gsr/features/scl")
+sequences = [ "lobby_sequence_0",  "lobby_sequence_1", "physio-sonification_survey_0",  "cardiac-coherence_survey_0", "cardiac-coherence_survey_1", "cardiac-coherence_score_0"]
