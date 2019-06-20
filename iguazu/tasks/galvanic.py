@@ -6,7 +6,7 @@ from prefect.engine import signals
 import prefect
 import pandas as pd
 
-from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean
+from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
 from iguazu.functions.common import path_exists_in_hdf5, safe_read_hdf5
 from iguazu.helpers.files import FileProxy
 
@@ -418,3 +418,125 @@ class DetectSCRPeaks(prefect.Task):
         output.upload()
 
         return output
+
+
+class RemoveBaseline(prefect.Task):
+    ''' Remove pseudo-baseline for each feature.
+
+    '''
+
+    def __init__(self,
+                 features_group: str,
+                 output_group: str,
+                 sequences: Optional[list] = None,
+
+                 force: bool = False,
+                 **kwargs):
+        '''
+
+        Parameters
+        ----------
+        signals_group
+        report_group
+        output_group
+        feature_definitions
+        sequences
+        force
+        kwargs
+        '''
+        super().__init__(**kwargs)
+        self.features_group = features_group
+        self.output_group = output_group
+        self.sequences = sequences or [ 'lobby_sequence_0',
+                                         'lobby_sequence_1',
+                                         'physio-sonification_survey_0',
+                                         'cardiac-coherence_survey_0',
+                                         'cardiac-coherence_survey_1',
+                                         'cardiac-coherence_score_0']
+        self.force = force
+
+
+    def run(self,
+            features: FileProxy) -> FileProxy:
+
+        output = signals.make_child(suffix='_corrected')
+        self.logger.info('Correcting baseline for features %s -> %s',
+                         features, output)
+
+        # Notes on parameter management
+        #
+        # if I wanted to admit the rewrite of a parameter foo,
+        # 1. Add foo to run parameter as an optional parameter with default None
+        # 2.a Manage None with `foo = foo or self.foo`
+        #
+        # If I wanted to admit a global context value of parameter foo
+        # 2.b `foo = foo or self.foo or context.get('foo', None)`
+        #
+        # Finally, if a default value is needed
+        # 2.c `foo = foo or self.foo or context.get('foo', 'default_value')`
+        #
+        # In the following lines, we are not following these ideas yet. Maybe later.
+        features_group = self.features_group  # No default value is given here
+        output_group = self.output_group  # No default value is given here
+
+        # Our current force detection code
+        if not self.force and path_exists_in_hdf5(output.file, output_group):
+            # TODO: consider a function that uses a FileProxy, in particular a
+            #       QuetzalFile. In this case, we could read the metadata
+            #       instead of downloading the file!
+            self.logger.info('Output already exists, skipping')
+            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
+            # TODO: consider a way to raise a skip with results. Currently, the
+            #       only way I think this is possible is by making a new signal
+            #       that derives from PrefectStateSignal and that uses a new
+            #       custom state class as well.
+            #       Another solution could be to use a custom state handler
+            return output
+
+        features_file = features.file.resolve()
+
+        with pd.HDFStore(features_file, 'r') as features_store:
+            try:
+                # TODO discuss: select column before sending it to a column
+                df_features = pd.read_hdf(features_store, features_group)
+                df_features_corrected, valid_sequences_ratio = galvanic_baseline_correction(df_features, sequences=self.sequences)
+                meta = {
+                    'source': 'iguazu',
+                    'task_name': self.__class__.__name__,
+                    'task_module': self.__class__.__module__,
+                    'state': 'SUCCESS',
+                    'version': '0.0',
+                    'valid_sequences_ratio': valid_sequences_ratio
+                }
+            except Exception as ex:
+                self.logger.warning('Report VR sequences graceful fail: %s', ex)
+                df_features_corrected = pd.DataFrame()
+                meta = {
+                    'source': 'iguazu',
+                    'task_name': self.__class__.__name__,
+                    'task_module': self.__class__.__module__,
+                    'state': 'FAILURE',
+                    'version': '0.0',
+                    'exception': str(ex),
+                }
+
+        # TODO: re-code the failure handling with respect to a task parameter
+        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
+        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
+        # if fail_mode == 'fail':  ==> raise exception as it arrives
+
+        # Manage output, save to file
+        output_file = output.file
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with pd.HDFStore(output_file, 'w') as output_store:
+            df_features_corrected.to_hdf(output_store, output_group)
+            output_store.get_node(output_group)._v_attrs['meta'] = {
+                'baseline_correction': meta,  # TODO: change to something else?
+            }
+
+        # Set meta on FileProxy so that Quetzal knows about this metadata
+        output.metadata['baseline_correction'].update(meta)
+        output.upload()
+
+        return output
+
