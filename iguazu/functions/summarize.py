@@ -36,40 +36,55 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
     -------
     features: pd.DataFrame
 
-    Examples:
-    ---------
-    >>> data                                         SCR_peaks_detected   SCR_peaks_increase-duration       bad
-                2019-03-29 13:36:33.376220951+00:00                True     1.374938                    ...  False
-                2019-03-29 13:36:41.018457394+00:00                True     2.367081                    ...  False
-                2019-03-29 13:54:12.321063443+00:00                True     7.499662                    ...   True
-                2019-03-29 13:54:29.615212103+00:00                True     6.148160                    ...  False
-                2019-03-29 13:54:44.495406190+00:00                True     6.896174                    ...  False
-                ...
+    Examples
+    --------
 
+    In this example, we have SCR peaks characteristics as data and we extract
+    certain features on specific periods/sequences of the VR session.
+
+    For example, we extract:
+
+        - 'tau' defined as the sum of the column 'SCR_peaks_detected',
+        ie. the sum of the detected peaks on a specific period, divided by the
+        period duration.
+
+        - 'median' defined as the median of columns 'SCR_peaks_increase-duration',
+        and 'SCR_peaks_increase-amplitude'.
+
+    The result is a dataframe where the index are the period names and the column
+    are named by column_feature (eg. SCR_peaks_detected_tau for feature tau estimated on
+    SCR_peaks_detected).
+
+    >>> data
+                                                    SCR_peaks_detected   SCR_peaks_increase-duration       bad
+            2019-03-29 13:36:33.376220951+00:00                True     1.374938                    ...  False
+            2019-03-29 13:36:41.018457394+00:00                True     2.367081                    ...  False
+            2019-03-29 13:54:12.321063443+00:00                True     7.499662                    ...   True
+            2019-03-29 13:54:29.615212103+00:00                True     6.148160                    ...  False
+            2019-03-29 13:54:44.495406190+00:00                True     6.896174                    ...  False
+                ...
     >>> sequences_report
-                                         intro_sequence_0  ...          cardiac-coherence_survey_1
-                begin 2019-03-29 13:36:19.863029298+00:00  ... 2019-03-29 13:48:34.481497988+00:00
-                end   2019-03-29 13:38:03.406418841+00:00  ... 2019-03-29 13:49:28.501953058+00:00
+                                     intro_sequence_0  ...          cardiac-coherence_survey_1
+            begin 2019-03-29 13:36:19.863029298+00:00  ... 2019-03-29 13:48:34.481497988+00:00
+            end   2019-03-29 13:38:03.406418841+00:00  ... 2019-03-29 13:49:28.501953058+00:00
 
     >>> feature_definitions = { "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
                                 "divide_by_duration": True, "empty_policy": 0.0, "drop_bad_samples": True},
                             "median": {"class": "numpy.nanmedian", "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True}}
     >>> features = signal_to_feature(data, sequences_report, feature_definitions=scr_feature_definitions, sequences=None)
-
     >>> features
-                name                                               SCR_peaks_detected_tau  ... SCR_peaks_increase-duration_median
-                intro_sequence_0                                                        2  ...                            1.87101
-                physio-sonification_playground_0                                      bad  ...                                bad
-                space-stress_survey_0                                                   2  ...                             3.9842
-                space-stress_survey_1                                                   5  ...                             2.7323
-                physio-sonification_sequence_0                                        bad  ...                                bad
-                space-stress_sequence_0                                                37  ...                            2.45887
-                baseline_eyes-opened_0                                                bad  ...                                bad
-                baseline_eyes-opened_1                                                bad  ...                                bad
-                baseline_eyes-opened_2                                                bad  ...                                bad
-                baseline_eyes-opened_3                                                bad  ...                                bad
-
+            name                                               SCR_peaks_detected_tau  ... SCR_peaks_increase-duration_median
+            intro_sequence_0                                                        2  ...                            1.87101
+            physio-sonification_playground_0                                      bad  ...                                bad
+            space-stress_survey_0                                                   2  ...                             3.9842
+            space-stress_survey_1                                                   5  ...                             2.7323
+            physio-sonification_sequence_0                                        bad  ...                                bad
+            space-stress_sequence_0                                                37  ...                            2.45887
+            baseline_eyes-opened_0                                                bad  ...                                bad
+            baseline_eyes-opened_1                                                bad  ...                                bad
+            baseline_eyes-opened_2                                                bad  ...                                bad
+            baseline_eyes-opened_3                                                bad  ...                                bad
 
     '''
     for feature_definition in feature_definitions.values():

@@ -54,6 +54,11 @@ def report_sequences(events, sequences=None):
 
     Examples
     --------
+    In this example, we have a unity_events from a VR_session and we want to extract
+    timestamps of begining/end of sub-sequences.
+    Note that some subsequences may occur more than once, eg: in space-stress game,
+    there are 6 waves. Hence, the period names
+
     >>> events
                                                                      label  ... hed
         2019-03-29 13:36:17+00:00            unity_session_sequence_begins  ...
