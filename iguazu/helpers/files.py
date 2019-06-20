@@ -26,7 +26,7 @@ class FileProxy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'FileProxy':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'FileProxy':
         # TODO: change extension
         pass
 
@@ -46,13 +46,13 @@ class QuetzalFile(FileProxy):
         self._wid = workspace_id
         self._local_path = None
         self._client_kwargs = client_kwargs or {}
+        self._temporary = False
 
     @property
     def file(self) -> pathlib.Path:
         if self._local_path is None:
             download_dir = get_data_dir()
             logger.debug('Downloading %s -> %s', self._file_id, download_dir)
-            import ipdb; ipdb.set_trace(context=21)
             filename = helpers.file.download(self.client,
                                              self._file_id,
                                              self._wid,
@@ -76,9 +76,10 @@ class QuetzalFile(FileProxy):
             return helpers.get_client(**context.quetzal_client)
         return helpers.get_client(**self._client_kwargs)
 
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'QuetzalFile':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'QuetzalFile':
         # TODO: define what metadata gets inherited!
-        if 'temp_dir' not in context:
+        # TODO: what if file already exists in quetzal? How do we check this?
+        if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
         temp_dir = pathlib.Path(context.temp_dir)
@@ -112,13 +113,26 @@ class QuetzalFile(FileProxy):
         for family in child._metadata:
             child._metadata[family]['id'] = None
         # link child to parent
-        child._metadata['links']['parent'] = base_metadata['id']
+        child._metadata['iguazu']['parents'] = base_metadata['id']
 
         child._local_path = new
+        child._temporary = temporary
         return child
 
     def upload(self):
-        logger.warning('Upload not implemented yet!')
+        logger.info('Uploading %s to Quetzal', self._local_path)
+        if self._local_path is None or not self._local_path.exists():
+            raise RuntimeError('Cannot upload if file does not exist')
+        with open(self._local_path, 'rb') as fd:
+            details = helpers.workspace.upload(self.client, self._wid, fd,
+                                               path=self.metadata['base']['path'],
+                                               temporary=self._temporary)
+        self._file_id = details.id
+        metadata = copy.deepcopy(self.metadata)
+        for family in metadata:
+            if 'id' in metadata[family]:
+                metadata[family].pop('id')
+        helpers.workspace.update_metadata(self.client, self._wid, self._file_id, metadata)
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -154,8 +168,8 @@ class LocalFile(FileProxy):
             self._metadata['base']['path'] = str(self._file.parent)
         return self._metadata
 
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=None) -> 'LocalFile':
-        if 'temp_dir' not in context:
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'LocalFile':
+        if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
         temp_dir = pathlib.Path(context.temp_dir)

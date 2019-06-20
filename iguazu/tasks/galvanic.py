@@ -131,7 +131,8 @@ class CleanSignal(prefect.Task):
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
 
-        with pd.HDFStore(signal_file, 'r') as signal_store, \
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(signal_file, 'r') as signal_store, \
              pd.HDFStore(events_file, 'r') as events_store:
 
             try:
@@ -177,7 +178,6 @@ class CleanSignal(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['galvanic'].update(meta)
         output.upload()
-        output._local_path = None
 
         return output
 
@@ -270,7 +270,8 @@ class ApplyCVX(prefect.Task):
 
         signal_file = signal.file
 
-        with pd.HDFStore(signal_file, 'r') as signal_store:
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(signal_file, 'r') as signal_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
@@ -310,6 +311,7 @@ class ApplyCVX(prefect.Task):
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['galvanic'].update(meta)
+        output.upload()
 
         return output
 
@@ -445,5 +447,6 @@ class DetectSCRPeaks(prefect.Task):
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['galvanic'].update(meta)
+        output.upload()
 
         return output
