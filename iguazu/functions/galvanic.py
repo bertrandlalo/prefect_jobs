@@ -5,7 +5,8 @@ from datascience_utils.filters import scipy_filter_signal, scipy_scale_signal
 from datascience_utils.cvxEDA import apply_cvxEDA
 from datascience_utils.peaks import OfflinePeak
 from sklearn.preprocessing import RobustScaler
-
+from prefect import task, context
+logger = context.get("logger")
 
 def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio):
@@ -57,11 +58,11 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
         .. image:: ../source/_static/examples/galvanic_functions/io_clean.png
 
     """
-    assert events.index.is_monotonic  # TODO: think about raising an exception here
+    if not events.index.is_monotonic:
+        raise Exception ("Events index should be monotonic. ")
 
     begins = events.index[0] - np.timedelta64(1, 's') * warmup_duration  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + np.timedelta64(1, 's') * warmup_duration  # end 30 seconds after the beginning of the session
-
 
     # troncate dataframe on session times
     data = data[begins:ends]
@@ -202,9 +203,109 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, glitch_kwargs
     return data
 
 
-# def galvanic_baseline_correction(features, ):
-#     pass
+def galvanic_baseline_correction(features, sequences):
+    """ Estimate basal state for features on pseudo-baseline sequences and remove it.
 
-f = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-03-29.14.36.17_df30e76534f6aa2f53cb9bbe3a4d9dd135c5c2da8ce8b7645bb8fdd6461c3b2a_clean_cvx_features.hdf5"
-features = pd.read_hdf(f, "/gsr/features/scl")
-sequences = [ "lobby_sequence_0",  "lobby_sequence_1", "physio-sonification_survey_0",  "cardiac-coherence_survey_0", "cardiac-coherence_survey_1", "cardiac-coherence_score_0"]
+    Parameters
+    ----------
+    features: pd.DataFrame
+        Dataframe with features where index are periods and columns are feature names.
+    sequences: list
+        List of period names to compute the pseudo baseline.
+
+    Returns
+    -------
+    features_corrected: pd.DataFrame
+        Dataframe with the same shape as the input `features`, after removal of the
+        basal state.
+    valid_sequences_ratio: Dict
+        Dictionary where keys are the feature names and values are the ratio of
+        valid periods where it (the feature) could be estimated.
+
+    Examples
+    --------
+
+    >>> features
+    name                                               F_clean_inversed_lowpassed_zscored_SCL_median  ... F_clean_inversed_lowpassed_zscored_SCL_auc
+    physio-sonification_sequence_0                                                               bad  ...                                   -168.801
+    lobby_sequence_0                                                                             bad  ...                                   -7.03184
+    lobby_sequence_1                                                                             bad  ...                                   -18.9236
+    lobby_sequence_2                                                                             bad  ...                                    22.3149
+    space-stress_game_0                                                                          bad  ...                                    208.325
+    space-stress_game_1                                                                          bad  ...                                    157.129
+    common_respiration-calibration_data-accumulation_0                                           bad  ...                                        bad
+    space-stress_game_enemy-wave_0                                                               bad  ...                                   -2.06235
+    space-stress_game_enemy-wave_1                                                               bad  ...                                    19.7417
+    space-stress_game_enemy-wave_2                                                               bad  ...                                    50.4054
+    ...
+    space-stress_intro_0                                                                         bad  ...                                   -20.1367
+    physio-sonification_coherence-feedback_0                                                     bad  ...                                   -24.4899
+    cardiac-coherence_score_0                                                                    bad  ...                                   -27.0506
+    cardiac-coherence_survey_0                                                                   bad  ...                                   -8.21526
+    cardiac-coherence_survey_1                                                                   bad  ...                                   -72.0361
+    cardiac-coherence_data-accumulation_0                                                        bad  ...                                   -177.136
+    intro_calibration_0                                                                          bad  ...                                    10.6846
+    >>> sequences
+        ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0', 'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1', 'cardiac-coherence_score_0']
+    >>> features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences)
+    >>> features_corrected
+    name                                               F_clean_inversed_lowpassed_zscored_SCL_median  ... F_clean_inversed_lowpassed_zscored_SCL_auc
+    physio-sonification_sequence_0                                                               bad  ...                                   -142.678
+    lobby_sequence_0                                                                             bad  ...                                    19.0911
+    lobby_sequence_1                                                                             bad  ...                                    7.19937
+    lobby_sequence_2                                                                             bad  ...                                    48.4378
+    space-stress_game_0                                                                          bad  ...                                    234.448
+    space-stress_game_1                                                                          bad  ...                                    183.252
+    common_respiration-calibration_data-accumulation_0                                           bad  ...                                        bad
+    space-stress_game_enemy-wave_0                                                               bad  ...                                    24.0606
+    space-stress_game_enemy-wave_1                                                               bad  ...                                    45.8647
+    space-stress_game_enemy-wave_2                                                               bad  ...                                    76.5284
+    ...
+    space-stress_intro_0                                                                         bad  ...                                    5.98628
+    physio-sonification_coherence-feedback_0                                                     bad  ...                                    1.63304
+    cardiac-coherence_score_0                                                                    bad  ...                                   -0.92763
+    cardiac-coherence_survey_0                                                                   bad  ...                                    17.9077
+    cardiac-coherence_survey_1                                                                   bad  ...                                   -45.9132
+    cardiac-coherence_data-accumulation_0                                                        bad  ...                                   -151.013
+    intro_calibration_0                                                                          bad  ...                                    36.8075
+    >>> valid_sequences_ratio
+    {'F_clean_inversed_lowpassed_zscored_SCL_median': 0.0,
+     'F_clean_inversed_lowpassed_zscored_SCL_std': 1.0,
+     'F_clean_inversed_lowpassed_zscored_SCL_ptp': 1.0,
+     'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope': 1.0,
+     'F_clean_inversed_lowpassed_zscored_SCL_linregress_rvalue': 1.0,
+     'F_clean_inversed_lowpassed_zscored_SCL_auc': 1.0}
+    """
+    if not set(sequences).issubset(set(features.index)):
+        logger.warning('Cannot find all pseudo-baseline sequences. Missing: %s',
+                       list(set(sequences) - set(features.index)))
+    available_pseudo_baselines = list(set(sequences) & set(features.index))
+    features_baseline = features.loc[available_pseudo_baselines, :]
+
+    features_baseline.loc["lobby_sequence_1", "F_clean_inversed_lowpassed_zscored_SCL_median"] = "bad"
+
+    features_baseline = features_baseline.where(
+        features_baseline.applymap(lambda x: isinstance(x, (int, float, np.int64, np.float64))), other=np.NaN)
+    valid_sequences_ratio = (1 - features_baseline.isna().mean()).to_dict()
+    features_baseline_averaged = features_baseline.mean()
+
+    def safe_substraction(x, correction):
+        if isinstance(x, (int, float, np.int64, np.float64)):
+            return x - correction
+        else:
+            return x
+
+    features_corrected = features.copy()
+    for column in features:
+        correction = features_baseline_averaged[column]
+        features_corrected[[column]] = features_corrected[[column]].applymap(lambda x: safe_substraction(x, correction))
+    return features_corrected, valid_sequences_ratio
+
+
+
+## TODO: delete that, for test purposes
+# f = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-04-05.14.37.15_4bedfdde268d635a3c53aa1b7727f3bf41b932883ac4c1cff623186ea32b0e67_clean_cvx_features.hdf5"
+# features = pd.read_hdf(f, "/gsr/features/scl")
+# sequences = [ "lobby_sequence_0",  "lobby_sequence_1", "physio-sonification_survey_0",  "cardiac-coherence_survey_0", "cardiac-coherence_survey_1", "cardiac-coherence_score_0"]
+# features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences)
+
