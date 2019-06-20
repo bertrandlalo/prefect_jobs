@@ -120,12 +120,11 @@ class ExtractFeatures(prefect.Task):
         with pd.HDFStore(output_file, 'w') as output_store:
             features.to_hdf(output_store, output_group)
             output_store.get_node(output_group)._v_attrs['meta'] = {
-                'galvanic': meta,
+                'vr_sequences': meta,  # TODO: change to something else?
             }
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['vr_sequences'].update(meta)
         output.upload()
-        output._local_path = None
 
         return output

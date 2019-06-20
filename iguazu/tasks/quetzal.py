@@ -1,3 +1,4 @@
+import copy
 import datetime
 import functools
 import random
@@ -11,7 +12,7 @@ from quetzal.client import QuetzalAPIException, helpers
 from iguazu.helpers.files import QuetzalFile
 
 
-ResultSetType = Dict[str, Dict[str, Any]]
+ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 
 
 class QuetzalBaseTask(Task):
@@ -90,6 +91,10 @@ class Query(QuetzalBaseTask):
 
     """
 
+    def __init__(self, as_proxy: bool = False, **kwargs):
+        super().__init__(**kwargs)
+        self._as_proxy = as_proxy
+
     def run(self,
             query: str,
             workspace_id: Optional[int] = None,
@@ -123,6 +128,11 @@ class Query(QuetzalBaseTask):
             self.logger.warning('Quetzal query task failed: %s', ex.title)
             raise
         self.logger.debug('Query gave %d results', total)
+
+        if self._as_proxy:
+            proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
+            return proxies
+
         return rows
 
 
@@ -165,12 +175,23 @@ class CreateWorkspace(QuetzalBaseTask):
 
     """
 
-    def __init__(self, exist_ok: bool = True, **kwargs):
+    def __init__(self, *,
+                 workspace_name: Optional[str] = None,
+                 description: Optional[str] = None,
+                 families: Optional[Dict[str, Optional[int]]] = None,
+                 exist_ok: bool = True,
+                 **kwargs):
         super().__init__(**kwargs)
+        self.workspace_name = workspace_name or 'iguazu-{date}-{rnd}'.format(
+            date=datetime.datetime.now().strftime('%Y%m%d'),
+            rnd=''.join(random.choices(string.ascii_lowercase, k=5))
+        )
+        self.description = description or 'Workspace created by iguazu'
+        self.families = copy.deepcopy(families or {})
         self.exist_ok = exist_ok  # TODO: decide: should this be here or a run parameter?
 
     def run(self,
-            name: Optional[str] = None,
+            workspace_name: Optional[str] = None,
             description: Optional[str] = None,
             families: Optional[Dict[str, Optional[int]]] = None,
             temporary: bool = False) -> int:
@@ -178,7 +199,7 @@ class CreateWorkspace(QuetzalBaseTask):
 
         Parameters
         ----------
-        name: str
+        workspace_name: str
             Name for the new workspace. If not set, a random name will be generated.
         description: str
             Description for the new workspace. If not set, a fallback description
@@ -196,19 +217,16 @@ class CreateWorkspace(QuetzalBaseTask):
 
         """
 
-        families = families or {}
-        name = name or 'iguazu-{date}-{rnd}'.format(
-            date=datetime.datetime.now().strftime('%Y%m%d'),
-            rnd=''.join(random.choices(string.ascii_lowercase, k=5))
-        )
-        description = description or 'Workspace created by iguazu'
+        families = families or self.families
+        workspace_name = workspace_name or self.workspace_name
+        description = description or self.description
 
         # Check if the requested workspace already exists
-        workspaces, total = helpers.workspace.list_(self.client, name=name)
+        workspaces, total = helpers.workspace.list_(self.client, name=workspace_name)
         if total == 0:
             # There was no workspace with such name, create it
             # This function will block until the workspace is initialized
-            details = helpers.workspace.create(self.client, name, description,
+            details = helpers.workspace.create(self.client, workspace_name, description,
                                                families, temporary, wait=True)
             # After initialization of a workspace, it can be INVALID, which
             # means that something went wrong
