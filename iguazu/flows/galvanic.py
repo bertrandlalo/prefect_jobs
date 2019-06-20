@@ -64,12 +64,13 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
     # Tasks and task arguments
     list_files = ListFiles(as_proxy=True)
     quetzal_create = CreateWorkspace(
-        workspace_name='iguazu-dev-7',
+        workspace_name='iguazu-dev-8',
         exist_ok=True,
         families=dict(
             iguazu=None,
             galvanic=None,
-            omi=None
+            omi=None,
+            vr_sequences=None,
         ),
     )
     quetzal_scan = ScanWorkspace(
@@ -170,7 +171,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             WHERE 
             base.filename LIKE '%.hdf5' AND 
             iguazu.id IS NULL
-            LIMIT 2
+            LIMIT 3
         """,
     )
 
@@ -198,7 +199,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                                          events=raw_signals)
         cvx = apply_cvx.map(clean_signals)
         scr = detect_scr_peaks.map(cvx)
-        sequences_reports = report_sequences.map(events=input_files)
+        sequences_reports = report_sequences.map(events=raw_signals)
         scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
         scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
 
@@ -228,8 +229,8 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             if isinstance(state, Mapped):
                 for i, s in enumerate(state.map_states):
                     task_rows.append({
-                        'task': type(s).__name__,
-                        'name': f'{t.name}[{i}]',
+                        'task class': type(t).__name__,
+                        'task name': f'{t.name}[{i}]',
                         'status': type(s).__name__.upper(),
                         'message': s.message,
                         'exception': s.result if isinstance(s, Failed) else '',
@@ -238,8 +239,8 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                         exceptions.append(s.result)
             else:
                 task_rows.append({
-                    'task': type(t).__name__,
-                    'name': t.name,
+                    'task class': type(t).__name__,
+                    'task name': t.name,
                     'status': type(state).__name__.upper(),
                     'message': state.message,
                     'exception': t.result if isinstance(t, Failed) else '',
@@ -249,7 +250,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
 
         df = pd.DataFrame.from_records(task_rows)
         if not df.empty:
-            df = df[['status', 'task', 'name', 'message', 'exception']]
+            df = df[['status', 'task class', 'task name', 'message', 'exception']]
             df.columns = [col.upper() for col in df.columns]
             print(df.to_string(index=False))
 
