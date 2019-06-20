@@ -56,10 +56,10 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
             scaling='robust',
             nu=1,
             range=(-0.02, +0.02),
-            rejection_win=20,
+            rejection_win=35,
         ),
         interpolation_kwargs=dict(
-            method='cubic',
+            method='linear',
         ),
         lowpass_kwargs=dict(
             Wn=[35],
