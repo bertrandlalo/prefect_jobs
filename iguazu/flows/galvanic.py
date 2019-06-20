@@ -59,7 +59,7 @@ def cli(base_dir, output_dir, executor_type, visualize_flow, force):
             rejection_win=35,
         ),
         interpolation_kwargs=dict(
-            method='linear',
+            method='pchip',
         ),
         lowpass_kwargs=dict(
             Wn=[35],
