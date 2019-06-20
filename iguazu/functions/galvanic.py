@@ -66,12 +66,15 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
     # troncate dataframe on session times
     data = data[begins:ends]
     data = data.loc[:, [column]]
+
+    # label 0.0 values as bad
+    data.loc[data.loc[:, column] == 0.0, "bad"] = True
+
     # add a column "bad" with rejection boolean on amplitude criteria
     label_bad_from_amplitude(data, column_name=column, output_column="bad", inplace=True,
                              **glitch_kwargs)
 
-    # label 0.0 values as bad
-    data.loc[data.loc[:, column] == 0.0, "bad"] = True
+
 
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column]].copy().add_suffix('_clean')
@@ -87,7 +90,7 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
     data_clean.interpolate(**interpolation_kwargs, inplace=True)
 
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
-    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed")
+    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed").dropna()
 
     # lowpass filter signal
     scipy_filter_signal(data_clean_inversed, columns=[column + "_clean_inversed"], btype='lowpass',
