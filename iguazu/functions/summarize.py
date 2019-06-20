@@ -122,18 +122,19 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                 tmp = data_troncated.loc[:, list(columns)]  # this makes a copy
                 if feature_definition["drop_bad_samples"] and "bad" in data_troncated:
                     tmp = tmp[~data_troncated.bad]
-                if tmp.empty:
-                    feat = pd.Series(index=columns, data=["foo_empty_policy"] * len(columns))
-                    features_on_sequence.append(pd.DataFrame(feat, columns=[feature_name]))
-                else:
-                    if "custom" in feature_definition:
-                        custom = feature_definition["custom"]
-                        if custom == "linregress":
+
+                if "custom" in feature_definition:
+                    custom = feature_definition["custom"]
+                    if custom == "linregress":
+                        if tmp.empty:
+                            feat =  pd.DataFrame(columns=[column], index=[feature_name + "_slope", feature_name + "_rvalue"],
+                                    data=[empty_policy, empty_policy] ).T
+                        else:
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
                                 if tmp_col.empty:
-                                    slope,  rvalue = "foo_empty_policy", "foo_empty_policy"
+                                    slope,  rvalue = empty_policy, empty_policy
                                 else:
                                     x = tmp_col.values.astype(float)
                                     y = tmp_col.index
@@ -142,12 +143,17 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 feat.append(pd.DataFrame(index=[feature_name + "_slope", feature_name + "_rvalue"],
                                                            data=[slope, rvalue], columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
-                        elif custom == "auc":
+                    elif custom == "auc":
+                        if tmp.empty:
+                            feat = pd.DataFrame(columns=columns,
+                                                index=[feature_name],
+                                                data=[empty_policy]*len(columns)).T
+                        else:
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
                                 if len(tmp_col) <=1 : # At least 2 points are needed to compute area under curve
-                                    auc_value = "foo_empty_policy"
+                                    auc_value = empty_policy
                                 else:
                                     y = tmp_col.values.astype(float)
                                     x = tmp_col.index
@@ -155,9 +161,15 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 feat.append(pd.DataFrame(index=[feature_name],
                                                          data=[auc_value], columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
-                        else:
-                            raise ValueError(f'Unknown custom definition "{custom}"')
                     else:
+                        raise ValueError(f'Unknown custom definition "{custom}"')
+                else:
+                    if tmp.empty:
+                        feat = pd.DataFrame(columns=columns,
+                                            index=[feature_name],
+                                            data=[empty_policy] * len(columns)).T
+                    else:
+
                         split = feature_definition["class"].rsplit('.', 1)
                         module_name = split[0]
                         class_name = split[1]
@@ -165,14 +177,14 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                         _func = getattr(m, class_name)
                         feat = tmp.astype(float).apply(_func)
 
-                    if feature_definition["divide_by_duration"] and type(feat) in [int, float]:
-                        feat /= duration
+                if feature_definition["divide_by_duration"] and type(feat) in [int, float]:
+                    feat /= duration
 
-                    if type(feat) == pd.Series:
-                        feat_columns = [feature_name]
-                    else:
-                        feat_columns = feat.columns
-                    features_on_sequence.append(pd.DataFrame(feat, columns=feat_columns))
+                if type(feat) == pd.Series:
+                    feat_columns = [feature_name]
+                else:
+                    feat_columns = feat.columns
+                features_on_sequence.append(pd.DataFrame(feat, columns=feat_columns))
             # concat all the features list in a DataFrame
             features_on_sequence = pd.concat(features_on_sequence, axis=1, sort=True).T
             # small magic to melt the DataFrame in a flat (one row) one, with columns are
@@ -183,7 +195,6 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
             features_on_sequence_flat = features_on_sequence_flat[['name', 'value']].set_index('name').transpose()
             features_on_sequence_flat.index = [sequence_occurence]
             features_on_sequence_flat = features_on_sequence_flat.dropna(how="all", axis=1)
-            features_on_sequence_flat.replace("foo_empty_policy", empty_policy, inplace=True)
 
             # drop columns that have ONLY NaNs
 
