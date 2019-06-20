@@ -151,8 +151,9 @@ class CleanSignal(prefect.Task):
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
 
-        with pd.HDFStore(signal_file, 'r') as signal_store, \
-                pd.HDFStore(events_file, 'r') as events_store:
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(signal_file, 'r') as signal_store, \
+             pd.HDFStore(events_file, 'r') as events_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
