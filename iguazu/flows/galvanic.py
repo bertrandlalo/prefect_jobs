@@ -13,6 +13,7 @@ import pandas as pd
 
 from iguazu.tasks.common import ListFiles
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
+from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
 from iguazu.tasks.unity import ReportSequences
 from iguazu.tasks.summarize import ExtractFeatures
@@ -100,6 +101,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         ),
         corrupted_maxratio=0.3,
         force=force,
+        state_handlers=[logging_handler],
     )
     apply_cvx = ApplyCVX(
         warmup_duration=15,
@@ -111,6 +113,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         ),
         cvxeda_kwargs=None,
         force=force,
+        state_handlers=[logging_handler],
     )
     detect_scr_peaks = DetectSCRPeaks(
         warmup_duration=15,
@@ -124,6 +127,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             prominence_window=15,
         ),
         force=force,
+        state_handlers=[logging_handler],
     )
     extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
                                            report_group="/unity/sequences_report",
