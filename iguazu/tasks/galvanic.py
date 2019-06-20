@@ -28,6 +28,18 @@ from iguazu.helpers.files import FileProxy
 #     output filename with new path /gsr/timeseries/preprocessed
 
 class CleanSignal(prefect.Task):
+    ''' Pre-process galvanic signals.
+
+    This task performs the following steps:
+
+        - troncate the signal between the begining and end of the session
+        - append a 'bad' column to estimate quality as a boolean
+        - detect and remove glitches and 0.0 values due to OA saturation
+        - inverse the voltage signal to estimate skin conductance
+        - interpolate missing samples
+        - low-pass filter the signal
+        - scale the signal on the whole session between 0 and 1
+    '''
 
     def __init__(self,
                  signal_group: Optional[str] = None,
@@ -79,6 +91,26 @@ class CleanSignal(prefect.Task):
     def run(self,
             signal: FileProxy,
             events: FileProxy) -> FileProxy:
+        '''
+        This task is a basic ETL where the input and output are HDF5 file proxy
+        and where the transformation is made on a DataFrame.
+        It consists in loading the signals and events from the input files proxy,
+        applying some processing (transformations) and
+        saving the result into an output file proxy.
+
+        The transformation that is performed is a cleaning of the galvanic signal.
+        See the documentation of :func:`galvanic.galvanic_clean`.
+
+        Parameters
+        ----------
+        signal: file proxy with input signals.
+        events:  file proxy with input events.
+
+        Returns
+        -------
+        output: file proxy with transformed signals.
+
+        '''
 
         output = signal.make_child(suffix='_clean')
         self.logger.info('Galvanic preprocessing for signal=%s, events=%s -> %s',
@@ -190,6 +222,26 @@ class ApplyCVX(prefect.Task):
         self.force = force
 
     def run(self, signal: FileProxy) -> FileProxy:
+        '''
+        This task is a basic ETL where the input and output are HDF5 file proxy
+        and where the transformation is made on a DataFrame.
+        It consists in loading the signals and events from the input files proxy,
+        applying some processing (transformations) and
+        saving the result into an output file proxy.
+
+        The transformation that is performed is a deconvolution of the galvanic signal.
+        See the documentation of :func:`galvanic.galvanic_cvx`.
+
+        Parameters
+        ----------
+        signal: file proxy with input signals.
+        events:  file proxy with input events.
+
+        Returns
+        -------
+        output: file proxy with transformed signals.
+
+        '''
         output = signal.make_child(suffix='_cvx')
         self.logger.info('Galvanic CVXEDA for %s -> %s', signal, output)
 
