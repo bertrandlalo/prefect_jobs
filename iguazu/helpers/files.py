@@ -1,6 +1,7 @@
 import abc
 import collections
 import copy
+import json
 import logging
 import pathlib
 from typing import Any, Dict
@@ -8,7 +9,6 @@ from typing import Any, Dict
 from prefect import context
 from quetzal.client import helpers
 from quetzal.client.utils import get_data_dir
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ class LocalFile(FileProxy):
                                'the prefect context')
         if temporary:
             file_dir = pathlib.Path(context.temp_dir)
-        else :
+        else:
             file_dir = pathlib.Path(context.output_dir)
         # Create a new file with the help of pathlib
         # First, the path
@@ -229,4 +229,3 @@ class LocalFile(FileProxy):
         base_metadata = self.metadata.get('base', {})
         filename = base_metadata.get('filename', 'unnamed')
         return f'LocalFile<filename={filename}>'
-
