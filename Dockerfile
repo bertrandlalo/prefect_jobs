@@ -36,4 +36,3 @@ WORKDIR /code
 COPY setup.cfg setup.py ./
 COPY iguazu ./iguazu
 RUN pip install .
-RUN pip install remote-pdb
