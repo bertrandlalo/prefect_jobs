@@ -76,6 +76,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
+        skip_on_upstream_skip=False,
     )
     quetzal_query = Query(
         name='Query quetzal',
@@ -114,6 +115,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         cvxeda_kwargs=None,
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
     detect_scr_peaks = DetectSCRPeaks(
         warmup_duration=15,
@@ -128,6 +130,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         ),
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
     extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
                                            report_group="/unity/sequences_report",
@@ -140,7 +143,9 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                                                           "columns": ['SCR_peaks_increase-duration',
                                                                       'SCR_peaks_increase-amplitude'],
                                                           "divide_by_duration": False, "empty_policy": "bad",
-                                                          "drop_bad_samples": True}})
+                                                          "drop_bad_samples": True}},
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
 
     scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
     extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
@@ -162,9 +167,12 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                                                "auc": {"custom": "auc", "columns": scl_columns,
                                                        "divide_by_duration": False, "empty_policy": "bad",
                                                        "drop_bad_samples": True},
-                                           })
+                                           },
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
 
-    report_sequences = ReportSequences(sequences=None)
+    report_sequences = ReportSequences(sequences=None,
+                                       skip_on_upstream_skip=False)
     # Flow/runtime arguments
     flow_parameters = dict(
         basedir=base_dir,
