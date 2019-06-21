@@ -11,15 +11,12 @@ dependencies:
   - scipy
   - pandas
   - pytables
-  - tqdm
-  - pip
-  - rpy2
   - tzlocal
   - simplegeneric
   - Click
   - prefect
+  - pip
   - pip:
     - graphviz
     - git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client
 #    - git+https://github.com/OpenMindInnovation/datascience_utils
-
