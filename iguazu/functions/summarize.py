@@ -1,6 +1,7 @@
-import pandas as pd
-import numpy as np
 from importlib import import_module
+
+import numpy as np
+import pandas as pd
 from scipy.stats import linregress
 from sklearn.metrics import auc
 
@@ -164,9 +165,9 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                         raise ValueError(f'Unknown custom definition "{custom}"')
                 else:
                     if tmp.empty:
-                        feat = pd.DataFrame(columns=columns,
-                                            index=[feature_name],
-                                            data=[empty_policy] * len(columns)).T
+                        feat = pd.DataFrame(index=columns,
+                                            columns=[feature_name],
+                                            data=[empty_policy] * len(columns))
                     else:
 
                         split = feature_definition["class"].rsplit('.', 1)
