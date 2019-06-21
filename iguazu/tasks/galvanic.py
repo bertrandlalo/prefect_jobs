@@ -196,6 +196,12 @@ class CleanSignal(prefect.Task):
         output.metadata['galvanic'].update(meta)
         output.upload()
 
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
+
         return output
 
 
