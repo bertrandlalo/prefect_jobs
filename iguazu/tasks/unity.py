@@ -1,13 +1,10 @@
-from typing import Dict, Optional
-import os
+from typing import Optional
 
-from prefect import task
-from prefect.engine import signals
-import prefect
 import pandas as pd
+import prefect
 
-from iguazu.functions.unity import report_sequences
 from iguazu.functions.common import path_exists_in_hdf5
+from iguazu.functions.unity import report_sequences
 from iguazu.helpers.files import FileProxy
 
 
@@ -99,12 +96,8 @@ class ReportSequences(prefect.Task):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             report.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'vr_sequences': meta,
-            }
-
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['vr_sequences'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
