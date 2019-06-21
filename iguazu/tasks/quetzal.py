@@ -117,7 +117,6 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
-        print(list(context))
         # TODO: manage username, password et al from context?
         self.logger.debug('Querying Quetzal at %s with SQL=%s',
                           self.client.configuration.host,
