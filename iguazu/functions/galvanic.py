@@ -200,11 +200,3 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, glitch_kwargs
     label_bad_from_amplitude(data, column_name="SCR_peaks_increase-duration", output_column="bad",
                              inplace=True, **glitch_kwargs)
     return data
-
-
-# def galvanic_baseline_correction(features, ):
-#     pass
-
-f = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-03-29.14.36.17_df30e76534f6aa2f53cb9bbe3a4d9dd135c5c2da8ce8b7645bb8fdd6461c3b2a_clean_cvx_features.hdf5"
-features = pd.read_hdf(f, "/gsr/features/scl")
-sequences = [ "lobby_sequence_0",  "lobby_sequence_1", "physio-sonification_survey_0",  "cardiac-coherence_survey_0", "cardiac-coherence_survey_1", "cardiac-coherence_score_0"]
