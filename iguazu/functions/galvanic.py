@@ -215,6 +215,8 @@ def galvanic_baseline_correction(features, sequences, columns=None):
         Dataframe with features where index are periods and columns are feature names.
     sequences: list
         List of period names to compute the pseudo baseline.
+    columns: list
+        List of columns where the baseline correction should be applied.
 
     Returns
     -------
@@ -282,11 +284,18 @@ def galvanic_baseline_correction(features, sequences, columns=None):
     if not set(sequences).issubset(set(features.index)):
         logger.warning('Cannot find all pseudo-baseline sequences. Missing: %s',
                        list(set(sequences) - set(features.index)))
+
+    columns = columns or features.columns
+    if not set(columns).issubset(set(features.columns)):
+        raise ValueError('Cannot find all columns in features. Missing: %s',
+                         list(set(columns) - set(features.columns)))
+
     available_pseudo_baselines = list(set(sequences) & set(features.index))
     features_baseline = features.loc[available_pseudo_baselines, :]
     features_baseline = features_baseline.where(
         features_baseline.applymap(lambda x: isinstance(x, (int, float, np.int64, np.float64))), other=np.NaN)
     valid_sequences_ratio = (1 - features_baseline.isna().mean()).to_dict()
+    valid_sequences_ratio = {column: valid_sequences_ratio[column] for column in columns}
     features_baseline_averaged = features_baseline.mean()
 
     def safe_substraction(x, correction):
@@ -296,7 +305,7 @@ def galvanic_baseline_correction(features, sequences, columns=None):
             return x
 
     features_corrected = features.copy()
-    for column in features:
+    for column in columns:
         correction = features_baseline_averaged[column]
         features_corrected[[column]] = features_corrected[[column]].applymap(lambda x: safe_substraction(x, correction))
     return features_corrected, valid_sequences_ratio
