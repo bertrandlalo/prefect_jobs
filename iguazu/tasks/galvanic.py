@@ -1,13 +1,10 @@
 from typing import Dict, Optional
-import os
 
-from prefect import task
-from prefect.engine import signals
-import prefect
 import pandas as pd
+import prefect
 
+from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
-from iguazu.functions.common import path_exists_in_hdf5, safe_read_hdf5
 from iguazu.helpers.files import FileProxy
 
 
@@ -153,7 +150,7 @@ class CleanSignal(prefect.Task):
 
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(signal_file, 'r') as signal_store, \
-             pd.HDFStore(events_file, 'r') as events_store:
+                pd.HDFStore(events_file, 'r') as events_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
@@ -191,12 +188,9 @@ class CleanSignal(prefect.Task):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             clean.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'galvanic': meta,
-            }
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['galvanic'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
@@ -304,9 +298,8 @@ class ApplyCVX(prefect.Task):
             }
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['galvanic'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
-
         return output
 
 
@@ -409,12 +402,8 @@ class DetectSCRPeaks(prefect.Task):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             scr.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'galvanic': meta,
-            }
-
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['galvanic'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
@@ -429,7 +418,7 @@ class RemoveBaseline(prefect.Task):
                  features_group: str,
                  output_group: str,
                  sequences: Optional[list] = None,
-
+                 columns: Optional[list] = None,
                  force: bool = False,
                  **kwargs):
         '''
@@ -441,25 +430,26 @@ class RemoveBaseline(prefect.Task):
         output_group
         feature_definitions
         sequences
+        columns
         force
         kwargs
         '''
         super().__init__(**kwargs)
         self.features_group = features_group
         self.output_group = output_group
-        self.sequences = sequences or [ 'lobby_sequence_0',
-                                         'lobby_sequence_1',
-                                         'physio-sonification_survey_0',
-                                         'cardiac-coherence_survey_0',
-                                         'cardiac-coherence_survey_1',
-                                         'cardiac-coherence_score_0']
+        self.sequences = sequences or ['lobby_sequence_0',
+                                       'lobby_sequence_1',
+                                       'physio-sonification_survey_0',
+                                       'cardiac-coherence_survey_0',
+                                       'cardiac-coherence_survey_1',
+                                       'cardiac-coherence_score_0']
+        self.columns = columns
         self.force = force
-
 
     def run(self,
             features: FileProxy) -> FileProxy:
 
-        output = signals.make_child(suffix='_corrected')
+        output = features.make_child(suffix='_corrected')
         self.logger.info('Correcting baseline for features %s -> %s',
                          features, output)
 
@@ -499,11 +489,14 @@ class RemoveBaseline(prefect.Task):
             try:
                 # TODO discuss: select column before sending it to a column
                 df_features = pd.read_hdf(features_store, features_group)
-                df_features_corrected, valid_sequences_ratio = galvanic_baseline_correction(df_features, sequences=self.sequences)
+                if df_features.empty:
+                    raise Exception(
+                        "Received empty dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
+                df_features_corrected, valid_sequences_ratio = galvanic_baseline_correction(df_features,
+                                                                                            sequences=self.sequences,
+                                                                                            columns=self.columns)
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'SUCCESS',
                     'version': '0.0',
                     'valid_sequences_ratio': valid_sequences_ratio
@@ -513,8 +506,6 @@ class RemoveBaseline(prefect.Task):
                 df_features_corrected = pd.DataFrame()
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'FAILURE',
                     'version': '0.0',
                     'exception': str(ex),
@@ -530,13 +521,8 @@ class RemoveBaseline(prefect.Task):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             df_features_corrected.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'baseline_correction': meta,  # TODO: change to something else?
-            }
-
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['baseline_correction'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
-
