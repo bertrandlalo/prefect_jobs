@@ -175,7 +175,7 @@ class LocalFile(FileProxy):
             self._metadata['base']['path'] = str(self._file.parent)
         return self._metadata
 
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'LocalFile':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'LocalFile':
         """ Creates a child FileProxy that inherits from its parent's metadata.
 
         Parameters
@@ -195,15 +195,17 @@ class LocalFile(FileProxy):
         if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
-        temp_dir = pathlib.Path(context.temp_dir)
-
+        if temporary:
+            file_dir = pathlib.Path(context.temp_dir)
+        else :
+            file_dir = pathlib.Path(context.output_dir)
         # Create a new file with the help of pathlib
         # First, the path
         base_metadata = self.metadata['base']
         if path is None:
-            new = temp_dir / self._relative_dir
+            new = file_dir / self._relative_dir
         else:
-            new = temp_dir / pathlib.Path(path)
+            new = file_dir / pathlib.Path(path)
         # Then, the filename
         if filename is None:
             new = new / base_metadata['filename']
@@ -215,7 +217,7 @@ class LocalFile(FileProxy):
         new = new.with_name(new.stem + suffix + extension)
 
         # Create new child proxy class and propagate metadata
-        child = LocalFile(new, base_dir=temp_dir)
+        child = LocalFile(new, base_dir=file_dir)
         return child
 
     def upload(self):
