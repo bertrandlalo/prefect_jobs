@@ -10,16 +10,13 @@ dependencies = [
     "scipy",
     "pandas",
     "tables",
-    "tqdm",
-    "pip",
-    "rpy2",
     "tzlocal",
     "simplegeneric",
     "click",
     "prefect",
     "graphviz",
-    "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils#egg=dsu",
-    "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@d62ff60#egg=quetzal-client"
+    "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@01b4f57#egg=dsu",
+    "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@7872401#egg=quetzal-client"
  ]
 build_dependencies = dependencies + ['pytest-runner']
 test_dependencies = ['pytest']

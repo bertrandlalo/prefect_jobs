@@ -2,12 +2,11 @@ numpy
 scipy
 pandas
 tables
-tqdm
-pip
-rpy2
 tzlocal
 simplegeneric
 Click
 prefect
+bokeh
 graphviz
-git+https://github.com/quetz-al/quetzal-client.git@d62ff60#egg=quetzal-client
+git+https://github.com/quetz-al/quetzal-client.git@7872401#egg=quetzal-client
+git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@01b4f57#egg=dsu
