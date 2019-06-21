@@ -135,6 +135,7 @@ class QuetzalFile(FileProxy):
         # link child to parent
         child._metadata['iguazu']['parents'] = base_metadata['id']
 
+        new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
         child._local_path = new
         child._temporary = temporary
         return child

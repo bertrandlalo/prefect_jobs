@@ -95,7 +95,7 @@ class ReportSequences(prefect.Task):
         with pd.HDFStore(output_file, 'w') as output_store:
             report.to_hdf(output_store, output_group)
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata[self.__class__.__name__].update(meta)
+        output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
 
         return output

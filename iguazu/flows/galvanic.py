@@ -68,13 +68,14 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     # Tasks and task arguments
     list_files = ListFiles(as_proxy=True)
     quetzal_create = CreateWorkspace(
-        workspace_name='iguazu-dev-8',
+        workspace_name='iguazu-dev-merged-3',
         exist_ok=True,
         families=dict(
             iguazu=None,
             galvanic=None,
             omi=None,
             vr_sequences=None,
+            task=None,
         ),
     )
     quetzal_scan = ScanWorkspace(
