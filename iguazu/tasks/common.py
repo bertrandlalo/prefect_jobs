@@ -67,11 +67,11 @@ class MergeFilesFromGroups(prefect.Task):
     def run(self, parent, **kwargs) -> FileProxy:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
-        with pd.HDFStore(output._file, "a") as output_store:
+        with pd.HDFStore(output.file, "a") as output_store:
             for output_group, file_proxy in kwargs.items():
                 output.metadata[output_group].update(file_proxy.metadata)
                 output_group = output_group.replace("_", "/")
-                with pd.HDFStore(file_proxy._file, "r") as input_store:
+                with pd.HDFStore(file_proxy.file, "r") as input_store:
                     groups = input_store.keys()
                     if len(groups) > 1:
                         # multiple groups in the HDF5, then get rid of the common path and
