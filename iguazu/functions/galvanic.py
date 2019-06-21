@@ -5,8 +5,8 @@ from datascience_utils.filters import scipy_filter_signal, scipy_scale_signal
 from datascience_utils.cvxEDA import apply_cvxEDA
 from datascience_utils.peaks import OfflinePeak
 from sklearn.preprocessing import RobustScaler
-from prefect import task, context
-logger = context.get("logger")
+import logging
+logger = logging.getLogger()
 
 def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio):
@@ -203,7 +203,7 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, glitch_kwargs
     return data
 
 
-def galvanic_baseline_correction(features, sequences):
+def galvanic_baseline_correction(features, sequences, columns=None):
     """ Estimate basal state for features on pseudo-baseline sequences and remove it.
 
     Parameters
@@ -247,7 +247,7 @@ def galvanic_baseline_correction(features, sequences):
     intro_calibration_0                                                                          bad  ...                                    10.6846
     >>> sequences
         ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0', 'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1', 'cardiac-coherence_score_0']
-    >>> features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences)
+    >>> features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences, columns=None)
     >>> features_corrected
     name                                               F_clean_inversed_lowpassed_zscored_SCL_median  ... F_clean_inversed_lowpassed_zscored_SCL_auc
     physio-sonification_sequence_0                                                               bad  ...                                   -142.678
