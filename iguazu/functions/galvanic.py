@@ -6,7 +6,9 @@ from datascience_utils.cvxEDA import apply_cvxEDA
 from datascience_utils.peaks import OfflinePeak
 from sklearn.preprocessing import RobustScaler
 import logging
+
 logger = logging.getLogger()
+
 
 def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio):
@@ -59,23 +61,23 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
 
     """
     if not events.index.is_monotonic:
-        raise Exception ("Events index should be monotonic. ")
+        raise Exception('Events index should be monotonic. ')
 
-    begins = events.index[0] - np.timedelta64(1, 's') * warmup_duration  # begin 30 seconds before the beginning of the session
-    ends = events.index[-1] + np.timedelta64(1, 's') * warmup_duration  # end 30 seconds after the beginning of the session
+    begins = events.index[0] - np.timedelta64(1,
+                                              's') * warmup_duration  # begin 30 seconds before the beginning of the session
+    ends = events.index[-1] + np.timedelta64(1,
+                                             's') * warmup_duration  # end 30 seconds after the beginning of the session
 
     # troncate dataframe on session times
     data = data[begins:ends]
     data = data.loc[:, [column]]
 
     # label 0.0 values as bad
-    data.loc[data.loc[:, column] == 0.0, "bad"] = True
+    data.loc[data.loc[:, column] == 0.0, 'bad'] = True
 
     # add a column "bad" with rejection boolean on amplitude criteria
-    label_bad_from_amplitude(data, column_name=column, output_column="bad", inplace=True,
+    label_bad_from_amplitude(data, column_name=column, output_column='bad', inplace=True,
                              **glitch_kwargs)
-
-
 
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column]].copy().add_suffix('_clean')
@@ -85,7 +87,8 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
-        raise Exception("AO saturation of {corrupted_ratio} exceeds {maxratio}.".format(corrupted_ratio=corrupted_ratio, maxratio=corrupted_maxratio))
+        raise Exception('AO saturation of {corrupted_ratio} exceeds {maxratio}.'.format(corrupted_ratio=corrupted_ratio,
+                                                                                        maxratio=corrupted_maxratio))
 
     # interpolate the signal
     begins = data_clean.first_valid_index()
@@ -93,22 +96,22 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
     data_clean = data_clean[begins:ends]
 
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
-    data_clean_inversed = 1 / data_clean.copy().add_suffix("_inversed")
-
+    data_clean_inversed = 1 / data_clean.copy().add_suffix('_inversed')
 
     data_clean_inversed.interpolate(**interpolation_kwargs, inplace=True)
 
     # lowpass filter signal
-    scipy_filter_signal(data_clean_inversed, columns=[column + "_clean_inversed"], btype='lowpass',
-                        **filter_kwargs, suffix="lowpassed", inplace=True)
+    scipy_filter_signal(data_clean_inversed, columns=[column + '_clean_inversed'], btype='lowpass',
+                        **filter_kwargs, suffix='lowpassed', inplace=True)
 
     # scale signal on the all session
-    scipy_scale_signal(data_clean_inversed, columns=[column + "_clean_inversed_lowpassed"], suffix="zscored",
+    scipy_scale_signal(data_clean_inversed, columns=[column + '_clean_inversed_lowpassed'], suffix='zscored',
                        inplace=True, **scaling_kwargs)
 
     # return preprocessed data
     data = pd.concat([data, data_clean, data_clean_inversed], axis=1)
     return data
+
 
 def galvanic_cvx(data, column, warmup_duration, glitch_params, cvxeda_params=None):
     """ Separate phasic (SCR) and tonic (SCL) galvanic components using a convexe deconvolution.
@@ -143,13 +146,13 @@ def galvanic_cvx(data, column, warmup_duration, glitch_params, cvxeda_params=Non
     data = apply_cvxEDA(data[[column]].dropna(), column_name=column, kwargs=cvxeda_params)
 
     # add a column "bad" with rejection boolean on amplitude criteria
-    label_bad_from_amplitude(data, column_name=column + "_SCR",
-                             output_column="bad", inplace=True, **glitch_params)
+    label_bad_from_amplitude(data, column_name=column + '_SCR',
+                             output_column='bad', inplace=True, **glitch_params)
     # set warmup period to "bad"
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
     # TODO: this does not do what it's supposed to do; it should be a slice!
-    data.loc[:data.index[0] + warm_up_timedelta, "bad"] = True
-    data.loc[data.index[-1] - warm_up_timedelta:, "bad"] = True
+    data.loc[:data.index[0] + warm_up_timedelta, 'bad'] = True
+    data.loc[data.index[-1] - warm_up_timedelta:, 'bad'] = True
     return data
 
 
@@ -185,20 +188,20 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, glitch_kwargs
     """
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
     data = data.loc[:, [column]]
-    data = data[data.index[0]+warm_up_timedelta:data.index[-1]-warm_up_timedelta]
+    data = data[data.index[0] + warm_up_timedelta:data.index[-1] - warm_up_timedelta]
     data.columns = ["SCR"]  # rename the column for simplicity purpose
     scaler = RobustScaler(with_centering=True, quantile_range=(5, 95.0))
-    peakdetector = OfflinePeak(data, column_name="SCR", scaler=scaler, **peaks_kwargs)
+    peakdetector = OfflinePeak(data, column_name='SCR', scaler=scaler, **peaks_kwargs)
     peakdetector.simulation()
 
     data = peakdetector._data.loc[:,
-                       ['SCR', 'peaks', 'peaks_left_locals', 'peaks_left_prominences', 'peaks_width_heights']].loc[
-                       peakdetector.peaks[0], :]
+           ['SCR', 'peaks', 'peaks_left_locals', 'peaks_left_prominences', 'peaks_width_heights']].loc[
+           peakdetector.peaks[0], :]
     data.columns = ['SCR', 'SCR_peaks_detected', 'SCR_peaks_increase-duration',
-                                'SCR_peaks_increase-amplitude',
-                                'SCR_peaks_recovery-duration']
+                    'SCR_peaks_increase-amplitude',
+                    'SCR_peaks_recovery-duration']
 
-    label_bad_from_amplitude(data, column_name="SCR_peaks_increase-duration", output_column="bad",
+    label_bad_from_amplitude(data, column_name='SCR_peaks_increase-duration', output_column='bad',
                              inplace=True, **glitch_kwargs)
     return data
 
@@ -281,9 +284,6 @@ def galvanic_baseline_correction(features, sequences, columns=None):
                        list(set(sequences) - set(features.index)))
     available_pseudo_baselines = list(set(sequences) & set(features.index))
     features_baseline = features.loc[available_pseudo_baselines, :]
-
-    features_baseline.loc["lobby_sequence_1", "F_clean_inversed_lowpassed_zscored_SCL_median"] = "bad"
-
     features_baseline = features_baseline.where(
         features_baseline.applymap(lambda x: isinstance(x, (int, float, np.int64, np.float64))), other=np.NaN)
     valid_sequences_ratio = (1 - features_baseline.isna().mean()).to_dict()
@@ -300,12 +300,3 @@ def galvanic_baseline_correction(features, sequences, columns=None):
         correction = features_baseline_averaged[column]
         features_corrected[[column]] = features_corrected[[column]].applymap(lambda x: safe_substraction(x, correction))
     return features_corrected, valid_sequences_ratio
-
-
-
-## TODO: delete that, for test purposes
-# f = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-04-05.14.37.15_4bedfdde268d635a3c53aa1b7727f3bf41b932883ac4c1cff623186ea32b0e67_clean_cvx_features.hdf5"
-# features = pd.read_hdf(f, "/gsr/features/scl")
-# sequences = [ "lobby_sequence_0",  "lobby_sequence_1", "physio-sonification_survey_0",  "cardiac-coherence_survey_0", "cardiac-coherence_survey_1", "cardiac-coherence_score_0"]
-# features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences)
-
