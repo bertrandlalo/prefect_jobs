@@ -79,6 +79,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
+        skip_on_upstream_skip=False,
     )
     quetzal_query = Query(
         name='Query quetzal',
@@ -117,6 +118,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         cvxeda_kwargs=None,
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
     detect_scr_peaks = DetectSCRPeaks(
         warmup_duration=15,
@@ -131,6 +133,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         ),
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
     report_sequences = ReportSequences(sequences=None,
                                        force=force,
@@ -149,7 +152,8 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
                                                           "divide_by_duration": False, "empty_policy": 0.0,
                                                           "drop_bad_samples": True}},
                                            force=force,
-                                           state_handlers=[logging_handler])
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
 
     scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
     extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
@@ -173,7 +177,8 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
                                                        "drop_bad_samples": True},
                                            },
                                            force=force,
-                                           state_handlers=[logging_handler])
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
     baseline_sequences = ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0',
                           'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1',
                           'cardiac-coherence_score_0']

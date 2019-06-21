@@ -1,11 +1,13 @@
 from typing import Dict, Optional
 
+from prefect.engine.runner import ENDRUN
 import pandas as pd
 import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
 from iguazu.helpers.files import FileProxy
+from iguazu.helpers.states import SkippedResult, GracefulFail
 
 
 #     This task is a basic ETL where the input and output are HDF5 files and where the transformation is made on a DataFrame.
@@ -137,13 +139,11 @@ class CleanSignal(prefect.Task):
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
             self.logger.info('Output already exists, skipping')
-            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
-            # TODO: consider a way to raise a skip with results. Currently, the
-            #       only way I think this is possible is by making a new signal
-            #       that derives from PrefectStateSignal and that uses a new
-            #       custom state class as well.
-            #       Another solution could be to use a custom state handler
-            return output
+
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            skip = SkippedResult('Output already exists, skipping', result=output)
+            raise ENDRUN(state=skip)
 
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
@@ -191,6 +191,12 @@ class CleanSignal(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata[self.__class__.__name__].update(meta)
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
 
         return output
 
@@ -247,13 +253,11 @@ class ApplyCVX(prefect.Task):
             # TODO: consider a function that uses a FileProxy, in particular a
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
-            self.logger.info('Output already exists, skipping')
-            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
-            # TODO: consider a way to raise a skip with results. Currently, the
-            #       only way I think this is possible is by making a new signal
-            #       that derives from PrefectStateSignal and that uses a new
-            #       custom state class as well.
-            return output
+
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            skip = SkippedResult('Output already exists, skipping', result=output)
+            raise ENDRUN(state=skip)
 
         signal_file = signal.file
 
@@ -357,12 +361,11 @@ class DetectSCRPeaks(prefect.Task):
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
             self.logger.info('Output already exists, skipping')
-            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
-            # TODO: consider a way to raise a skip with results. Currently, the
-            #       only way I think this is possible is by making a new signal
-            #       that derives from PrefectStateSignal and that uses a new
-            #       custom state class as well.
-            return output
+
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            skip = SkippedResult('Output already exists, skipping', result=output)
+            raise ENDRUN(state=skip)
 
         signal_file = signal.file
 
