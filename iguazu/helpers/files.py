@@ -8,7 +8,7 @@ from typing import Any, Dict
 from prefect import context
 from quetzal.client import helpers
 from quetzal.client.utils import get_data_dir
-
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,12 @@ class LocalFile(FileProxy):
         self._file = pathlib.Path(file)
         self._base_dir = pathlib.Path(base_dir)
         self._relative_dir = self._file.relative_to(base_dir).parent
-        self._metadata = collections.defaultdict(dict)
+        self._meta_file = self._file.with_name(self._file.stem + ".json")
+        if self._meta_file.exists():
+            with open(self._meta_file) as json_file:
+                self._metadata = json.load(json_file)
+        else:
+            self._metadata = collections.defaultdict(dict)
 
     @property
     def file(self) -> pathlib.Path:
@@ -215,7 +220,8 @@ class LocalFile(FileProxy):
 
     def upload(self):
         # Upload on local file does nothing
-        pass
+        with open(self._meta_file, 'w') as outfile:
+            json.dump(self.metadata, outfile)
 
     def __repr__(self):
         base_metadata = self.metadata.get('base', {})
