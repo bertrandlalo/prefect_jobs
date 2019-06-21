@@ -7,9 +7,11 @@ from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
+from prefect.engine.runner import ENDRUN
 from quetzal.client import QuetzalAPIException, helpers
 
 from iguazu.helpers.files import QuetzalFile
+from iguazu.helpers.states import SkippedResult
 
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
@@ -117,8 +119,10 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
-        print(list(context))
-        # TODO: manage username, password et al from context?
+        for k,v in context.items():
+            self.logger.info('Context: %s = %s', k ,v)
+        # from remote_pdb import RemotePdb
+        # RemotePdb('0.0.0.0', 4444).set_trace()
         self.logger.debug('Querying Quetzal at %s with SQL=%s',
                           self.client.configuration.host,
                           query)
@@ -242,7 +246,11 @@ class CreateWorkspace(QuetzalBaseTask):
             # return the id
             details = workspaces[0]
             self._verify_workspace_requirements(details, families)
-            return details['id']
+
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            skip = SkippedResult('Workspace already exists, skipping', result=details['id'])
+            raise ENDRUN(state=skip)
 
         else:
             # There are many results. For the moment, fail. Maybe in the future

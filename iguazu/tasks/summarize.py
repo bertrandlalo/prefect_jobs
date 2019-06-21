@@ -1,15 +1,17 @@
 from typing import Optional
-import prefect
-import pandas as pd
 
-from iguazu.functions.summarize import signal_to_feature
+from prefect.engine.runner import ENDRUN
+import pandas as pd
+import prefect
+
 from iguazu.functions.common import path_exists_in_hdf5
-from iguazu.helpers.files import FileProxy
+from iguazu.functions.summarize import signal_to_feature
+from iguazu.helpers.files import FileProxy, QuetzalFile
+from iguazu.helpers.states import SkippedResult
 
 
 class ExtractFeatures(prefect.Task):
     ''' Extract features from a signal based on period (time slices).
-
     '''
 
     def __init__(self,
@@ -70,14 +72,11 @@ class ExtractFeatures(prefect.Task):
             # TODO: consider a function that uses a FileProxy, in particular a
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
-            self.logger.info('Output already exists, skipping')
-            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
-            # TODO: consider a way to raise a skip with results. Currently, the
-            #       only way I think this is possible is by making a new signal
-            #       that derives from PrefectStateSignal and that uses a new
-            #       custom state class as well.
-            #       Another solution could be to use a custom state handler
-            return output
+
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            skip = SkippedResult('Output already exists, skipping', result=output)
+            raise ENDRUN(state=skip)
 
         signals_file = signals.file.resolve()
         report_file = report.file.resolve()
@@ -92,20 +91,16 @@ class ExtractFeatures(prefect.Task):
                                              feature_definitions=self.feature_definitions, sequences=self.sequences)
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'SUCCESS',
-                    'version': '0.0',
+                    'version': '0.0',  # Todo get version
                 }
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail: %s', ex)
                 features = pd.DataFrame()
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'FAILURE',
-                    'version': '0.0',
+                    'version': '0.0',  # Todo get version
                     'exception': str(ex),
                 }
 
@@ -116,15 +111,54 @@ class ExtractFeatures(prefect.Task):
 
         # Manage output, save to file
         output_file = output.file
-        output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             features.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'vr_sequences': meta,  # TODO: change to something else?
-            }
-
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['vr_sequences'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
+
+
+class SummarizePopulation(prefect.Task):
+    def __init__(self, groups, axis_name='sequence', **kwargs):
+        super().__init__(**kwargs)
+        self.groups = {group.replace('_', '/'): groups[group] for group in groups}
+        self.axis_name = axis_name
+
+    def run(self,
+            files: list) -> FileProxy:
+
+        if not files:
+            self.logger.log("SummarizePopulation received an empty list. ")
+            return
+
+        parent = files[0]
+        output = parent.make_child(filename=None, path=None, suffix="_population",
+                                   extension=".csv", temporary=False)
+        output._metadata.clear()
+
+        data_list_population = []
+        for file in files:
+            if isinstance(file, QuetzalFile):
+                file_id = file._file_id
+            else:  # LocalFile
+                file_id = file._file.stem
+            with pd.HDFStore(file._file, 'r') as store:
+                data_summary_file = pd.DataFrame()
+                for group, columns in self.groups.items():
+                    data = pd.read_hdf(store, group, columns=columns)
+                    if not data.empty:
+                        # todo: add meta here
+                        data_summary_file = data_summary_file.join(data, how="outer")
+                    else:
+                        pass
+                        a = 1
+                        # todo: do something here
+                if not data_summary_file.empty:
+                    data_summary_file.loc[:, 'file_id'] = file_id
+                    data_list_population.append(data_summary_file)
+
+        data_output = pd.concat(data_list_population, axis=0)
+        data_output = data_output.rename_axis(self.axis_name).reset_index()
+        data_output.to_csv(output.file)

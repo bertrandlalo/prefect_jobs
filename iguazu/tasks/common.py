@@ -1,7 +1,10 @@
+import os
 import pathlib
 
+import pandas as pd
 import prefect
 
+from iguazu.helpers.files import FileProxy
 from iguazu.helpers.files import LocalFile
 
 
@@ -18,6 +21,7 @@ class ListFiles(prefect.Task):
     -------
     files: a list of files matching the specified pattern.
     """
+
     def __init__(self, as_proxy: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._as_proxy = as_proxy
@@ -39,3 +43,47 @@ class ListFiles(prefect.Task):
             return proxies
 
         return files
+
+
+class MergeFilesFromGroups(prefect.Task):
+    ''' Merge HDF5 files with unique groups in one file containing all the groups.
+    '''
+
+    def __init__(self, suffix=None, **kwargs):
+        '''
+
+        Parameters
+        ----------
+        suffix: str
+            Suffix to add at the end of the parent file when creating its child
+
+        kwargs:
+            Keywords arguments with keys are hdf5 group to read and merge and
+            values are hdf5 file proxy.
+        '''
+        super().__init__(**kwargs)
+        self.suffix = suffix or "_merged"
+
+    def run(self, parent, **kwargs) -> FileProxy:
+
+        output = parent.make_child(temporary=False, suffix=self.suffix)
+        with pd.HDFStore(output.file, "a") as output_store:
+            for output_group, file_proxy in kwargs.items():
+                output.metadata[output_group].update(file_proxy.metadata)
+                output_group = output_group.replace("_", "/")
+                with pd.HDFStore(file_proxy.file, "r") as input_store:
+                    groups = input_store.keys()
+                    if len(groups) > 1:
+                        # multiple groups in the HDF5, then get rid of the common path and
+                        # append it to the output group.
+                        common = os.path.commonprefix(input_store.keys())
+                        for group in groups:
+                            rel = os.path.relpath(group, common)
+                            data = pd.read_hdf(input_store, group)
+                            data.to_hdf(output_store, os.path.join(output_group, rel))
+                    else:
+                        data = pd.read_hdf(input_store, groups[0])
+                        data.to_hdf(output_store, output_group)
+
+            output.upload()
+            return output

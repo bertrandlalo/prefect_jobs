@@ -1,6 +1,7 @@
 import abc
 import collections
 import copy
+import json
 import logging
 import pathlib
 from typing import Any, Dict
@@ -8,7 +9,6 @@ from typing import Any, Dict
 from prefect import context
 from quetzal.client import helpers
 from quetzal.client.utils import get_data_dir
-
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class FileProxy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'FileProxy':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'FileProxy':
         # TODO: change extension
         pass
 
@@ -70,15 +70,14 @@ class QuetzalFile(FileProxy):
 
     @property
     def client(self):
-        # if 'quetzal_client' in context:
-        #     return context.quetzal_client
+        # TODO: reuse previous client if possible...
+        #       but needs some intelligence with respect to context
         if 'quetzal_client' in context:
             return helpers.get_client(**context.quetzal_client)
         return helpers.get_client(**self._client_kwargs)
 
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'QuetzalFile':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'QuetzalFile':
         # TODO: define what metadata gets inherited!
-        # TODO: what if file already exists in quetzal? How do we check this?
         if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
@@ -101,11 +100,32 @@ class QuetzalFile(FileProxy):
         extension = extension or new.suffix
         new = new.with_name(new.stem + suffix + extension)
 
+        # Verify if there already a child with the same name, path and parent
+        existing_meta = self._retrieve_child_meta(str(new.relative_to(temp_dir).parent), new.name)
+        if existing_meta:
+            child = QuetzalFile(file_id=existing_meta['base']['id'],
+                                workspace_id=self._wid,
+                                **self._client_kwargs)
+            child._metadata = existing_meta
+            # Propagate parent metadata (drop base metadata, drop all ids)
+            parent_metadata = copy.deepcopy(self._metadata)
+            for family in parent_metadata:
+                parent_metadata[family].pop('id', None)
+            parent_metadata.pop('base', None)
+            if 'iguazu' in parent_metadata:
+                parent_metadata['iguazu'].pop('parents', None)
+            child._metadata = _deep_update(child._metadata, parent_metadata)
+            return child
+
         # Create new child proxy class and propagate metadata
         child = QuetzalFile(file_id=None,
                             workspace_id=self._wid,
                             **self._client_kwargs)
         child._metadata = copy.deepcopy(self._metadata)
+        if not isinstance(child._metadata, collections.defaultdict):
+            tmp = collections.defaultdict(dict)
+            tmp.update(child._metadata)
+            child._metadata = tmp
         child._metadata.pop('base', None)
         child._metadata['base']['filename'] = new.name
         child._metadata['base']['path'] = str(new.relative_to(temp_dir).parent)
@@ -119,15 +139,36 @@ class QuetzalFile(FileProxy):
         child._temporary = temporary
         return child
 
+    def _retrieve_child_meta(self, path, filename):
+        logger.info('Retrieving possible child')
+        parent_id = self._file_id
+        candidates = helpers.file.find(self.client, wid=self._wid, path=path, filename=filename)
+        logger.info('File by name and path gave %d candidates', len(candidates))
+        for file_detail in sorted(candidates, key=lambda d: d.date, reverse=True):
+            meta = helpers.file.metadata(self.client, file_detail.id, wid=self._wid)
+            parent = meta.get('iguazu', {}).get('parents', None)
+            if parent == parent_id:
+                logger.info('Found a match with same parent %s', meta['base'])
+                return meta
+        logger.info('No candidate matches')
+        return None
+
     def upload(self):
         logger.info('Uploading %s to Quetzal', self._local_path)
-        if self._local_path is None or not self._local_path.exists():
+        if self._file_id is not None:
+            logger.info('File already has an id, no need to upload')
+        elif self._local_path is None or not self._local_path.exists():
             raise RuntimeError('Cannot upload if file does not exist')
-        with open(self._local_path, 'rb') as fd:
-            details = helpers.workspace.upload(self.client, self._wid, fd,
-                                               path=self.metadata['base']['path'],
-                                               temporary=self._temporary)
-        self._file_id = details.id
+        else:
+            with open(self._local_path, 'rb') as fd:
+                details = helpers.workspace.upload(self.client, self._wid, fd,
+                                                   path=self.metadata['base']['path'],
+                                                   temporary=self._temporary)
+            self._file_id = details.id
+
+        self._upload_metadata()
+
+    def _upload_metadata(self):
         metadata = copy.deepcopy(self.metadata)
         for family in metadata:
             if 'id' in metadata[family]:
@@ -157,20 +198,26 @@ class LocalFile(FileProxy):
         self._file = pathlib.Path(file)
         self._base_dir = pathlib.Path(base_dir)
         self._relative_dir = self._file.relative_to(base_dir).parent
-        self._metadata = collections.defaultdict(dict)
+        self._meta_file = self._file.with_name(self._file.name + ".json")
+        if self._meta_file.exists():
+            with open(self._meta_file) as json_file:
+                self._metadata = json.load(json_file)
+        else:
+            self._metadata = collections.defaultdict(dict) # type: Dict[str, Dict[str, Any]]
 
     @property
     def file(self) -> pathlib.Path:
+        self._file.parent.mkdir(parents=True, exist_ok=True)
         return self._file
 
     @property
     def metadata(self) -> Dict[str, Dict[str, Any]]:
-        if not self._metadata:
+        if not self._metadata:  # TODO: if json is present but not metadata, read it from there
             self._metadata['base']['filename'] = str(self._file.name)
             self._metadata['base']['path'] = str(self._file.parent)
         return self._metadata
 
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=False) -> 'LocalFile':
+    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'LocalFile':
         """ Creates a child FileProxy that inherits from its parent's metadata.
 
         Parameters
@@ -190,15 +237,17 @@ class LocalFile(FileProxy):
         if 'temp_dir' not in context or context.temp_dir is None:
             raise RuntimeError('Cannot create new file without a "temp_dir" on '
                                'the prefect context')
-        temp_dir = pathlib.Path(context.temp_dir)
-
+        if temporary:
+            file_dir = pathlib.Path(context.temp_dir)
+        else:
+            file_dir = pathlib.Path(context.output_dir)
         # Create a new file with the help of pathlib
         # First, the path
         base_metadata = self.metadata['base']
         if path is None:
-            new = temp_dir / self._relative_dir
+            new = file_dir / self._relative_dir
         else:
-            new = temp_dir / pathlib.Path(path)
+            new = file_dir / pathlib.Path(path)
         # Then, the filename
         if filename is None:
             new = new / base_metadata['filename']
@@ -210,15 +259,24 @@ class LocalFile(FileProxy):
         new = new.with_name(new.stem + suffix + extension)
 
         # Create new child proxy class and propagate metadata
-        child = LocalFile(new, base_dir=temp_dir)
+        child = LocalFile(new, base_dir=file_dir)
         return child
 
     def upload(self):
         # Upload on local file does nothing
-        pass
+        with open(self._meta_file, 'w') as outfile:
+            json.dump(self.metadata, outfile)
 
     def __repr__(self):
         base_metadata = self.metadata.get('base', {})
         filename = base_metadata.get('filename', 'unnamed')
         return f'LocalFile<filename={filename}>'
 
+
+def _deep_update(dest, src):
+    for k, v in src.items():
+        if isinstance(v, collections.Mapping):
+            dest[k] = _deep_update(dest.get(k, {}), v)
+        else:
+            dest[k] = v
+    return dest

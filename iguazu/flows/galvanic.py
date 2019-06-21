@@ -1,29 +1,31 @@
 import os
-import time
 import tempfile
+import time
 import traceback
 
+import click
+import pandas as pd
+from prefect import Flow, Parameter, context
 from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
 from prefect.engine.state import Mapped, Failed
 from prefect.tasks.control_flow import switch, merge
 from prefect.utilities.debug import raise_on_exception
-from prefect import Flow, Parameter, context
-import click
-import pandas as pd
 
-from iguazu.tasks.common import ListFiles
-from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks
+from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
+from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
-from iguazu.tasks.unity import ReportSequences
 from iguazu.tasks.summarize import ExtractFeatures
+from iguazu.tasks.unity import ReportSequences
 
 
 @click.command()
 @click.option('-b', '--base-dir', type=click.Path(file_okay=False, dir_okay=True, exists=True),
               required=False, help='Path from where the files with raw data are read. ')
+@click.option('-t', '--temp-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
+              required=False, help='Path where temporary files with processed data are saved. ')
 @click.option('-o', '--output-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=False, help='Path where the files with processed data are saved. ')
+              required=False, help='Path where final files with processed data are saved. ')
 @click.option('--data-source', type=click.Choice(['local', 'quetzal']),
               default='local', help='Data source that provides input files for this flow.')
 @click.option('--executor-type', type=click.Choice(['local', 'synchronous', 'dask']),
@@ -36,7 +38,7 @@ from iguazu.tasks.summarize import ExtractFeatures
               help='Whether to force the processing if the path already exists in the output file. ')
 @click.option('--raise/--no-raise', 'raise_exc', is_flag=True, default=False,
               help='Raise the exceptions encountered during execution when scheduler is local')
-def cli(base_dir, output_dir, data_source, executor_type, executor_address, visualize_flow, force, raise_exc):
+def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_address, visualize_flow, force, raise_exc):
     """ Run the HDF5 pipeline on the specified FILENAMES.
     Do not specify any FILENAMES to run on *all* files found on DATAFOLDER.
     """
@@ -58,7 +60,8 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
             password=os.getenv('QUETZAL_PASSWORD', 'secret'),
             insecure=True,
         ),
-        temp_dir=output_dir or tempfile.mkdtemp(),
+        temp_dir=temp_dir or tempfile.mkdtemp(),
+        output_dir=output_dir or tempfile.mkdtemp(),
         raise_on_exception=raise_exc,
     )
 
@@ -76,6 +79,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
+        skip_on_upstream_skip=False,
     )
     quetzal_query = Query(
         name='Query quetzal',
@@ -114,6 +118,7 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         cvxeda_kwargs=None,
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
     detect_scr_peaks = DetectSCRPeaks(
         warmup_duration=15,
@@ -128,19 +133,27 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         ),
         force=force,
         state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
     )
+    report_sequences = ReportSequences(sequences=None,
+                                       force=force,
+                                       state_handlers=[logging_handler])
+
     extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
                                            report_group="/unity/sequences_report",
                                            output_group="/gsr/features/scr",
                                            feature_definitions={
-                                               "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
+                                               "rate": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
                                                        "divide_by_duration": True, "empty_policy": 0.0,
                                                        "drop_bad_samples": True},
                                                "median": {"class": "numpy.nanmedian",
                                                           "columns": ['SCR_peaks_increase-duration',
                                                                       'SCR_peaks_increase-amplitude'],
-                                                          "divide_by_duration": False, "empty_policy": "bad",
-                                                          "drop_bad_samples": True}})
+                                                          "divide_by_duration": False, "empty_policy": 0.0,
+                                                          "drop_bad_samples": True}},
+                                           force=force,
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
 
     scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
     extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
@@ -162,9 +175,25 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
                                                "auc": {"custom": "auc", "columns": scl_columns,
                                                        "divide_by_duration": False, "empty_policy": "bad",
                                                        "drop_bad_samples": True},
-                                           })
+                                           },
+                                           force=force,
+                                           state_handlers=[logging_handler],
+                                           skip_on_upstream_skip=False)
+    baseline_sequences = ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0',
+                          'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1',
+                          'cardiac-coherence_score_0']
+    correct_scr = RemoveBaseline(features_group="/gsr/features/scr", output_group="/gsr/features/scr_corrected",
+                                 sequences=baseline_sequences,
+                                 columns=['SCR_peaks_detected_rate'])
+    correct_scl = RemoveBaseline(features_group="/gsr/features/scl", output_group="/gsr/features/scl_corrected",
+                                 sequences=baseline_sequences,
+                                 columns=['F_clean_inversed_lowpassed_zscored_SCL_median',
+                                          'F_clean_inversed_lowpassed_zscored_SCL_ptp',
+                                          'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
+                                          'F_clean_inversed_lowpassed_zscored_SCL_auc'])
 
-    report_sequences = ReportSequences(sequences=None)
+    merge_subject = MergeFilesFromGroups(suffix="_gsr")
+
     # Flow/runtime arguments
     flow_parameters = dict(
         basedir=base_dir,
@@ -206,6 +235,14 @@ def cli(base_dir, output_dir, data_source, executor_type, executor_address, visu
         sequences_reports = report_sequences.map(events=raw_signals)
         scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
         scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
+        scr_features_corrected = correct_scr.map(features=scr_features)
+        scl_features_corrected = correct_scl.map(features=scl_features)
+
+        subject_summary = merge_subject.map(parent=raw_signals,
+                                            gsr_timeseries_deconvoluted=cvx,
+                                            gsr_features_scr=scr_features_corrected,
+                                            gsr_features_scl=scl_features_corrected,
+                                            unity_seqeunces=sequences_reports)
 
     if visualize_flow:
         flow.visualize()

@@ -1,10 +1,6 @@
 import pathlib
 
 import pandas as pd
-# from prefect import task, context
-# logger = context.get("logger")
-
-
 
 def safe_read_hdf5(filename, path):
     """
@@ -44,3 +40,4 @@ def path_exists_in_hdf5(filename, group):
         return False
     with pd.HDFStore(filename, "r") as store:
         return group in store
+
