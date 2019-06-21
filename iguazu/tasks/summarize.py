@@ -5,7 +5,7 @@ import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
-from iguazu.helpers.files import FileProxy
+from iguazu.helpers.files import FileProxy, QuetzalFile
 
 
 class ExtractFeatures(prefect.Task):
@@ -119,3 +119,47 @@ class ExtractFeatures(prefect.Task):
         output.upload()
 
         return output
+
+
+class SummarizePopulation(prefect.Task):
+    def __init__(self, groups, axis_name='sequence', **kwargs):
+        super().__init__(**kwargs)
+        self.groups = {group.replace('_', '/'): groups[group] for group in groups}
+        self.axis_name = axis_name
+
+    def run(self,
+            files: list) -> FileProxy:
+
+        if not files:
+            self.logger.log("SummarizePopulation received an empty list. ")
+            return
+
+        parent = files[0]
+        output = parent.make_child(filename=None, path=None, suffix="_population",
+                                   extension=".csv", temporary=False)
+        output._metadata.clear()
+
+        data_list_population = []
+        for file in files:
+            if isinstance(file, QuetzalFile):
+                file_id = file._file_id
+            else:  # LocalFile
+                file_id = file._file.stem
+            with pd.HDFStore(file._file, 'r') as store:
+                data_summary_file = pd.DataFrame()
+                for group, columns in self.groups.items():
+                    data = pd.read_hdf(store, group, columns=columns)
+                    if not data.empty:
+                        # todo: add meta here
+                        data_summary_file = data_summary_file.join(data, how="outer")
+                    else:
+                        pass
+                        a = 1
+                        # todo: do something here
+                if not data_summary_file.empty:
+                    data_summary_file.loc[:, 'file_id'] = file_id
+                    data_list_population.append(data_summary_file)
+
+        data_output = pd.concat(data_list_population, axis=0)
+        data_output = data_output.rename_axis(self.axis_name).reset_index()
+        data_output.to_csv(output.file)
