@@ -93,7 +93,6 @@ class ReportSequences(prefect.Task):
 
         # Manage output, save to file
         output_file = output.file
-        output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             report.to_hdf(output_store, output_group)
         # Set meta on FileProxy so that Quetzal knows about this metadata

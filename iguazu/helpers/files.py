@@ -166,6 +166,7 @@ class LocalFile(FileProxy):
 
     @property
     def file(self) -> pathlib.Path:
+        self._file.parent.mkdir(parents=True, exist_ok=True)
         return self._file
 
     @property
