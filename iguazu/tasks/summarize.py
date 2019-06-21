@@ -1,15 +1,15 @@
 from typing import Optional
-import prefect
-import pandas as pd
 
-from iguazu.functions.summarize import signal_to_feature
+import pandas as pd
+import prefect
+
 from iguazu.functions.common import path_exists_in_hdf5
+from iguazu.functions.summarize import signal_to_feature
 from iguazu.helpers.files import FileProxy
 
 
 class ExtractFeatures(prefect.Task):
     ''' Extract features from a signal based on period (time slices).
-
     '''
 
     def __init__(self,
@@ -92,20 +92,16 @@ class ExtractFeatures(prefect.Task):
                                              feature_definitions=self.feature_definitions, sequences=self.sequences)
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'SUCCESS',
-                    'version': '0.0',
+                    'version': '0.0',  # Todo get version
                 }
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail: %s', ex)
                 features = pd.DataFrame()
                 meta = {
                     'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
                     'state': 'FAILURE',
-                    'version': '0.0',
+                    'version': '0.0',  # Todo get version
                     'exception': str(ex),
                 }
 
@@ -119,12 +115,8 @@ class ExtractFeatures(prefect.Task):
         output_file.parent.mkdir(parents=True, exist_ok=True)
         with pd.HDFStore(output_file, 'w') as output_store:
             features.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'vr_sequences': meta,  # TODO: change to something else?
-            }
-
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['vr_sequences'].update(meta)
+        output.metadata[self.__class__.__name__].update(meta)
         output.upload()
 
         return output
