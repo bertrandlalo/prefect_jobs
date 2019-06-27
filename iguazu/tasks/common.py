@@ -67,7 +67,8 @@ class MergeFilesFromGroups(prefect.Task):
     def run(self, parent, **kwargs) -> FileProxy:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
-        with pd.HDFStore(output.file, "a") as output_store:
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(output.file, "a") as output_store:
             for output_group, file_proxy in kwargs.items():
                 output.metadata[output_group].update(file_proxy.metadata)
                 output_group = output_group.replace("_", "/")

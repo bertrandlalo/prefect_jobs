@@ -81,8 +81,9 @@ class ExtractFeatures(prefect.Task):
         signals_file = signals.file.resolve()
         report_file = report.file.resolve()
 
-        with pd.HDFStore(signals_file, 'r') as signals_store, \
-                pd.HDFStore(report_file, 'r') as report_store:
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(signals_file, 'r') as signals_store, \
+             pd.HDFStore(report_file, 'r') as report_store:
             try:
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signals_store, signals_group)
@@ -144,7 +145,8 @@ class SummarizePopulation(prefect.Task):
                 file_id = file._file_id
             else:  # LocalFile
                 file_id = file._file.stem
-            with pd.HDFStore(file._file, 'r') as store:
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(file._file, 'r') as store:
                 data_summary_file = pd.DataFrame()
                 for group, columns in self.groups.items():
                     data = pd.read_hdf(store, group, columns=columns)
