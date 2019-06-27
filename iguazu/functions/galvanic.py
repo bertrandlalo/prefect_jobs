@@ -1,11 +1,12 @@
-import pandas as pd
-import numpy as np
-from datascience_utils.signal_quality import label_bad_from_amplitude
-from datascience_utils.filters import scipy_filter_signal, scipy_scale_signal
-from datascience_utils.cvxEDA import apply_cvxEDA
-from datascience_utils.peaks import OfflinePeak
-from sklearn.preprocessing import RobustScaler
 import logging
+
+import numpy as np
+import pandas as pd
+from datascience_utils.cvxEDA import apply_cvxEDA
+from datascience_utils.filters import scipy_filter_signal, scipy_scale_signal
+from datascience_utils.peaks import OfflinePeak
+from datascience_utils.signal_quality import label_bad_from_amplitude
+from sklearn.preprocessing import RobustScaler
 
 logger = logging.getLogger()
 
@@ -72,12 +73,11 @@ def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpo
     data = data[begins:ends]
     data = data.loc[:, [column]]
 
-    # label 0.0 values as bad
-    data.loc[data.loc[:, column] == 0.0, 'bad'] = True
-
     # add a column "bad" with rejection boolean on amplitude criteria
     label_bad_from_amplitude(data, column_name=column, output_column='bad', inplace=True,
                              **glitch_kwargs)
+    # label 0.0 values as bad
+    data.loc[data.loc[:, column] == 0.0, 'bad'] = True
 
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column]].copy().add_suffix('_clean')
