@@ -80,7 +80,6 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
-        skip_on_upstream_skip=False,
     )
     quetzal_query = Query(
         name='Query quetzal',

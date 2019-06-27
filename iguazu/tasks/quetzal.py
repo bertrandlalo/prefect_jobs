@@ -247,10 +247,7 @@ class CreateWorkspace(QuetzalBaseTask):
             details = workspaces[0]
             self._verify_workspace_requirements(details, families)
 
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            skip = SkippedResult('Workspace already exists, skipping', result=details['id'])
-            raise ENDRUN(state=skip)
+            return details['id']
 
         else:
             # There are many results. For the moment, fail. Maybe in the future
