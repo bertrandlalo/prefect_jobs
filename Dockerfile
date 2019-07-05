@@ -6,7 +6,7 @@ FROM python:3.7-slim as intermediate
 
 # Additional packages not included in the base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git openssh-client build-essential \
+    git openssh-client build-essential procps \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir /root/.ssh/
@@ -35,4 +35,6 @@ RUN mkdir /code
 WORKDIR /code
 COPY setup.cfg setup.py ./
 COPY iguazu ./iguazu
+#RUN mkdir /root/.dask
+#COPY config.yaml /root/.dask/config.yaml
 RUN pip install .

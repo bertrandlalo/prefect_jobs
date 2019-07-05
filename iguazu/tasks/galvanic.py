@@ -6,6 +6,7 @@ import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
+from iguazu.helpers.decorators import SubprocessException
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SkippedResult, GracefulFail
 
@@ -277,8 +278,11 @@ class ApplyCVX(prefect.Task):
                     'version': '0.0',
                     'bad_ratio': cvx.bad.mean(),
                 }
+            except SubprocessException as ex:
+                self.logger.warning('Subprocess failed, propagating exception')
+                raise ex
             except Exception as ex:
-                self.logger.warning('Galvanic CVX graceful fail: %s', ex)
+                self.logger.warning('Galvanic CVX graceful fail! %s', ex, exc_info=True)
                 cvx = pd.DataFrame()
                 meta = {
                     'state': 'FAILURE',
@@ -504,7 +508,7 @@ class RemoveBaseline(prefect.Task):
                     'valid_sequences_ratio': valid_sequences_ratio
                 }
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail: %s', ex)
+                self.logger.warning('Report VR sequences graceful fail! %s', ex, exc_info=True)
                 df_features_corrected = pd.DataFrame()
                 meta = {
                     'source': 'iguazu',

@@ -247,7 +247,8 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             WHERE 
             base.filename LIKE '%.hdf5' AND 
             iguazu.id IS NULL
-            LIMIT 3
+            -- AND base.filename LIKE 'data_2018-02-16.09.32%'
+            LIMIT 20
         """,
     )
 
