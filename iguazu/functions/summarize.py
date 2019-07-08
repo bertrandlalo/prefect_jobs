@@ -205,30 +205,3 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
 
     return features
 
-## For testing purpose
-
-# fname = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-03-29.14.36.17_df30e76534f6aa2f53cb9bbe3a4d9dd135c5c2da8ce8b7645bb8fdd6461c3b2a"
-# scr_data = pd.read_hdf(fname + "_clean_cvx_scr.hdf5", "/gsr/timeseries/scrpeaks")
-# scl_data = pd.read_hdf(fname + "_clean_cvx.hdf5", "/gsr/timeseries/deconvoluted")
-#
-# sequences_report = pd.read_hdf(fname + "_sequences.hdf5", "/offline/sequences_report")
-# scr_feature_definitions = { "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
-#                                 "divide_by_duration": True, "empty_policy": 0.0, "drop_bad_samples": True},
-#                             "median": {"class": "numpy.nanmedian", "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True}}
-#
-# scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
-# scl_feature_definitions = {
-# "median": {"class": "numpy.nanmedian", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "std": {"class": "numpy.nanstd", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "ptp": {"class": "numpy.ptp", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "linregress": {"custom": "linregress", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "auc": {"custom": "auc", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-#                              }
-# scr_features = signal_to_feature(scr_data, sequences_report, feature_definitions=scr_feature_definitions, sequences=None)
-# scl_features = signal_to_feature(scl_data, sequences_report, feature_definitions=scl_feature_definitions, sequences=None)
