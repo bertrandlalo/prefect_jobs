@@ -9,7 +9,6 @@ from prefect import Flow, Parameter, context
 from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
 from prefect.engine.state import Mapped, Failed
 from prefect.tasks.control_flow import switch, merge
-from prefect.utilities.debug import raise_on_exception
 
 from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
@@ -80,7 +79,6 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
-        skip_on_upstream_skip=False,
     )
     quetzal_query = Query(
         name='Query quetzal',
@@ -136,63 +134,107 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
-    report_sequences = ReportSequences(sequences=None,
-                                       force=force,
-                                       state_handlers=[logging_handler])
-
-    extract_features_scr = ExtractFeatures(signals_group="/gsr/timeseries/scrpeaks",
-                                           report_group="/unity/sequences_report",
-                                           output_group="/gsr/features/scr",
-                                           feature_definitions={
-                                               "rate": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
-                                                       "divide_by_duration": True, "empty_policy": 0.0,
-                                                       "drop_bad_samples": True},
-                                               "median": {"class": "numpy.nanmedian",
-                                                          "columns": ['SCR_peaks_increase-duration',
-                                                                      'SCR_peaks_increase-amplitude'],
-                                                          "divide_by_duration": False, "empty_policy": 0.0,
-                                                          "drop_bad_samples": True}},
-                                           force=force,
-                                           state_handlers=[logging_handler],
-                                           skip_on_upstream_skip=False)
-
+    report_sequences = ReportSequences(
+        sequences=None,
+        force=force,
+        state_handlers=[logging_handler]
+    )
+    extract_features_scr = ExtractFeatures(
+        signals_group="/gsr/timeseries/scrpeaks",
+        report_group="/unity/sequences_report",
+        output_group="/gsr/features/scr",
+        feature_definitions=dict(
+            rate={
+                "class": "numpy.sum",
+                "columns": ["SCR_peaks_detected"],
+                "divide_by_duration": True,
+                "empty_policy": 0.0,
+                "drop_bad_samples": True,
+            },
+            median={
+                "class": "numpy.nanmedian",
+                "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
+                "divide_by_duration": False,
+                "empty_policy": 0.0,
+                "drop_bad_samples": True,
+            }
+        ),
+        force=force,
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False
+    )
     scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
-    extract_features_scl = ExtractFeatures(signals_group="/gsr/timeseries/deconvoluted",
-                                           report_group="/unity/sequences_report",
-                                           output_group="/gsr/features/scl",
-                                           feature_definitions={
-                                               "median": {"class": "numpy.nanmedian", "columns": scl_columns,
-                                                          "divide_by_duration": False, "empty_policy": "bad",
-                                                          "drop_bad_samples": True},
-                                               "std": {"class": "numpy.nanstd", "columns": scl_columns,
-                                                       "divide_by_duration": False, "empty_policy": "bad",
-                                                       "drop_bad_samples": True},
-                                               "ptp": {"class": "numpy.ptp", "columns": scl_columns,
-                                                       "divide_by_duration": False, "empty_policy": "bad",
-                                                       "drop_bad_samples": True},
-                                               "linregress": {"custom": "linregress", "columns": scl_columns,
-                                                              "divide_by_duration": False, "empty_policy": "bad",
-                                                              "drop_bad_samples": True},
-                                               "auc": {"custom": "auc", "columns": scl_columns,
-                                                       "divide_by_duration": False, "empty_policy": "bad",
-                                                       "drop_bad_samples": True},
-                                           },
-                                           force=force,
-                                           state_handlers=[logging_handler],
-                                           skip_on_upstream_skip=False)
+    extract_features_scl = ExtractFeatures(
+        signals_group="/gsr/timeseries/deconvoluted",
+        report_group="/unity/sequences_report",
+        output_group="/gsr/features/scl",
+        feature_definitions={
+            "median": {
+                "class": "numpy.nanmedian",
+                "columns": scl_columns,
+                "divide_by_duration": False,
+                "empty_policy": "bad",
+                "drop_bad_samples": True,
+            },
+            "std": {
+                "class": "numpy.nanstd",
+                "columns": scl_columns,
+                "divide_by_duration": False,
+                "empty_policy": "bad",
+                "drop_bad_samples": True,
+            },
+            "ptp": {
+                "class": "numpy.ptp",
+                "columns": scl_columns,
+                "divide_by_duration": False,
+                "empty_policy": "bad",
+                "drop_bad_samples": True,
+            },
+            "linregress": {
+                "custom": "linregress",
+                "columns": scl_columns,
+                "divide_by_duration": False,
+                "empty_policy": "bad",
+                "drop_bad_samples": True,
+            },
+            "auc": {
+                "custom": "auc",
+                "columns": scl_columns,
+                "divide_by_duration": False,
+                "empty_policy": "bad",
+                "drop_bad_samples": True,
+            },
+        },
+        force=force,
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
+    )
     baseline_sequences = ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0',
                           'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1',
                           'cardiac-coherence_score_0']
-    correct_scr = RemoveBaseline(features_group="/gsr/features/scr", output_group="/gsr/features/scr_corrected",
-                                 sequences=baseline_sequences,
-                                 columns=['SCR_peaks_detected_rate'])
-    correct_scl = RemoveBaseline(features_group="/gsr/features/scl", output_group="/gsr/features/scl_corrected",
-                                 sequences=baseline_sequences,
-                                 columns=['F_clean_inversed_lowpassed_zscored_SCL_median',
-                                          'F_clean_inversed_lowpassed_zscored_SCL_ptp',
-                                          'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
-                                          'F_clean_inversed_lowpassed_zscored_SCL_auc'])
-
+    correct_scr = RemoveBaseline(
+        features_group="/gsr/features/scr",
+        output_group="/gsr/features/scr_corrected",
+        sequences=baseline_sequences,
+        columns=['SCR_peaks_detected_rate'],
+        force=force,
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
+    )
+    correct_scl = RemoveBaseline(
+        features_group="/gsr/features/scl",
+        output_group="/gsr/features/scl_corrected",
+        sequences=baseline_sequences,
+        columns=[
+            'F_clean_inversed_lowpassed_zscored_SCL_median',
+            'F_clean_inversed_lowpassed_zscored_SCL_ptp',
+            'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
+            'F_clean_inversed_lowpassed_zscored_SCL_auc'
+        ],
+        force=force,
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
+    )
     merge_subject = MergeFilesFromGroups(suffix="_gsr")
 
     # Flow/runtime arguments
@@ -250,7 +292,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
 
     # Flow execution
     t0 = time.time()
-    with raise_on_exception(), context(**context_args):
+    with context(**context_args):
         flow_state = flow.run(parameters=flow_parameters,
                               executor=executor)
     local_execution_duration = time.time() - t0

@@ -369,7 +369,8 @@ class DetectSCRPeaks(prefect.Task):
 
         signal_file = signal.file
 
-        with pd.HDFStore(signal_file, 'r') as signal_store:
+        with pd.option_context('mode.chained_assignment', None),\
+             pd.HDFStore(signal_file, 'r') as signal_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
@@ -485,7 +486,8 @@ class RemoveBaseline(prefect.Task):
 
         features_file = features.file.resolve()
 
-        with pd.HDFStore(features_file, 'r') as features_store:
+        with pd.option_context('mode.chained_assignment', None),\
+             pd.HDFStore(features_file, 'r') as features_store:
             try:
                 # TODO discuss: select column before sending it to a column
                 df_features = pd.read_hdf(features_store, features_group)
