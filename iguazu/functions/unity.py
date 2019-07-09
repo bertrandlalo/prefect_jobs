@@ -1,7 +1,7 @@
 import pandas as pd
 import prefect
-from datascience_utils.unity import fix_unity_events, print_subsequences_report, \
-    extract_unity_subsequence_times, extract_marker_version
+from datascience_utils.unity import print_subsequences_report, extract_unity_subsequence_times
+from dsu.unity import extract_marker_version, fix_unity_events
 
 logger = prefect.utilities.logging.get_logger(name=None)
 
