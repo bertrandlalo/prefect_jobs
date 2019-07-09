@@ -1,13 +1,12 @@
 import logging
-
 logger = logging.getLogger()
 
-import numpy as np
-import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.quality import quality_gsr
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
+import numpy as np
+import pandas as pd
 from sklearn.preprocessing import RobustScaler
 
 
@@ -106,26 +105,27 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     return data
 
 
-def galvanic_cvx(data, column, warmup_duration, threshold_scr, cvxeda_params=None):
+def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda_params=None):
     """ Separate phasic (SCR) and tonic (SCL) galvanic components using a convexe deconvolution.
 
     Parameters
     ----------
     data: pd.ataFrame
         Dataframe containing the preprocessed GSR in channel given by column_name.
-    column: str
+    column: str | None
         Name of column where the data of interest are located.
+        If None, the first column is considered.
     warmup_duration: float
         Duration at beginning and end of the data to label as 'bad'==True.
     threshold_scr:
-        Keywords arguments to detect bad samples.
+        Maximum acceptable amplitude of SCR component.
     cvxeda_params:
         Keywords arguments to apply cvxEDA algorithm.
 
     Returns
     -------
     data: pd.DataFrame
-          Dataframe with columns: ['F_clean_inversed_lowpassed_zscored_SCR', 'F_clean_inversed_lowpassed_zscored°SCL', 'bad']
+          Dataframe with columns: ['xxx_SCR', 'xxx_SCL', 'bad']
 
     Examples
     --------
@@ -136,7 +136,15 @@ def galvanic_cvx(data, column, warmup_duration, threshold_scr, cvxeda_params=Non
     cvxeda_params = cvxeda_params or {}
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
+    if 'bad' not in data:
+        raise Exception('Received data without a column named "bad"')
+
     bad = data.bad
+
+    # if no column is specified, consider the first one
+    column = column or data.columns[0]
+
+    # Deconvolution or the signal
     data = apply_cvxEDA(data[[column, 'bad']].dropna(), column=column, **cvxeda_params)
 
     # add a column "bad" with rejection boolean on amplitude criteria
@@ -155,15 +163,16 @@ def galvanic_cvx(data, column, warmup_duration, threshold_scr, cvxeda_params=Non
     return data
 
 
-def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, max_increase_duration):
+def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, max_increase_duration=7):
     """ Detect peaks of SCR component and estimate their characteristics.
 
     Parameters
     ----------
     data: pd.DataFrame
         Dataframe containing the deconvoluted GSR in channel given by column_name.
-    column: str
+    column: str | None
         Name of column where the data of interest are located.
+        If None, the first column is considered.
     warmup_duration: float
         Duration at beginning and end of the data to label as 'bad'==True.
     peaks_kwargs:
@@ -185,22 +194,46 @@ def galvanic_scrpeaks(data, column, warmup_duration, peaks_kwargs, max_increase_
 
 
     """
+    # convert duration (s) in timedelta
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
+
+    if 'bad' not in data:
+        raise Exception('Received data without a column named "bad"')
+
     bad = data.bad
+
+    # if no column is specified, consider the first one
+    column = column or data.columns[0]
+
+    # Select the data of interest
     data = data.loc[:, [column]]
     data = data[data.index[0] + warm_up_timedelta:data.index[-1] - warm_up_timedelta]
 
+    # Define the scaler to apply before detecting peaks
     scaler = RobustScaler(with_centering=True, quantile_range=(5, 95.0))
 
+    # Detect peaks and estimate their properties
     data = detect_peaks(data, column=column, estimate_properties=True, scaler=scaler, **peaks_kwargs)
     data = data[data.label == 'peak'].loc[:,
            ['value', 'left_local', 'left_prominence', 'right_ips']]
-    data.columns = [column + '_peaks_value', column + '_peaks_increase-duration',
-                    column + '_peaks_increase-amplitude',
-                    column + '_peaks_recovery-duration']
 
+    # Rename columns for lisibility purposes
+    data = data.rename(
+        columns={
+            'value': column + '_peaks_value',
+            'left_local': column + '_peaks_increase-duration',
+            'left_prominence': column + '_peaks_increase-amplitude',
+            'right_ips': column + '_peaks_recovery-duration'
+        })
+
+    # Append the 'bad' column from input data
     data.loc[:, 'bad'] = bad
+    # Update the bad column with this new find of artefact, being false peak detection
+    # (when thee increase duration is greater than the prominence window,
+    # it means no local minima has been found, hence the peak was not significant)
     data.loc[data[column + '_peaks_increase-duration'] >= max_increase_duration, 'bad'] = True
+    # To ease the extraction of peak rate, let's add a column with boolean values
+    # True if the peak is kept, False if not.
     data.loc[:, column + '_peaks_detected'] = ~data.bad
 
     return data
@@ -289,20 +322,36 @@ def galvanic_baseline_correction(features, sequences, columns=None):
     if not set(columns).issubset(set(features.columns)):
         raise ValueError('Cannot find all columns in features. Missing: %s',
                          list(set(columns) - set(features.columns)))
-
+    # Intersection between available sequences in the sequences report and the
+    # pseudo-baseline sequences
     available_pseudo_baselines = list(set(sequences) & set(features.index))
+    # Select the features amongst pseudo-baseline sequences and mask the values
+    # that are not scalars (eg. 'bad' or else)
     features_baseline = features.loc[available_pseudo_baselines, :]
     features_baseline = features_baseline.where(
         features_baseline.applymap(lambda x: isinstance(x, (int, float, np.int64, np.float64))), other=np.NaN)
+    # Compute the ratio of available samples per sequence in the pseudo-baseline
+    # (0 if their were no good samples to estimate the average over the sequence, 1
+    # if all samples could be considered.
     valid_sequences_ratio = (1 - features_baseline.isna().mean()).to_dict()
     valid_sequences_ratio = {column: valid_sequences_ratio[column] for column in columns}
     features_baseline_averaged = features_baseline.mean()
 
-    def safe_substraction(x, correction):
-        if isinstance(x, (int, float, np.int64, np.float64)):
-            return x - correction
+    def safe_substraction(original, value_to_substract):
+        '''Substract a value to an original scalar
+        If `original` is a scalar, then substract the `value_to_substract` ,
+        else return `original`.
+
+        Parameters
+        ----------
+        original: scalar from which the value should be substracted
+        value_to_substract: value to substract
+
+        '''
+        if isinstance(original, (int, float, np.int64, np.float64)):
+            return original - value_to_substract
         else:
-            return x
+            return original
 
     features_corrected = features.copy()
     for column in columns:
