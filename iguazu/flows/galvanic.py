@@ -85,51 +85,38 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         as_proxy=True,
     )
     clean_signal = CleanSignal(
+        signal_column='F',
         warmup_duration=30,
-        glitch_kwargs=dict(
-            scaling='robust',
-            nu=1,
-            range=(-0.02, +0.02),
-            rejection_win=35,
-        ),
+        quality_kwargs=dict(
+            sampling_rate=512,
+            oa_range=[1e-6, 2000],
+            glitch_range=[0.0, 180],
+            rejection_window=2),
         interpolation_kwargs=dict(
             method='pchip',
         ),
-        lowpass_kwargs=dict(
-            Wn=[35],
-            order=5,
-        ),
+        filter_kwargs=dict(order=10, frequencies=30, filter_type='lowpass'),
         scaling_kwargs=dict(
             method='standard',
         ),
         corrupted_maxratio=0.3,
+        sampling_rate=256,
         force=force,
         state_handlers=[logging_handler],
     )
     apply_cvx = ApplyCVX(
+        signal_column='F_filtered_clean_inversed_zscored',
         warmup_duration=15,
-        glitch_kwargs=dict(
-            scaling=False,
-            nu=0,
-            range=(0, 4),
-            rejection_win=20,
-        ),
-        cvxeda_kwargs=None,
+        threshold_scr=4,
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
     detect_scr_peaks = DetectSCRPeaks(
+        signal_column='gsr_SCR',
         warmup_duration=15,
-        glitch_kwargs=dict(
-            nu=0,
-            range=(0, 7),
-        ),
-        peak_detection_kwargs=dict(
-            width=0.5,
-            prominence=0.1,
-            prominence_window=15,
-        ),
+        peaks_kwargs=dict(width=0.5, prominence=.1, prominence_window=15, rel_height=.5),
+        max_increase_duration=7,  # seconds
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
@@ -146,14 +133,14 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         feature_definitions=dict(
             rate={
                 "class": "numpy.sum",
-                "columns": ["SCR_peaks_detected"],
+                "columns": ["gsr_SCR_peaks_detected"],
                 "divide_by_duration": True,
                 "empty_policy": 0.0,
                 "drop_bad_samples": True,
             },
             median={
                 "class": "numpy.nanmedian",
-                "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
+                "columns": ['gsr_SCR_peaks_increase-duration', 'gsr_SCR_peaks_increase-amplitude'],
                 "divide_by_duration": False,
                 "empty_policy": 0.0,
                 "drop_bad_samples": True,
@@ -163,7 +150,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False
     )
-    scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
+    scl_columns = ['gsr_SCL']
     extract_features_scl = ExtractFeatures(
         signals_group="/gsr/timeseries/deconvoluted",
         report_group="/unity/sequences_report",
@@ -216,7 +203,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         features_group="/gsr/features/scr",
         output_group="/gsr/features/scr_corrected",
         sequences=baseline_sequences,
-        columns=['SCR_peaks_detected_rate'],
+        columns=['gsr_SCR_peaks_detected_rate'],
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
@@ -226,16 +213,16 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         output_group="/gsr/features/scl_corrected",
         sequences=baseline_sequences,
         columns=[
-            'F_clean_inversed_lowpassed_zscored_SCL_median',
-            'F_clean_inversed_lowpassed_zscored_SCL_ptp',
-            'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
-            'F_clean_inversed_lowpassed_zscored_SCL_auc'
+            'gsr_SCL_median',
+            'gsr_SCL_ptp',
+            'gsr_SCL_linregress_slope',
+            'gsr_SCL_auc'
         ],
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
-    merge_subject = MergeFilesFromGroups(suffix="_gsr")
+    merge_subject = MergeFilesFromGroups(suffix="_gsr", skip_on_upstream_skip=False)
 
     # Flow/runtime arguments
     flow_parameters = dict(
