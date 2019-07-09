@@ -1,8 +1,8 @@
 from typing import Dict, Optional
 
-from prefect.engine.runner import ENDRUN
 import pandas as pd
 import prefect
+from prefect.engine.runner import ENDRUN
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
@@ -46,11 +46,12 @@ class CleanSignal(prefect.Task):
                  output_group: Optional[str] = None,
                  signal_column: Optional[str] = None,
                  warmup_duration: int = 30,
-                 glitch_kwargs: Optional[Dict] = None,
+                 quality_kwargs: Optional[Dict] = None,
                  interpolation_kwargs: Optional[Dict] = None,
-                 lowpass_kwargs: Optional[Dict] = None,
+                 filter_kwargs: Optional[Dict] = None,
                  scaling_kwargs: Optional[Dict] = None,
                  corrupted_maxratio: Optional[float] = None,
+                 sampling_rate: Optional[float] = None,
                  force: bool = False,
                  **kwargs):
         '''
@@ -70,6 +71,7 @@ class CleanSignal(prefect.Task):
         lowpass_kwargs: see the documentation of :py:func:`galvanic_clean`.
         scaling_kwargs: see the documentation of :py:func:`galvanic_clean`.
         corrupted_maxratio: see the documentation of :py:ref:`galvanic_clean`.
+        sampling_rate: see the documentation of :py:ref:`galvanic_clean`.
         force: if True, the task will run even if `output_group` from the output
          HDF5 file already contains some data.
         kwargs: additive keywords arguments to call the `run` method.
@@ -80,10 +82,11 @@ class CleanSignal(prefect.Task):
         self.output_group = output_group
         self.signals_column = signal_column
         self.warmup_duration = warmup_duration
-        self.glitch_kwargs = glitch_kwargs or {}
+        self.quality_kwargs = quality_kwargs or {}
         self.interpolation_kwargs = interpolation_kwargs or {}
-        self.lowpass_kwargs = lowpass_kwargs or {}
+        self.filter_kwargs = filter_kwargs or {}
         self.scaling_kwargs = scaling_kwargs or {}
+        self.sampling_rate = sampling_rate or 256
         self.corrupted_maxratio = corrupted_maxratio or 100
         self.force = force
 
@@ -159,11 +162,12 @@ class CleanSignal(prefect.Task):
 
                 clean = galvanic_clean(df_signals, df_events, signals_column,
                                        self.warmup_duration,
-                                       self.glitch_kwargs,
+                                       self.quality_kwargs,
                                        self.interpolation_kwargs,
-                                       self.lowpass_kwargs,
+                                       self.filter_kwargs,
                                        self.scaling_kwargs,
-                                       self.corrupted_maxratio)
+                                       self.corrupted_maxratio,
+                                       self.sampling_rate)
                 meta = {
                     'state': 'SUCCESS',
                     'version': '0.0',
@@ -207,7 +211,7 @@ class ApplyCVX(prefect.Task):
                  output_group: Optional[str] = None,
                  signal_column: Optional[str] = None,
                  warmup_duration: int = 15,
-                 glitch_kwargs: Optional[Dict] = None,
+                 threshold_scr: float = 4.,
                  cvxeda_kwargs: Optional[Dict] = None,
                  force: bool = False,
                  **kwargs):
@@ -216,7 +220,7 @@ class ApplyCVX(prefect.Task):
         self.output_group = output_group
         self.signals_column = signal_column
         self.warmup_duration = warmup_duration
-        self.glitch_kwargs = glitch_kwargs or {}
+        self.threshold_scr = threshold_scr
         self.cvxeda_kwargs = cvxeda_kwargs or {}
         self.force = force
 
@@ -267,10 +271,13 @@ class ApplyCVX(prefect.Task):
             try:
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signal_store, signal_group)
+                if df_signals.empty:
+                    raise Exception(
+                        "Received empty dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
                 cvx = galvanic_cvx(df_signals,
                                    signals_column,
                                    self.warmup_duration,
-                                   self.glitch_kwargs,
+                                   self.threshold_scr,
                                    self.cvxeda_kwargs)
                 meta = {
                     'state': 'SUCCESS',
@@ -302,6 +309,13 @@ class ApplyCVX(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
+
         return output
 
 
@@ -311,9 +325,9 @@ class DetectSCRPeaks(prefect.Task):
                  signal_group: Optional[str] = None,
                  output_group: Optional[str] = None,
                  signal_column: Optional[str] = None,
-                 warmup_duration: int = 15,
-                 glitch_kwargs: Optional[Dict] = None,
-                 peak_detection_kwargs: Optional[Dict] = None,
+                 warmup_duration: float = 15,
+                 peaks_kwargs: Optional[Dict] = None,
+                 max_increase_duration: float = 7,
                  force: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
@@ -321,8 +335,8 @@ class DetectSCRPeaks(prefect.Task):
         self.output_group = output_group
         self.signals_column = signal_column
         self.warmup_duration = warmup_duration
-        self.glitch_kwargs = glitch_kwargs or {}
-        self.peak_detection_kwargs = peak_detection_kwargs or {}
+        self.max_increase_duration = max_increase_duration
+        self.peaks_kwargs = peaks_kwargs or {}
         self.force = force
 
     def run(self, signal: FileProxy) -> FileProxy:
@@ -369,17 +383,20 @@ class DetectSCRPeaks(prefect.Task):
 
         signal_file = signal.file
 
-        with pd.option_context('mode.chained_assignment', None),\
+        with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(signal_file, 'r') as signal_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signal_store, signal_group)
+                if df_signals.empty:
+                    raise Exception(
+                        "Received empty dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
                 scr = galvanic_scrpeaks(df_signals,
                                         signals_column,
                                         self.warmup_duration,
-                                        self.peak_detection_kwargs,
-                                        self.glitch_kwargs)
+                                        self.peaks_kwargs,
+                                        self.max_increase_duration)
                 meta = {
                     'state': 'SUCCESS',
                     'version': '0.0',
@@ -406,6 +423,12 @@ class DetectSCRPeaks(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
 
         return output
 
@@ -486,7 +509,7 @@ class RemoveBaseline(prefect.Task):
 
         features_file = features.file.resolve()
 
-        with pd.option_context('mode.chained_assignment', None),\
+        with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(features_file, 'r') as features_store:
             try:
                 # TODO discuss: select column before sending it to a column
@@ -525,5 +548,11 @@ class RemoveBaseline(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata[self.__class__.__name__].update(meta)
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
 
         return output
