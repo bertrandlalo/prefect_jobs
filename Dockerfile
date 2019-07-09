@@ -6,7 +6,7 @@ FROM python:3.7-slim as intermediate
 
 # Additional packages not included in the base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git openssh-client build-essential procps \
+    git openssh-client build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir /root/.ssh/
@@ -25,6 +25,11 @@ RUN pip wheel --wheel-dir /tmp/wheels -r requirements.txt
 
 ################################################################################
 FROM python:3.7-slim
+
+# Additional packages not included in the base image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies from wheels generated in intermediate image
 COPY --from=intermediate /tmp/wheels /tmp/wheels

@@ -74,3 +74,65 @@ these steps:
    .. code-block:: console
 
       $ docker-compose up --scale worker=2
+
+
+Kubernetes cluster
+==================
+
+To deploy on kubernetes (either a Google Cloud Platform or a local minikube),
+follow these instructions:
+
+1. Before doing anything, publish the Iguazu Docker images to a registry. In
+   this case, the Google Cloud Registry:
+
+   .. code-block:: console
+
+      $ python iguazu/cli.py --registry gcr.io/your-gcp-project-id
+
+2. Create a kubernetes cluster. On minikube, follow the
+   `minikube documentation <https://kubernetes.io/docs/setup/learning-environment/minikube/>`_.
+   For Google Cloud Platform (GCP), create one with:
+
+   .. code-block:: console
+
+      $ gcloud container clusters create iguazu-cluster --num-nodes=1 --machine-type=n1-standard-4
+
+   On either case, make sure that you have ``kubectl`` installed and that you are
+   using the cluster you just created:
+
+   .. code-block:: console
+
+      $ kubectl config get-context
+      CURRENT   NAME                 CLUSTER             AUTHINFO                                                      NAMESPACE
+      *         xxx_iguazu-cluster   xxx_iguazu-cluster  xxx_iguazu-cluster
+
+3. Install `Helm <https://helm.sh/>`_ on your local computer.
+
+4. Deploy *Tiller* (the Helm kubernetes application) on your kubernetes cluster with:
+
+   .. code-block:: console
+
+      $ helm init
+
+5. Install the Helm chart into the kubernetes cluster to deploy the Iguazu:
+
+   .. code-block:: console
+
+      $ helm install --name somename ./helm/iguazu
+
+6. Get the scheduler service external IP. This is the IP that you will need to
+   use as the dask scheduler.
+
+   .. code-block:: console
+
+      $ kubectl get services
+      NAME                        TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)                       AGE
+      somename-iguazu-scheduler   LoadBalancer   10.47.255.179   35.240.37.119   8786:30392/TCP,80:31366/TCP   67s
+
+7. If you want to pause the cluster on GCP:
+
+   .. code-block:: console
+
+      $ gcloud container clusters resize iguazu-cluster --size 0
+
+   bring it back by using the same command with a size > 0.
