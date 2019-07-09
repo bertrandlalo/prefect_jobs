@@ -1,13 +1,13 @@
 from typing import Optional
 
-from prefect.engine.runner import ENDRUN
 import pandas as pd
 import prefect
+from prefect.engine.runner import ENDRUN
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.unity import report_sequences
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.states import SkippedResult, GracefulFail
 
 
 class ReportSequences(prefect.Task):
@@ -29,7 +29,7 @@ class ReportSequences(prefect.Task):
 
         output = events.make_child(suffix='_sequences')
         self.logger.info('Reporting sequences for events=%s -> %s',
-                          events, output)
+                         events, output)
 
         # Notes on parameter management
         #
@@ -97,5 +97,11 @@ class ReportSequences(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
 
         return output
