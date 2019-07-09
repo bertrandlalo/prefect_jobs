@@ -59,6 +59,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             password=os.getenv('QUETZAL_PASSWORD', 'secret'),
             insecure=True,
         ),
+        workspace_name='gsr-devel-v4',
         temp_dir=temp_dir or tempfile.mkdtemp(),
         output_dir=output_dir or tempfile.mkdtemp(),
         raise_on_exception=raise_exc,
@@ -67,7 +68,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     # Tasks and task arguments
     list_files = ListFiles(as_proxy=True)
     quetzal_create = CreateWorkspace(
-        workspace_name='iguazu-dev-merged-3',
+        #workspace_name='gsr-devel-v3',
         exist_ok=True,
         families=dict(
             iguazu=None,
@@ -235,7 +236,11 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
-    merge_subject = MergeFilesFromGroups(suffix="_gsr")
+    merge_subject = MergeFilesFromGroups(
+        suffix="_gsr",
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
+    )
 
     # Flow/runtime arguments
     flow_parameters = dict(
@@ -286,7 +291,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
                                             gsr_timeseries_deconvoluted=cvx,
                                             gsr_features_scr=scr_features_corrected,
                                             gsr_features_scl=scl_features_corrected,
-                                            unity_seqeunces=sequences_reports)
+                                            unity_sequences=sequences_reports)
 
     if visualize_flow:
         flow.visualize()
