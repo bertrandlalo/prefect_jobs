@@ -1,13 +1,13 @@
 from typing import Optional
 
-from prefect.engine.runner import ENDRUN
 import pandas as pd
 import prefect
+from prefect.engine.runner import ENDRUN
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
 from iguazu.helpers.files import FileProxy, QuetzalFile
-from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.states import SkippedResult, GracefulFail
 
 
 class ExtractFeatures(prefect.Task):
@@ -41,7 +41,6 @@ class ExtractFeatures(prefect.Task):
         self.sequences = sequences
         self.feature_definitions = feature_definitions
         self.force = force
-
 
     def run(self,
             signals: FileProxy, report: FileProxy) -> FileProxy:
@@ -83,12 +82,18 @@ class ExtractFeatures(prefect.Task):
 
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(signals_file, 'r') as signals_store, \
-             pd.HDFStore(report_file, 'r') as report_store:
+                pd.HDFStore(report_file, 'r') as report_store:
             try:
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signals_store, signals_group)
-                report = pd.read_hdf(report_store, report_group)
-                features = signal_to_feature(df_signals, report,
+                if df_signals.empty:
+                    raise Exception(
+                        "Received empty signals dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
+                df_report = pd.read_hdf(report_store, report_group)
+                if df_report.empty:
+                    raise Exception(
+                        "Received empty reports dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
+                features = signal_to_feature(df_signals, df_report,
                                              feature_definitions=self.feature_definitions, sequences=self.sequences)
                 meta = {
                     'source': 'iguazu',
@@ -117,6 +122,12 @@ class ExtractFeatures(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
+
+        if meta.get('state', None) == 'FAILURE':
+            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # this is the only way to skip with results
+            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
+            raise ENDRUN(state=grace)
 
         return output
 
