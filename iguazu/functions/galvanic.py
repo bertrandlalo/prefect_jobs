@@ -14,7 +14,6 @@ from iguazu.helpers.decorators import processify
 logger = logging.getLogger(__name__)
 
 
-
 def galvanic_clean(data, events, column, warmup_duration, glitch_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio):
     """
@@ -149,7 +148,9 @@ def galvanic_cvx(data, column, warmup_duration, glitch_params, cvxeda_params=Non
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
     data = data.iloc[::2]
+    logger.info('Running cvxEDA on 2-down subsampled entry, now it is size=%s', data.shape)
     data = apply_cvxEDA(data[[column]].dropna(), column_name=column, kwargs=cvxeda_params)
+    logger.info('cvxEDA finished, doing the rest of the work...')
 
     # add a column "bad" with rejection boolean on amplitude criteria
     label_bad_from_amplitude(data, column_name=column + '_SCR',
@@ -159,6 +160,7 @@ def galvanic_cvx(data, column, warmup_duration, glitch_params, cvxeda_params=Non
     # TODO: this does not do what it's supposed to do; it should be a slice!
     data.loc[:data.index[0] + warm_up_timedelta, 'bad'] = True
     data.loc[data.index[-1] - warm_up_timedelta:, 'bad'] = True
+    logger.info('galvanic_cvx finished, returning dataframe with shape', data.shape)
     return data
 
 
