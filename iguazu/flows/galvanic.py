@@ -6,10 +6,11 @@ import traceback
 import click
 import pandas as pd
 from prefect import Flow, Parameter, context
-from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
+from prefect.engine.executors import LocalExecutor, SynchronousExecutor
 from prefect.engine.state import Mapped, Failed
 from prefect.tasks.control_flow import switch, merge
 
+from iguazu.executors import DaskExecutor
 from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import logging_handler
@@ -77,13 +78,16 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             vr_sequences=None,
             task=None,
         ),
+        state_handlers=[logging_handler],
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
+        state_handlers=[logging_handler],
     )
     quetzal_query = Query(
         name='Query quetzal',
         as_proxy=True,
+        state_handlers=[logging_handler],
     )
     clean_signal = CleanSignal(
         warmup_duration=30,
