@@ -1,7 +1,7 @@
 import pandas as pd
 import prefect
-from datascience_utils.unity import print_subsequences_report, extract_unity_subsequence_times
-from dsu.unity import extract_marker_version, fix_unity_events
+from dsu.unity import extract_marker_version, fix_unity_events, extract_complete_sequences, \
+    extract_complete_sequence_times
 
 logger = prefect.utilities.logging.get_logger(name=None)
 
@@ -84,7 +84,7 @@ def report_sequences(events, sequences=None):
 
     # correct unity events # TODO : put that in the conversion xdf to hdf
     events = fix_unity_events(events)
-    sequences_report = print_subsequences_report(events)
+    sequences_report = extract_complete_sequences(events)
     sequences = sequences or sequences_report
     # intersection between sequences found in events and sequences specified in the parameters
     available_sequences = [sequence for sequence in sequences_report if sequence in sequences ]
@@ -94,7 +94,7 @@ def report_sequences(events, sequences=None):
 
     sequence_times = {}
     for sequence_name in available_sequences:
-        times = extract_unity_subsequence_times(events, sequence_name)
+        times = extract_complete_sequence_times(events, sequence_name, pedantic='warn')
         for k, (begin, end) in enumerate(times):
             sequence_times[sequence_name + "_" + str(k)] = {'begin': begin, 'end': end}
     # This is a protection against corrupted events, that is, we keep only the sequences keys that are
