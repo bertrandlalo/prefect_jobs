@@ -19,7 +19,7 @@ def logging_handler(task, old_state, new_state):
             pathlib.Path(temp_dir) /
             'logs' /
             context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
-            f'{context.task_full_name}-{task.slug}'
+            f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
         ).with_suffix('.log')
         log_filename.parent.mkdir(parents=True, exist_ok=True)
         handler = CustomFileHandler(str(log_filename.resolve()), mode='a')
@@ -47,9 +47,14 @@ def logging_handler(task, old_state, new_state):
                     client = helpers.get_client(**context.quetzal_client)
                     workspace_details = helpers.workspace.details(client, name=context.workspace_name)
                     state_name = str(type(new_state).__name__).upper()
+                    target_path = (
+                        pathlib.Path('logs') /
+                        context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
+                        state_name
+                    )
                     with open(hdlr.baseFilename, 'rb') as fd:
                         helpers.workspace.upload(client, workspace_details.id, fd,
-                                                 path=f'logs/{state_name}', temporary=True)
+                                                 path=str(target_path), temporary=True)
                 except:
                     # Catch any error, log it and keep going
                     logger.warning('Could not upload logs to quetzal', exc_info=True)
