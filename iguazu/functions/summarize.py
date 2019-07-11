@@ -127,9 +127,9 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                     custom = feature_definition["custom"]
                     if custom == "linregress":
                         if tmp.empty:
-                            feat = pd.DataFrame(columns=[column],
+                            feat = pd.DataFrame(columns=columns,
                                                 index=[feature_name + "_slope", feature_name + "_rvalue"],
-                                                data=[empty_policy, empty_policy]).T
+                                                data=np.array([[empty_policy] * len(columns)] * 2)).T
                         else:
                             feat = [pd.DataFrame()]
                             for column in columns:
