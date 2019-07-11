@@ -6,10 +6,11 @@ import traceback
 import click
 import pandas as pd
 from prefect import Flow, Parameter, context
-from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
+from prefect.engine.executors import LocalExecutor, SynchronousExecutor
 from prefect.engine.state import Mapped, Failed
 from prefect.tasks.control_flow import switch, merge
 
+from iguazu.executors import DaskExecutor
 from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import logging_handler
@@ -59,6 +60,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             password=os.getenv('QUETZAL_PASSWORD', 'secret'),
             insecure=True,
         ),
+        workspace_name='gsr-devel-v4',
         temp_dir=temp_dir or tempfile.mkdtemp(),
         output_dir=output_dir or tempfile.mkdtemp(),
         raise_on_exception=raise_exc,
@@ -67,7 +69,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
     # Tasks and task arguments
     list_files = ListFiles(as_proxy=True)
     quetzal_create = CreateWorkspace(
-        workspace_name='iguazu-dev-merged-3',
+        #workspace_name='gsr-devel-v3',
         exist_ok=True,
         families=dict(
             iguazu=None,
@@ -76,13 +78,16 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             vr_sequences=None,
             task=None,
         ),
+        state_handlers=[logging_handler],
     )
     quetzal_scan = ScanWorkspace(
         name='Update workspace SQL views',
+        state_handlers=[logging_handler],
     )
     quetzal_query = Query(
         name='Query quetzal',
         as_proxy=True,
+        state_handlers=[logging_handler],
     )
     clean_signal = CleanSignal(
         warmup_duration=30,
@@ -235,7 +240,11 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
-    merge_subject = MergeFilesFromGroups(suffix="_gsr")
+    merge_subject = MergeFilesFromGroups(
+        suffix="_gsr",
+        state_handlers=[logging_handler],
+        skip_on_upstream_skip=False,
+    )
 
     # Flow/runtime arguments
     flow_parameters = dict(
@@ -247,7 +256,8 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             WHERE 
             base.filename LIKE '%.hdf5' AND 
             iguazu.id IS NULL
-            LIMIT 3
+            -- AND base.filename LIKE 'data_2018-02-16.09.32%'
+            LIMIT 20
         """,
     )
 
@@ -285,7 +295,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
                                             gsr_timeseries_deconvoluted=cvx,
                                             gsr_features_scr=scr_features_corrected,
                                             gsr_features_scl=scl_features_corrected,
-                                            unity_seqeunces=sequences_reports)
+                                            unity_sequences=sequences_reports)
 
     if visualize_flow:
         flow.visualize()

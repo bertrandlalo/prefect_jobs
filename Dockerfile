@@ -26,6 +26,11 @@ RUN pip wheel --wheel-dir /tmp/wheels -r requirements.txt
 ################################################################################
 FROM python:3.7-slim
 
+# Additional packages not included in the base image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies from wheels generated in intermediate image
 COPY --from=intermediate /tmp/wheels /tmp/wheels
 RUN pip install /tmp/wheels/*.whl
@@ -35,4 +40,6 @@ RUN mkdir /code
 WORKDIR /code
 COPY setup.cfg setup.py ./
 COPY iguazu ./iguazu
+#RUN mkdir /root/.dask
+#COPY config.yaml /root/.dask/config.yaml
 RUN pip install .

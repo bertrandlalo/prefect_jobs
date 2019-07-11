@@ -1,3 +1,4 @@
+import collections
 import os
 import pathlib
 
@@ -70,7 +71,8 @@ class MergeFilesFromGroups(prefect.Task):
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(output.file, "a") as output_store:
             for output_group, file_proxy in kwargs.items():
-                output.metadata[output_group].update(file_proxy.metadata)
+                output.metadata['task'].setdefault(output_group, {})
+                output.metadata['task'][output_group].update(file_proxy.metadata)
                 output_group = output_group.replace("_", "/")
                 with pd.HDFStore(file_proxy.file, "r") as input_store:
                     groups = input_store.keys()

@@ -10,11 +10,13 @@ dependencies:
   - numpy
   - scipy
   - pandas
+  - scikit-learn
   - pytables
   - tzlocal
   - simplegeneric
   - Click
   - prefect
+  - docker-py  # this is a dev-requirement
   - pip
   - pip:
     - graphviz
