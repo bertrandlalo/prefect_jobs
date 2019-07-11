@@ -14,7 +14,7 @@ services:
   worker:
     build:
       context: .
-    command: dask-worker --nthreads 1 scheduler:8786 --memory-limit 4GB
+    command: dask-worker --nthreads 1 scheduler:8786 --memory-limit 4GB --no-nanny
     depends_on:
       - scheduler
     environment:

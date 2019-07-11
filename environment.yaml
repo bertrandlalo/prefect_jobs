@@ -15,6 +15,7 @@ dependencies:
   - simplegeneric
   - Click
   - prefect
+  - docker-py  # this is a dev-requirement
   - pip
   - pip:
     - graphviz

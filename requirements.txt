@@ -8,5 +8,6 @@ Click
 prefect
 bokeh
 graphviz
-git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client
+docker  # this is a dev-requirement
+git+https://github.com/quetz-al/quetzal-client.git@v0.3.0#egg=quetzal-client
 git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@01b4f57#egg=dsu
