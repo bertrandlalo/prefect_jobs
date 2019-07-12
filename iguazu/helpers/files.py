@@ -115,6 +115,7 @@ class QuetzalFile(FileProxy):
             if 'iguazu' in parent_metadata:
                 parent_metadata['iguazu'].pop('parents', None)
             child._metadata = _deep_update(child._metadata, parent_metadata)
+            child._wid = self._wid
             return child
 
         # Create new child proxy class and propagate metadata
@@ -174,6 +175,11 @@ class QuetzalFile(FileProxy):
         for family in metadata:
             if 'id' in metadata[family]:
                 metadata[family].pop('id')
+            if family == 'base':
+                metadata[family] = {k: v for k, v in metadata[family].items() if k in ('path', 'filename')}
+                # for k in list(metadata[family]):  # note list for in-loop modification
+                #     if k not in ('path', 'filename'):
+                #         metadata[family].pop(k)
         helpers.workspace.update_metadata(self.client, self._wid, self._file_id, metadata)
 
     def __getstate__(self):
