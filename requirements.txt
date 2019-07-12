@@ -6,6 +6,7 @@ tables
 tzlocal
 simplegeneric
 Click
+docker
 prefect
 bokeh
 graphviz

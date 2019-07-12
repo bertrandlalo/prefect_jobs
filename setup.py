@@ -39,6 +39,11 @@ setup_args = dict(
     install_requires=dependencies,
     python_requires='>=3.6',
     zip_safe=False,
+    entry_points={
+        'console_scripts': [
+            'iguazu = iguazu.cli.main:cli',
+        ],
+    },
 )
 
 setup(**setup_args)

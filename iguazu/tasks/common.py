@@ -1,6 +1,6 @@
-import collections
 import os
 import pathlib
+import logging
 
 import pandas as pd
 import prefect
@@ -44,6 +44,16 @@ class ListFiles(prefect.Task):
             return proxies
 
         return files
+
+
+class Log(prefect.Task):
+
+    def __init__(self, level=logging.INFO, **kwargs):
+        super().__init__(**kwargs)
+        self.level = level
+
+    def run(self, input_):
+        self.logger.log(self.level, 'Received %s', input_)
 
 
 class MergeFilesFromGroups(prefect.Task):

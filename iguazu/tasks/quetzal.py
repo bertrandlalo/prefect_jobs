@@ -121,8 +121,6 @@ class Query(QuetzalBaseTask):
         """
         for k,v in context.items():
             self.logger.info('Context: %s = %s', k ,v)
-        # from remote_pdb import RemotePdb
-        # RemotePdb('0.0.0.0', 4444).set_trace()
         self.logger.debug('Querying Quetzal at %s with SQL=%s',
                           self.client.configuration.host,
                           query)
