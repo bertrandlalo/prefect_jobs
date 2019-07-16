@@ -3,26 +3,56 @@
 
 import inspect
 import logging
-import traceback
+import pathlib
+import pickle
 import sys
+import traceback
 
 import click
 import pandas as pd
 import prefect
 
-
 logger = logging.getLogger(__name__)
-
 
 registry = dict()
 
 
-def register_flow(flow_name):
+def dump_pickle(obj, filename='my_pickle.pickle'):
+    with open(filename, "wb") as f:  # remember to open the file in binary mode
+        pickle.dump(obj, f)  # serialize datetime.datetime object
 
+
+def load_pickle(fname, default=None):
+    try:
+        with open(fname, 'rb') as file:
+            obj = pickle.load(file)
+        return obj
+    except (OSError, IOError) as e:
+        return default
+
+
+def update_task_states(task_states, filename):
+    stored_states = load_pickle(filename) or {}
+    task_states.update(stored_states)
+    dump_pickle(task_states, filename=filename)
+
+
+def task_almost_equal(task1, task2):
+    return type(task1) == type(task2) and task1.__dict__ == task2.__dict__
+
+
+def adapt_task_states(task_states, new_tasks):
+    new_task_states = {}
+    for new_task in new_tasks:
+        old_task = [t for t in task_states.keys() if task_almost_equal(t, new_task)]
+        if len(old_task) == 1:
+            new_task_states[new_task] = task_states[old_task[0]]
+
+
+def register_flow(flow_name):
     # TODO: verification there is no whitespace on flow_name (it would not work with the cli)
 
     def decorator(func):
-
         if flow_name in registry:
             fn = registry[flow_name].__wrapped__
             qn = '.'.join([inspect.getmodule(fn).__name__, fn.__qualname__])
@@ -37,7 +67,7 @@ def register_flow(flow_name):
                      flow_name,
                      inspect.getmodule(func).__name__,
                      func.__qualname__)
-        registry[flow_name] = func #wrapper
+        registry[flow_name] = func  # wrapper
 
         from iguazu.cli.flows import run_group, run_flow_command
         cmd = click.command(flow_name)(run_flow_command(func))
@@ -74,6 +104,7 @@ def _import_flows():
 
 _import_flows()
 
+
 #
 # factory_methods = {
 #     # Dataset handling flows
@@ -100,6 +131,12 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
 
     # Read cached states from a local file
     # ...
+    state_filename = (
+            pathlib.Path(context_args['temp_dir']) /
+            'cache' /
+            'task_states'
+    ).with_suffix('.pickle')
+    flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename), flow.sorted_tasks())
 
     with prefect.context(**context_args):
         flow_state = flow.run(parameters=flow_parameters,
@@ -108,6 +145,7 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
 
     # Save cached states to a local file
     # ...
+    update_task_states(flow_state.result, state_filename)
 
     return flow, flow_state
 
