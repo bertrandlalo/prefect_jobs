@@ -5,20 +5,20 @@ channels:
 dependencies:
   # Python dependencies
   - python>=3.7
-  - jupyter
-  - matplotlib
   - numpy
   - scipy
   - pandas
+  - matplotlib
   - scikit-learn
   - pytables
   - tzlocal
   - simplegeneric
-  - Click
+  - click
   - prefect
-  - docker-py  # this is a dev-requirement
+  - docker-py
   - pip
   - pip:
+    - APScheduler
     - graphviz
     - git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client
 #    - git+https://github.com/OpenMindInnovation/datascience_utils

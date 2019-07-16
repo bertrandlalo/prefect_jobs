@@ -6,15 +6,18 @@ from setuptools import setup, find_packages
 
 
 dependencies = [
+    "APScheduler",
     "numpy",
     "scipy",
     "pandas",
+    "matplotlib",
     "tables",
     "tzlocal",
     "simplegeneric",
     "click",
     "prefect",
     "graphviz",
+    "docker",
     "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@01b4f57#egg=dsu",
     "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client"
  ]

@@ -4,6 +4,7 @@ import click
 
 from iguazu.cli.deploy import deploy_group
 from iguazu.cli.flows import flows_group
+from iguazu.cli.scheduler import scheduler_group
 
 
 @click.group()
@@ -29,6 +30,7 @@ def cli(log_level):
 
 cli.add_command(deploy_group)
 cli.add_command(flows_group)
+cli.add_command(scheduler_group)
 
 
 if __name__ == '__main__':
