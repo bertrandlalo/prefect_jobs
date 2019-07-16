@@ -6,7 +6,7 @@ import iguazu
 
 @click.group('deploy')
 def deploy_group():
-    """Deployment commands and helpers"""
+    """Helpers to deploy Iguazu into a Kubernetes cluster"""
     pass
 
 
@@ -19,7 +19,7 @@ def deploy_group():
               help='Docker registry where the resulting images will be uploaded. '
                    'For example, for Google Cloud Registry, use gcr.io/your_project_id')
 def images(prefix, registry):
-    """ Deploy iguazu Docker images to a Docker registry"""
+    """Build and upload iguazu Docker images to a Docker registry"""
     client = docker.from_env()
 
     app_version = iguazu.__version__

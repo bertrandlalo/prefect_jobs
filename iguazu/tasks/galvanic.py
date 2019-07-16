@@ -235,7 +235,6 @@ class ApplyCVX(prefect.Task):
         Parameters
         ----------
         signal: file proxy with input signals.
-        events:  file proxy with input events.
 
         Returns
         -------

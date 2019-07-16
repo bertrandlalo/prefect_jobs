@@ -1,64 +1,96 @@
 import logging
 
+import click
+
 from prefect import Flow, Parameter, Task
 from prefect.engine.cache_validators import never_use
-from prefect.tasks.control_flow import switch, merge
+from prefect.tasks.control_flow import switch
+from prefect.tasks.control_flow.conditional import Merge
 
-from iguazu.tasks.common import Log, ListFiles
+from iguazu.tasks.common import AlwaysFail, AlwaysSucceed, Log, ListFiles
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, Query, ScanWorkspace
+from iguazu.recipes import inherit_params, register_flow
+from quetzal.client.cli import FamilyVersionListType
 
 logger = logging.getLogger(__name__)
 
 
-def local_dataset_flow(*,
-                       basedir=None,
-                       as_proxy=True) -> Flow:
-    """Flow to create a file dataset from a local directory"""
+@register_flow('local_dataset')
+@click.option('--basedir', required=False,
+              type=click.Path(dir_okay=True, file_okay=False),
+              help='Local data directory')
+def local_dataset_flow(*, basedir=None) -> Flow:
+    """Create file dataset from a local directory"""
     logger.debug('Creating local dataset flow')
 
     # Manage parameters
     # ... not needed for this flow ...
 
     # Instantiate tasks
-    list_files = ListFiles(as_proxy=as_proxy)
+    list_files = ListFiles(as_proxy=True)
 
     # Define flow and its task connections
     with Flow('local_dataset_flow') as flow:
         basedir = Parameter('basedir', default=basedir, required=False)
-        _ = list_files(basedir)
+        upstream = AlwaysSucceed(name='trigger')
+        dataset = list_files(basedir, upstream_tasks=[upstream])
 
-    logger.debug('Created flow: %s with tasks %s', flow, flow.tasks)
+        flow.set_reference_tasks([dataset])
+
+    logger.debug('Created flow %s with tasks %s', flow, flow.tasks)
     return flow
 
 
+@register_flow('quetzal_dataset')
+@click.option('--workspace-name', required=False, type=click.STRING,
+              help='Name of the Quetzal workspace to create or retrieve.')
+@click.option('--families', type=FamilyVersionListType(),
+              metavar='NAME:VERSION[,...]', required=False,
+              help='Comma-separated family NAMEs and VERSIONs to declare when '
+                   'creating a new Quetzal workspace, or to ensure that they '
+                   'are needed when an existing Quetzal workspace is retrieved. '
+                   'For example: "--families base:latest,xdf:10" means that '
+                   'the workspace should use the most recent version of the '
+                   '"base" family, and the version 10 of the "xdf" family.')
+@click.option('--query', required=False, type=click.File(),
+              help='Filename to SQL query that defines the Quetzal dataset.')
 def quetzal_dataset_flow(*,
                          workspace_name=None,
                          families=None,
-                         sql=None,
-                         as_proxy=True) -> Flow:
-    """Flow to create a file dataset from a Quetzal query"""
+                         query=None) -> Flow:
+    """Create file dataset from a Quetzal query"""
     logger.debug('Creating Quetzal dataset flow')
 
     # Manage parameters
     families = families or dict(base=None)
+    if query:
+        sql = query.read()
+    else:
+        sql = None
 
     # Instantiate tasks
-    as_proxy = as_proxy or True
     create_or_retrieve = CreateWorkspace(
+        # Iguazu task constructor arguments
         exist_ok=True,
         families=families,
         workspace_name=workspace_name,
+        # Prefect task arguments
         state_handlers=[logging_handler],
         cache_validator=never_use,
     )
     scan = ScanWorkspace(
+        # Iguazu task constructor arguments
+        # ... None ...
+        # Prefect task arguments
         name='ScanWorkspace',  # Needs to set name otherwise it will be named _WorkspaceOperation
         state_handlers=[logging_handler],
         cache_validator=never_use,
     )
     query = Query(
-        as_proxy=as_proxy,
+        # Iguazu task constructor arguments
+        as_proxy=True,
+        # Prefect task arguments
         state_handlers=[logging_handler],
         cache_validator=never_use,
     )
@@ -66,67 +98,80 @@ def quetzal_dataset_flow(*,
     # Define flow and its task connections
     with Flow('quetzal_dataset_flow') as flow:
         sql = Parameter('sql', default=sql, required=False)
-        wid = create_or_retrieve()
+        upstream = AlwaysSucceed(name='trigger')
+        wid = create_or_retrieve(upstream_tasks=[upstream])
         wid_ready = scan(wid)  # wid_ready == wid, but we are using to set the task dependencies
-        _ = query(query=sql, workspace_id=wid_ready)
+        dataset = query(query=sql, workspace_id=wid_ready)
 
-    logger.debug('Created flow: %s with tasks %s', flow, flow.tasks)
+        flow.set_reference_tasks([dataset])
+
+    logger.debug('Created flow %s with tasks %s', flow, flow.tasks)
     return flow
 
 
-def merged_dataset_flow(*,
-                        data_source='local',
-                        basedir='.',
-                        workspace_name=None,
-                        families=None,
-                        sql=None) -> Flow:
-    """Flow to create a file dataset from a local directory or Quetzal query"""
+@register_flow('generic_dataset')
+@click.option('--data-source', type=click.Choice(['local', 'quetzal']), default='local',
+              help='Source of data to choose for this flow.')
+@inherit_params(local_dataset_flow)
+@inherit_params(quetzal_dataset_flow)
+def generic_dataset_flow(*,
+                         data_source=None,
+                         basedir=None,
+                         workspace_name=None,
+                         families=None,
+                         query=None) -> Flow:
+    """Create file dataset from a local dir or Quetzal query"""
+    logger.debug('Creating generic (local or quetzal) dataset flow')
 
-    logger.debug('Creating merged local or quetzal dataset flow')
+    local_flow = local_dataset_flow(basedir=basedir)
+    qtzal_flow = quetzal_dataset_flow(workspace_name=workspace_name,
+                                      families=families,
+                                      query=query)
+    merge = Merge()
 
-    local_ds_flow = local_dataset_flow(basedir=basedir)
-    quetzal_ds_flow = quetzal_dataset_flow(workspace_name=workspace_name,
-                                           families=families,
-                                           sql=sql)
-
-    local_ds_root = local_ds_flow.get_tasks(task_type=ListFiles)[0]
-    local_ds_terminal = local_ds_root
-    quetzal_ds_root = quetzal_ds_flow.get_tasks(task_type=CreateWorkspace)[0]
-    quetzal_ds_terminal = quetzal_ds_flow.get_tasks(task_type=Query)[0]
+    local_upstream_task = local_flow.get_tasks(name='trigger').pop()
+    qtzal_upstream_task = qtzal_flow.get_tasks(name='trigger').pop()
+    local_downstream_task = local_flow.reference_tasks().pop()
+    qtzal_downstream_task = qtzal_flow.reference_tasks().pop()
 
     # Define flow and its task connections
     with Flow('merged_dataset_flow') as flow:
         # Add all the tasks of the upstream flows
-        flow.update(local_ds_flow)
-        flow.update(quetzal_ds_flow)
+        flow.update(local_flow)
+        flow.update(qtzal_flow)
 
         # Then define this flow's tasks
         data_source = Parameter('data_source', default=data_source, required=False)
         switch(condition=data_source,
                cases={
-                   'local': local_ds_root,
-                   'quetzal': quetzal_ds_root,
+                   'local': local_upstream_task,
+                   'quetzal': qtzal_upstream_task,
                })
-        _ = merge(local_ds_terminal, quetzal_ds_terminal)
+        dataset = merge(local_branch=local_downstream_task,
+                        quetzal_branch=qtzal_downstream_task)
 
-    logger.debug('Created flow: %s with tasks %s', flow, flow.tasks)
+        flow.set_reference_tasks([dataset])
+
+    logger.debug('Created flow %s with tasks %s', flow, flow.tasks)
     return flow
 
 
+@register_flow('print_dataset')
+@inherit_params(generic_dataset_flow)
 def print_dataset_flow(**kwargs) -> Flow:
     """Flow that prints each file in its dataset"""
 
     logger.debug('Creating print dataset flow')
 
-    dataset_flow = merged_dataset_flow(**kwargs)
-    dataset_terminal = dataset_flow.terminal_tasks().pop()
+    dataset_flow = generic_dataset_flow(**kwargs)
+    dataset_downstream_task = dataset_flow.reference_tasks().pop()
 
     echo = Log()
 
     with Flow('print_dataset_flow') as flow:
         # Add all the tasks of the upstream flows
         flow.update(dataset_flow)
-        echo.map(dataset_terminal)
+        echo.map(input=dataset_downstream_task)
 
     return flow
 

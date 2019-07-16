@@ -52,8 +52,23 @@ class Log(prefect.Task):
         super().__init__(**kwargs)
         self.level = level
 
-    def run(self, input_):
-        self.logger.log(self.level, 'Received %s', input_)
+    def run(self, input):
+        self.logger.log(self.level, 'Received %s', input)
+
+
+class AlwaysFail(prefect.Task):
+
+    def __init__(self, msg=None, **kwargs):
+        super().__init__(**kwargs)
+        self.msg = msg or 'Always fails'
+
+    def run(self):
+        raise prefect.engine.signals.FAIL(self.msg)
+
+
+class AlwaysSucceed(prefect.Task):
+    def run(self):
+        pass
 
 
 class MergeFilesFromGroups(prefect.Task):

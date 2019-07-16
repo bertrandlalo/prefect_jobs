@@ -119,8 +119,12 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
-        for k,v in context.items():
-            self.logger.info('Context: %s = %s', k ,v)
+        # for k,v in context.items():
+        #     self.logger.info('Context: %s = %s', k ,v)
+
+        if not query:
+            raise signals.FAIL('Query is empty')
+
         self.logger.debug('Querying Quetzal at %s with SQL=%s',
                           self.client.configuration.host,
                           query)
@@ -215,7 +219,6 @@ class CreateWorkspace(QuetzalBaseTask):
             Workspace identifier on the Quetzal API.
 
         """
-
         random_name = 'iguazu-{date}-{rnd}'.format(
             date=datetime.datetime.now().strftime('%Y%m%d'),
             rnd=''.join(random.choices(string.ascii_lowercase, k=5))

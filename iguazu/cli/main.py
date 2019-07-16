@@ -12,6 +12,9 @@ from iguazu.cli.flows import flows_group
               required=False, default=None, help='Python logging level.')
 def cli(log_level):
     """Command-line utility for Iguazu operations"""
+
+    # TODO: consider accepting a .yaml or .json file that has a dictConfig
+
     # Initialize logging for the CLI
     logging.basicConfig(
         level=log_level or logging.NOTSET,

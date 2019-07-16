@@ -197,6 +197,11 @@ class QuetzalFile(FileProxy):
         filename = base_metadata.get('filename', 'unnamed')
         return f'QuetzalFile<id={fid}, filename={filename}>'
 
+    def __eq__(self, other):
+        if type(self) != type(other):
+            return False
+        return (self._file_id, self._wid) == (other._file_id, other._wid)
+
 
 class LocalFile(FileProxy):
 
