@@ -35,7 +35,7 @@ spec:
             - scheduler
             - run
             - --scheduler-address
-            - {{ template "iguazu.fullname" . }}-scheduler:"{{ .Values.dask_scheduler.servicePort }}"
+            - {{ template "iguazu.fullname" . }}-dask-scheduler:{{ .Values.dask_scheduler.servicePort }}
           resources:
 {{ toYaml .Values.scheduler.resources | indent 12 }}
           env:
