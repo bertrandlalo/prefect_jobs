@@ -47,6 +47,7 @@ def adapt_task_states(task_states, new_tasks):
         old_task = [t for t in task_states.keys() if task_almost_equal(t, new_task)]
         if len(old_task) == 1:
             new_task_states[new_task] = task_states[old_task[0]]
+    return new_task_states
 
 
 def register_flow(flow_name):
