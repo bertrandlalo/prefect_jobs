@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-import inspect
 import functools
 import os
 import pathlib
 import tempfile
 import traceback
+from typing import Optional
 
 import click
-import pandas as pd
-import prefect
+from prefect.engine.state import State
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor
 
 from iguazu.executors import DaskExecutor
@@ -62,31 +61,6 @@ def info(flow_name, output, show):
         path.with_suffix('').unlink()
 
 
-# @flows_group.command('list')
-# def list_():
-#     """List available flows"""
-#     records = []
-#     for name in registry:
-#         func = registry[name]
-#         doc = func.__doc__
-#         # fg = None
-#         if doc is None:
-#             # fg = 'yellow'
-#             doc = f'⚠️  Not documented, please document {func.__qualname__} ⚠️'
-#         records.append((name, inspect.getmodule(func).__name__ + '.' + func.__qualname__, doc))
-#
-#     df = pd.DataFrame.from_records(records, columns=['flow_name', 'function', 'summary'])
-#     with pd.option_context('display.max_colwidth', 80):
-#         df_str = df.to_string(index=False)
-#
-#     click.secho('List of available flows:', fg='blue')
-#     for i, line in enumerate(df_str.split('\n'), -1):
-#         if i == -1:
-#             click.secho(line.upper(), fg='blue')
-#         else:
-#             click.secho(line)
-
-
 class RunFlowGroup(click.core.Group):
     """A regular click group, but with a custom error
 
@@ -101,6 +75,11 @@ class RunFlowGroup(click.core.Group):
         except click.UsageError as exc:
             msg = exc.message.replace('No such command', 'No such flow', 1)
             raise click.UsageError(msg)
+
+    def get_help(self, ctx):
+        help_str = super().get_help(ctx)
+        help_str = help_str.replace('\nCommands:\n', '\nAvailable flows:\n', 1)
+        return help_str
 
 
 @flows_group.group('run', cls=RunFlowGroup, subcommand_metavar='FLOW_NAME [ARGS] ...', no_args_is_help=True)
@@ -117,9 +96,9 @@ class RunFlowGroup(click.core.Group):
               help='Output CSV report of the execution')
 @click.pass_context
 def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report):
-    """Run flow FLOW_NAME
+    """Run the flow registered as FLOW_NAME
 
-    Use command `iguazu flows list` to get a list of all available flows.
+    Use command `iguazu flows run --help` to get a list of all available flows.
     """
     ctx.obj = ctx.obj or {}
     opts = {

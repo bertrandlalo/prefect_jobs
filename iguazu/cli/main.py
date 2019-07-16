@@ -18,7 +18,7 @@ def cli(log_level):
 
     # Initialize logging for the CLI
     logging.basicConfig(
-        level=log_level or logging.NOTSET,
+        level=log_level or logging.WARNING,
         format='%(levelname)s %(asctime)s %(name)s %(message)s',
     )
 
