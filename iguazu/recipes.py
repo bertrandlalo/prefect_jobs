@@ -98,10 +98,17 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
         if p not in flow.parameters():
             flow_parameters.pop(p)
 
+    # Read cached states from a local file
+    # ...
+
     with prefect.context(**context_args):
         flow_state = flow.run(parameters=flow_parameters,
                               executor=executor,
                               **flow_kwargs)
+
+    # Save cached states to a local file
+    # ...
+
     return flow, flow_state
 
 
