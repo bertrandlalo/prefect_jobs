@@ -5,16 +5,15 @@ To learn more about the release, try:
   $ helm status {{ .Release.Name }}  # information about running pods and this message
   $ helm get {{ .Release.Name }}     # get full Kubernetes specification
 
-This release includes an Iguazu Dask scheduler and
-{{ .Values.worker.replicas }} Iguazu Dask workers.
+This release includes a Dask scheduler, an Iguazu scheduler and {{ .Values.dask_worker.replicas }} Dask workers.
 
 The scheduler expose external services to which you can connect directly to the Dask
 cluster. You can get these addresses by running the following:
 
-  export DASK_SCHEDULER=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  export DASK_SCHEDULER_UI_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  echo http://$DASK_SCHEDULER_UI_IP:{{ .Values.webUI.servicePort }}  -- Dask dashboard
-  echo http://$DASK_SCHEDULER:{{ .Values.scheduler.servicePort }}    -- Dask Client connection
+  export DASK_SCHEDULER=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-dask-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  export DASK_SCHEDULER_UI_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-dask-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo http://$DASK_SCHEDULER_UI_IP:{{ .Values.dask_scheduler_ui.servicePort }}  -- Dask dashboard
+  echo http://$DASK_SCHEDULER:{{ .Values.dask_scheduler.servicePort }}    -- Dask Client connection
 
 
   NOTE: It may take a few minutes for the LoadBalancer IP to be available, until that the commands below will not work.
