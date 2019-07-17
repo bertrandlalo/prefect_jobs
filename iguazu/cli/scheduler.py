@@ -58,19 +58,20 @@ def run(scheduler_address):
     scheduler.add_job(_ping_job, id='ping', name='ping',
                       trigger=IntervalTrigger(minutes=1))
 
-    # Print dataset every 5 min
-    print_dataset_flow = registry['print_dataset']
-    print_dataset_kwargs = dict(
-        data_source='quetzal',
-        workspace_name=workspace_name,
-    )
-    scheduler.add_job(execute_flow,
-                      args=(print_dataset_flow, print_dataset_kwargs, executor, context_parameters),
-                      id=f'print-dataset-{uuid.uuid4()}', name='print-dataset',
-                      trigger=IntervalTrigger(minutes=10),
-                      max_instances=1)
+    # # Print dataset every 5 min
+    # print_dataset_flow = registry['print_dataset']
+    # print_dataset_kwargs = dict(
+    #     data_source='quetzal',
+    #     workspace_name=workspace_name,
+    # )
+    # scheduler.add_job(execute_flow,
+    #                   args=(print_dataset_flow, print_dataset_kwargs, executor, context_parameters),
+    #                   id=f'print-dataset-{uuid.uuid4()}', name='print-dataset',
+    #                   trigger=IntervalTrigger(minutes=10),
+    #                   max_instances=1)
 
     # Run the galvanic feature extraction every hour
+    # For the moment, this is every 2 minutes (for testing/debugging purposes)
     galvanic_features_flow = registry['galvanic_features']
     galvanic_features_kwargs = dict(
         data_source='quetzal',
