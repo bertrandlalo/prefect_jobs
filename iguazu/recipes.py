@@ -18,7 +18,10 @@ registry = dict()
 
 
 def dump_pickle(obj, filename='my_pickle.pickle'):
-    with open(filename, "wb") as f:  # remember to open the file in binary mode
+    logger.info('Trying to pickle %s in %s', obj, filename)
+    path = pathlib.Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:  # remember to open the file in binary mode
         pickle.dump(obj, f)  # serialize datetime.datetime object
 
 
@@ -33,8 +36,8 @@ def load_pickle(fname, default=None):
 
 def update_task_states(task_states, filename):
     stored_states = load_pickle(filename) or {}
-    task_states.update(stored_states)
-    dump_pickle(task_states, filename=filename)
+    stored_states.update(task_states)
+    dump_pickle(stored_states, filename=filename)
 
 
 def task_almost_equal(task1, task2):
@@ -45,8 +48,9 @@ def adapt_task_states(task_states, new_tasks):
     new_task_states = {}
     for new_task in new_tasks:
         old_task = [t for t in task_states.keys() if task_almost_equal(t, new_task)]
-        if len(old_task) == 1:
-            new_task_states[new_task] = task_states[old_task[0]]
+        if old_task:
+            logger.info('Cached pre-management: %s', task_states[old_task[-1]])
+            new_task_states[new_task] = task_states[old_task.pop()]
     return new_task_states
 
 
@@ -106,20 +110,6 @@ def _import_flows():
 _import_flows()
 
 
-#
-# factory_methods = {
-#     # Dataset handling flows
-#     'datasets:local': iguazu.flows.datasets.local_dataset_flow,
-#     'datasets:merged': iguazu.flows.datasets.merged_dataset_flow,
-#     'datasets:quetzal': iguazu.flows.datasets.quetzal_dataset_flow,
-#     'datasets:debug': iguazu.flows.datasets.print_dataset_flow,
-#     # Galvanic flows
-#     'galvanic:template': iguazu.flows.galvanic.galvanic_features_template,
-#     'galvanic:pipeline': iguazu.flows.galvanic.galvanic_features_flow,
-#     # Feature collection
-# }
-
-
 def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
     flow_parameters = func_kwargs.copy()
     flow_kwargs = flow_kwargs or {}
@@ -131,13 +121,16 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
             flow_parameters.pop(p)
 
     # Read cached states from a local file
-    # ...
     state_filename = (
             pathlib.Path(context_args['temp_dir']) /
             'cache' /
-            'task_states'
-    ).with_suffix('.pickle')
-    flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename), flow.sorted_tasks())
+            'task_states.pickle'
+    )
+    try:
+        flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename, default={}),
+                                                       flow.sorted_tasks())
+    except:
+        logger.warning('Could not read cache at %s', state_filename, exc_info=True)
 
     with prefect.context(**context_args):
         flow_state = flow.run(parameters=flow_parameters,
@@ -145,8 +138,10 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
                               **flow_kwargs)
 
     # Save cached states to a local file
-    # ...
-    update_task_states(flow_state.result, state_filename)
+    try:
+        update_task_states(flow_state.result, state_filename)
+    except:
+        logger.warning('Could not save cache to %s', state_filename, exc_info=True)
 
     return flow, flow_state
 
@@ -162,7 +157,7 @@ def state_report(flow_state, flow=None):
             'status': type(state).__name__,
             'message': state.message,
             'exception': extract_state_exception(state),
-            'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, -1),
+            'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, task.name, -1),
         })
         if state.is_mapped():
             for i, mapped_state in enumerate(state.map_states):
@@ -172,7 +167,7 @@ def state_report(flow_state, flow=None):
                     'status': type(mapped_state).__name__,
                     'message': mapped_state.message,
                     'exception': extract_state_exception(mapped_state),
-                    'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, i),
+                    'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, task.name, i),
                 })
 
     df = (
