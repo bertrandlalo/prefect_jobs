@@ -1,4 +1,5 @@
 from typing import Optional
+import gc
 
 from prefect.engine.runner import ENDRUN
 import pandas as pd
@@ -53,10 +54,12 @@ class ReportSequences(prefect.Task):
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
 
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+            # # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
+            # # this is the only way to skip with results
+            # skip = SkippedResult('Output already exists, skipping', result=output)
+            # raise ENDRUN(state=skip)
+            self.logger.info('Output already exists, returning output')
+            return output
 
         events_file = events.file.resolve()
 
@@ -97,5 +100,9 @@ class ReportSequences(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
         output.upload()
+
+        # Save memory, hdf5 is very bad at keeping memory
+        self.logger.info('Calling gc... ')
+        gc.collect()
 
         return output

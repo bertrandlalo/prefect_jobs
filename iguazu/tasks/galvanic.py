@@ -1,4 +1,5 @@
 from typing import Dict, Optional
+import gc
 
 from prefect.engine.runner import ENDRUN
 import pandas as pd
@@ -151,7 +152,7 @@ class CleanSignal(prefect.Task):
 
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(signal_file, 'r') as signal_store, \
-                pd.HDFStore(events_file, 'r') as events_store:
+             pd.HDFStore(events_file, 'r') as events_store:
 
             try:
                 # TODO discuss: select column before sending it to a column
@@ -188,6 +189,10 @@ class CleanSignal(prefect.Task):
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             clean.to_hdf(output_store, output_group)
+
+        # Save memory, hdf5 is very bad at keeping memory
+        self.logger.info('Calling gc...')
+        gc.collect()
 
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['task'][self.__class__.__name__] = meta
@@ -277,9 +282,12 @@ class ApplyCVX(prefect.Task):
                     'version': '0.0',
                     'bad_ratio': cvx.bad.mean(),
                 }
-            except SubprocessException as ex:
-                self.logger.warning('Subprocess failed, propagating exception')
-                raise ex
+                # TODO: think again about this... I am letting graceful fail
+                #       this case because otherwise the query will always keep
+                #       these failed files
+            # except SubprocessException as ex:
+            #     self.logger.warning('Subprocess failed, propagating exception')
+            #     raise ex
             except Exception as ex:
                 self.logger.warning('Galvanic CVX graceful fail! %s', ex, exc_info=True)
                 cvx = pd.DataFrame()

@@ -1,3 +1,5 @@
+import datetime
+import logging
 import os
 import tempfile
 import time
@@ -10,7 +12,7 @@ from prefect.engine.executors import LocalExecutor, SynchronousExecutor
 from prefect.engine.state import Mapped, Failed
 from prefect.tasks.control_flow import switch, merge
 
-from iguazu.cache_validators import all_validator
+from iguazu.cache_validators import ParametrizedValidator#, debug
 from iguazu.executors import DaskExecutor
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
@@ -84,6 +86,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
 
     # Instantiate tasks
     clean = CleanSignal(
+        # Iguazu task constructor arguments
         warmup_duration=30,
         glitch_kwargs=dict(
             scaling='robust',
@@ -102,12 +105,15 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             method='standard',
         ),
         corrupted_maxratio=0.3,
-        #force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        #cache_for=datetime.timedelta(days=7),
-        #cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
+        #cache_validator=debug,
     )
     apply_cvx = ApplyCVX(
+        # Iguazu task constructor arguments
         warmup_duration=15,
         glitch_kwargs=dict(
             scaling=False,
@@ -116,13 +122,14 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             rejection_win=20,
         ),
         cvxeda_kwargs=None,
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     detect_scr_peaks = DetectSCRPeaks(
+        # Iguazu task constructor arguments
         warmup_duration=15,
         glitch_kwargs=dict(
             nu=0,
@@ -133,20 +140,23 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             prominence=0.1,
             prominence_window=15,
         ),
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     report_sequences = ReportSequences(
+        # Iguazu task constructor arguments
         sequences=None,
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     extract_features_scr = ExtractFeatures(
+        # Iguazu task constructor arguments
         signals_group="/gsr/timeseries/scrpeaks",
         report_group="/unity/sequences_report",
         output_group="/gsr/features/scr",
@@ -166,11 +176,11 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
                 "drop_bad_samples": True,
             }
         ),
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     scl_columns_definitions_kwargs = dict(
         columns=['F_clean_inversed_lowpassed_zscored_SCL'],
@@ -179,6 +189,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         drop_bad_sample=True,
     )
     extract_features_scl = ExtractFeatures(
+        # Iguazu task constructor arguments
         signals_group="/gsr/timeseries/deconvoluted",
         report_group="/unity/sequences_report",
         output_group="/gsr/features/scl",
@@ -204,25 +215,29 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
                 **scl_columns_definitions_kwargs,
             },
         },
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     baseline_sequences = ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0',
                           'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1',
                           'cardiac-coherence_score_0']
     correct_scr = RemoveBaseline(
+        # Iguazu task constructor arguments
         features_group="/gsr/features/scr",
         output_group="/gsr/features/scr_corrected",
         sequences=baseline_sequences,
         columns=['SCR_peaks_detected_rate'],
-        # force=force,
+        force=force,
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     correct_scl = RemoveBaseline(
+        # Iguazu task constructor arguments
         features_group="/gsr/features/scl",
         output_group="/gsr/features/scl_corrected",
         sequences=baseline_sequences,
@@ -233,17 +248,19 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             'F_clean_inversed_lowpassed_zscored_SCL_auc'
         ],
         # force=force,
-        state_handlers=[logging_handler],
+        #state_handlers=[logging_handler],
         # skip_on_upstream_skip=False,
         # cache_for=datetime.timedelta(days=7),
         # cache_validator=all_validator(force=force),
     )
     merge_subject = MergeFilesFromGroups(
+        # Iguazu task constructor arguments
         suffix="_gsr",
+        status_metadata_key='gsr',
+        # Prefect task arguments
         state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
 
     # Define flow and its task connections

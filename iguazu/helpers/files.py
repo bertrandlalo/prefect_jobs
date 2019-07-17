@@ -156,7 +156,7 @@ class QuetzalFile(FileProxy):
         return None
 
     def upload(self):
-        logger.info('Uploading %s to Quetzal', self._local_path)
+        logger.info('Uploading %s to Quetzal', self)
         if self._file_id is not None:
             logger.info('File already has an id, no need to upload')
         elif self._local_path is None or not self._local_path.exists():
@@ -215,7 +215,7 @@ class LocalFile(FileProxy):
             with open(self._meta_file) as json_file:
                 self._metadata = json.load(json_file)
         else:
-            self._metadata = collections.defaultdict(dict) # type: Dict[str, Dict[str, Any]]
+            self._metadata = collections.defaultdict(dict)  # type: Dict[str, Dict[str, Any]]
 
     @property
     def file(self) -> pathlib.Path:

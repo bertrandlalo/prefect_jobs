@@ -93,8 +93,8 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             SELECT id, filename FROM base
             LEFT JOIN iguazu USING (id)
             WHERE 
-            base.filename LIKE '%.hdf5' AND 
-            iguazu.id IS NULL
+            base.filename LIKE '%_gsr.hdf5' AND 
+            iguazu.id IS NOT NULL
             LIMIT 3
         """,
     )
@@ -181,4 +181,5 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
 
 
 if __name__ == '__main__':  # __name__ is the process id, that decides for what the process is supposed to work on
-    cli()
+    #cli()
+    print('Removed this cli!')
