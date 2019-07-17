@@ -141,10 +141,14 @@ def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
                               **flow_kwargs)
 
     # Save cached states to a local file
-    try:
-        update_task_states(flow_state.result, state_filename)
-    except:
-        logger.warning('Could not save cache to %s', state_filename, exc_info=True)
+    if isinstance(flow_state.result, Exception):
+        logger.info('No cached saved because the flow result is an exception:\n%s',
+                    ''.join(traceback.TracebackException.from_exception(flow_state.result).format()))
+    else:
+        try:
+            update_task_states(flow_state.result, state_filename)
+        except:
+            logger.warning('Could not save cache to %s', state_filename, exc_info=True)
 
     return flow, flow_state
 
