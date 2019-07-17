@@ -364,14 +364,17 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
 
 @register_flow('galvanic_features')
 @inherit_params(generic_dataset_flow)
-def galvanic_features_flow(*, force=False, **kwargs) -> Flow:
+def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_query=None,
+                           **kwargs) -> Flow:
     """Extract galvanic features"""
     logger.debug('Creating galvanic features flow')
 
     # Manage parameters
     kwargs = kwargs.copy()
-    # Quetzal workspace must have the following families:
-    # (note that None means "latest" version)
+    # Propagate workspace name because we captured it on kwargs
+    kwargs['workspace_name'] = workspace_name
+    # Force required families: Quetzal workspace must have the following
+    # families: (nb: None means "latest" version)
     required_families = dict(
         iguazu=None,
         galvanic=None,
@@ -379,9 +382,37 @@ def galvanic_features_flow(*, force=False, **kwargs) -> Flow:
         vr_sequences=None,
         task=None,
     )
-    kwargs.setdefault('families', {})
+    families = kwargs.get('families', {}) or {}  # Could be None by default args
     for name in required_families:
-        kwargs['families'].setdefault(name, required_families[name])
+        families.setdefault(name, required_families[name])
+    kwargs['families'] = families
+    # In case there was no query, set a default one
+    default_query = """\
+        SELECT
+        id,
+        filename
+        FROM base
+        LEFT JOIN iguazu USING (id)
+        LEFT JOIN omi using (id)
+        WHERE
+            base.filename LIKE '%.hdf5' AND      -- only HDF5 files
+            iguazu.id IS NULL AND                -- files *not* created by iguazu
+            iguazu.gsr::json->>'status' IS NULL  -- files not yet processed by iguazu
+        LIMIT 10
+    """
+    default_alt_query = """\
+        SELECT
+        id,
+        filename
+        FROM base
+        LEFT JOIN iguazu USING (id)
+        WHERE
+            base.filename LIKE '%.hdf5' AND      -- only HDF5 files
+            iguazu.id IS NULL                    -- files *not* created by iguazu
+        LIMIT 10
+    """
+    kwargs['query'] = query or default_query
+    kwargs['alt_query'] = alt_query or default_alt_query
 
     # Manage connections to other flows
     dataset_flow = generic_dataset_flow(**kwargs)

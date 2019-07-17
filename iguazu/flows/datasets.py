@@ -55,19 +55,37 @@ def local_dataset_flow(*, basedir=None) -> Flow:
                    '"base" family, and the version 10 of the "xdf" family.')
 @click.option('--query', required=False, type=click.File(),
               help='Filename to SQL query that defines the Quetzal dataset.')
+@click.option('--alt-query', required=False, type=click.File(),
+              help='Filename to an secondary SQL query that defines the Quetzal '
+                   'dataset, but only when the primary query fails.')
 def quetzal_dataset_flow(*,
                          workspace_name=None,
                          families=None,
-                         query=None) -> Flow:
+                         query=None,
+                         alt_query=None) -> Flow:
     """Create file dataset from a Quetzal query"""
     logger.debug('Creating Quetzal dataset flow')
 
     # Manage parameters
     families = families or dict(base=None)
     if query:
-        sql = query.read()
+        if hasattr(query, 'read'):
+            sql = query.read()
+        elif isinstance(query, str):
+            sql = query
+        else:
+            raise ValueError('Invalid query parameter type')
     else:
         sql = None
+    if alt_query:
+        if hasattr(alt_query, 'read'):
+            alt_sql = alt_query.read()
+        elif isinstance(alt_query, str):
+            alt_sql = alt_query
+        else:
+            raise ValueError('Invalid alt_query parameter type')
+    else:
+        alt_sql = None
 
     # Instantiate tasks
     create_or_retrieve = CreateWorkspace(
@@ -98,10 +116,11 @@ def quetzal_dataset_flow(*,
     # Define flow and its task connections
     with Flow('quetzal_dataset_flow') as flow:
         sql = Parameter('sql', default=sql, required=False)
+        alt_sql = Parameter('alt_sql', default=alt_sql, required=False)
         upstream = AlwaysSucceed(name='trigger')
         wid = create_or_retrieve(upstream_tasks=[upstream])
         wid_ready = scan(wid)  # wid_ready == wid, but we are using to set the task dependencies
-        dataset = query(query=sql, workspace_id=wid_ready)
+        dataset = query(query=sql, alt_query=alt_sql, workspace_id=wid_ready)
 
         flow.set_reference_tasks([dataset])
 
@@ -119,14 +138,16 @@ def generic_dataset_flow(*,
                          basedir=None,
                          workspace_name=None,
                          families=None,
-                         query=None) -> Flow:
+                         query=None,
+                         alt_query=None) -> Flow:
     """Create file dataset from a local dir or Quetzal query"""
     logger.debug('Creating generic (local or quetzal) dataset flow')
 
     local_flow = local_dataset_flow(basedir=basedir)
     qtzal_flow = quetzal_dataset_flow(workspace_name=workspace_name,
                                       families=families,
-                                      query=query)
+                                      query=query,
+                                      alt_query=alt_query)
     merge = Merge()
 
     local_upstream_task = local_flow.get_tasks(name='trigger').pop()
@@ -174,4 +195,3 @@ def print_dataset_flow(**kwargs) -> Flow:
         echo.map(input=dataset_downstream_task)
 
     return flow
-

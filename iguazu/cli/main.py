@@ -11,7 +11,10 @@ from iguazu.cli.scheduler import scheduler_group
 @click.option('--log-level',
               type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']),
               required=False, default=None, help='Python logging level.')
-def cli(log_level):
+@click.option('--quetzal-logs', default=None, type=click.STRING,
+              required=False, help='Quetzal workspace name to upload logs.')
+@click.pass_context
+def cli(ctx, log_level, quetzal_logs):
     """Command-line utility for Iguazu operations"""
 
     # TODO: consider accepting a .yaml or .json file that has a dictConfig
@@ -26,6 +29,11 @@ def cli(log_level):
     if log_level is not None:
         import prefect.utilities.logging as prefect_logging
         prefect_logging.prefect_logger.setLevel(log_level)
+
+    # Set quetzal workspace logs in click context to provide it to inner commands
+    if quetzal_logs and not ctx.resilient_parsing:
+        ctx.obj = ctx.obj or {}
+        ctx.obj['quetzal_logs'] = quetzal_logs
 
 
 cli.add_command(deploy_group)

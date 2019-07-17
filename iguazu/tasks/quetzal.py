@@ -93,12 +93,15 @@ class Query(QuetzalBaseTask):
 
     """
 
-    def __init__(self, as_proxy: bool = False, **kwargs):
+    def __init__(self,
+                 as_proxy: bool = False,
+                 **kwargs):
         super().__init__(**kwargs)
         self._as_proxy = as_proxy
 
     def run(self,
             query: str,
+            alt_query: Optional[str] = None,
             workspace_id: Optional[int] = None,
             id_column: Optional[str] = None) -> List[ResultSetType]:
         """ Perform the Quetzal SQL query
@@ -107,6 +110,9 @@ class Query(QuetzalBaseTask):
         ----------
         query: str
             Query in postgreSQL dialect.
+        alt_query: str
+            Alternate query, also in postgreSQL dialect, to perform in case the
+            initial `query` fails.
         workspace_id: int
             Workspace where the query should be executed. If not set, it uses
             the global workspace.
@@ -125,15 +131,28 @@ class Query(QuetzalBaseTask):
         if not query:
             raise signals.FAIL('Query is empty')
 
-        self.logger.debug('Querying Quetzal at %s with SQL=%s',
-                          self.client.configuration.host,
-                          query)
+        self.logger.info('Querying Quetzal at %s with SQL=\n%s',
+                         self.client.configuration.host,
+                         query)
+        rows, total = None, 0
         try:
             rows, total = helpers.query(self.client, workspace_id, query)
         except QuetzalAPIException as ex:
-            self.logger.warning('Quetzal query task failed: %s', ex.title)
-            raise
-        self.logger.debug('Query gave %d results', total)
+            self.logger.warning('Quetzal query failed: %s', ex.title)
+            if not alt_query:
+                raise
+
+        # Try the alt query if we failed and alt_query exists
+        if rows is None and alt_query:
+            self.logger.info('Querying Quetzal with alternate query SQL=\n%s', alt_query)
+            try:
+                rows, total = helpers.query(self.client, workspace_id, alt_query)
+            except QuetzalAPIException as ex:
+                self.logger.warning('Quetzal alternate query also failed: %s', ex.title)
+                raise
+
+        # Handle results
+        self.logger.info('Query gave %d results', total)
 
         if self._as_proxy:
             proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
