@@ -41,6 +41,8 @@ def update_task_states(task_states, filename):
 
 
 def task_almost_equal(task1, task2):
+    if (task1.cache_key and task2.cache_key) is not None:
+        return task1.cache_key == task2.cache_key
     return type(task1) == type(task2) and task1.__dict__ == task2.__dict__
 
 
