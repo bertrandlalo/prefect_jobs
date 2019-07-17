@@ -75,7 +75,7 @@ class MergeFilesFromGroups(prefect.Task):
     ''' Merge HDF5 files with unique groups in one file containing all the groups.
     '''
 
-    def __init__(self, suffix=None, **kwargs):
+    def __init__(self, suffix=None, status_metadata_key=None, **kwargs):
         '''
 
         Parameters
@@ -89,6 +89,7 @@ class MergeFilesFromGroups(prefect.Task):
         '''
         super().__init__(**kwargs)
         self.suffix = suffix or "_merged"
+        self.status_key = status_metadata_key
 
     def run(self, parent, **kwargs) -> FileProxy:
 
@@ -96,8 +97,9 @@ class MergeFilesFromGroups(prefect.Task):
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(output.file, "a") as output_store:
             for output_group, file_proxy in kwargs.items():
+                # Inherit the contents of the "task" family only for this input
                 output.metadata['task'].setdefault(output_group, {})
-                output.metadata['task'][output_group].update(file_proxy.metadata)
+                output.metadata['task'][output_group].update(file_proxy.metadata.get('task', {}))
                 output_group = output_group.replace("_", "/")
                 with pd.HDFStore(file_proxy.file, "r") as input_store:
                     groups = input_store.keys()
@@ -113,5 +115,17 @@ class MergeFilesFromGroups(prefect.Task):
                         data = pd.read_hdf(input_store, groups[0])
                         data.to_hdf(output_store, output_group)
 
+            # import json
+            # self.logger.info('Uploading file with metadata:\n%s',
+            #                  json.dumps(output.metadata, indent=2))
             output.upload()
-            return output
+
+        # Mark parent as processed
+        parent.metadata['iguazu'][self.status_key] = {
+            'status': 'PROCESSED',  # TODO: discuss
+            'date': prefect.context.scheduled_start_time,
+        }
+        parent.upload()
+
+        return output
+
