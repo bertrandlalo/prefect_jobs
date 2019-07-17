@@ -142,6 +142,8 @@ def run_flow_command(func):
         context_args = dict(
             temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
             output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
+            quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
+                                                    kwargs.get('workspace_name', None)),
         )
         if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
             # At least one of these keys exist in the environment
@@ -166,6 +168,7 @@ def run_flow_command(func):
         ###
         # Flow execution
         ###
+
         flow, flow_state = execute_flow(func, kwargs, executor, context_args)
         # with prefect.context(**context_args):
         #     flow_state = flow.run(parameters=flow_parameters,
@@ -195,7 +198,7 @@ def run_flow_command(func):
             click.secho(f'Saved CSV report on {report}', fg='blue')
 
         # Show a final error message if the flow failed
-        errors = df.loc[~df.exception.isnull()]
+        errors = df.loc[~df.exception.isnull()].query('status != "TriggerFailed"')
         if not errors.empty:
             click.secho('Flow encountered the following exceptions:', fg='red')
             for idx, row in errors.iterrows():
@@ -238,4 +241,5 @@ def prepare_executor(executor_type, executor_address=None):
 
 
 def str2bool(value):
+    # TODO: move to a utils package?
     return str(value).lower() in ("yes", "true", "t", "1")
