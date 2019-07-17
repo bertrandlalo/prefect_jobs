@@ -1,24 +1,14 @@
 import datetime
 import logging
-import os
-import tempfile
-import time
-import traceback
 
-import click
-import pandas as pd
-from prefect import Flow, Parameter, context
-from prefect.engine.executors import LocalExecutor, SynchronousExecutor
-from prefect.engine.state import Mapped, Failed
-from prefect.tasks.control_flow import switch, merge
+from prefect import Flow
+from prefect.tasks.notifications import SlackTask
 
-from iguazu.cache_validators import ParametrizedValidator#, debug
-from iguazu.executors import DaskExecutor
+from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
-from iguazu.tasks.common import ListFiles, MergeFilesFromGroups
+from iguazu.tasks.common import MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import logging_handler
-from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
 from iguazu.tasks.summarize import ExtractFeatures
 from iguazu.tasks.unity import ReportSequences
 from iguazu.recipes import inherit_params, register_flow
@@ -247,11 +237,11 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
             'F_clean_inversed_lowpassed_zscored_SCL_auc'
         ],
-        # force=force,
-        #state_handlers=[logging_handler],
-        # skip_on_upstream_skip=False,
-        # cache_for=datetime.timedelta(days=7),
-        # cache_validator=all_validator(force=force),
+        force=force,
+        # Prefect task arguments
+        state_handlers=[logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
     )
     merge_subject = MergeFilesFromGroups(
         # Iguazu task constructor arguments
@@ -262,6 +252,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
+    notify = SlackTask(message='Galvanic feature extraction finished!')
 
     # Define flow and its task connections
     with Flow('galvanic_features_flow') as flow:
@@ -286,11 +277,13 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         scl_features_corrected = correct_scl.map(features=scl_features)
 
         # Subject summary
-        merge_subject.map(parent=raw_signals,
-                          gsr_timeseries_deconvoluted=cvx,
-                          gsr_features_scr=scr_features_corrected,
-                          gsr_features_scl=scl_features_corrected,
-                          unity_sequences=sequences_reports)
+        merged = merge_subject.map(parent=raw_signals,
+                                   gsr_timeseries_deconvoluted=cvx,
+                                   gsr_features_scr=scr_features_corrected,
+                                   gsr_features_scl=scl_features_corrected,
+                                   unity_sequences=sequences_reports)
+
+        notify(upstream_tasks=[merged])
 
         # TODO: what's the reference task of this?
 

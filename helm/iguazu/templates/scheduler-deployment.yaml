@@ -49,6 +49,11 @@ spec:
                 secretKeyRef:
                   name: {{ template "iguazu.fullname" . }}-secrets
                   key: password
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: slack_url
 {{ toYaml .Values.scheduler.env | indent 12 }}
     {{- with .Values.scheduler.nodeSelector }}
       nodeSelector:

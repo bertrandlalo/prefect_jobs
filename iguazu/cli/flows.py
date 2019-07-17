@@ -145,6 +145,7 @@ def run_flow_command(func):
             quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
                                                     kwargs.get('workspace_name', None)),
         )
+        # TODO: this could be set in a context secret
         if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
             # At least one of these keys exist in the environment
             quetzal_kws = dict(
@@ -154,6 +155,11 @@ def run_flow_command(func):
                 insecure=str2bool(os.getenv('QUETZAL_INSECURE', 0))
             )
             context_args['quetzal_client'] = quetzal_kws
+
+        context_args.setdefault('secrets', {})
+        if 'SLACK_WEBHOOK_URL' in os.environ:
+            context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+
         # force = ctx.obj.get('force', False)
         #
         # # Prepare flow parameters
