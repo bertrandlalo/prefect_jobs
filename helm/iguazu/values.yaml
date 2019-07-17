@@ -52,7 +52,7 @@
 scheduler:
   name: scheduler
   image:
-    repository: gcr.io/quetzal-omind/iguazu/iguazu
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.0.1
     pullPolicy: Always
   replicas: 1
@@ -66,12 +66,18 @@ scheduler:
   tolerations: []
   nodeSelector: {}
   affinity: {}
-
+  env:
+    - name: QUETZAL_URL
+      value: "https://quetzal.omind.me/api/v1"
+    - name: QUETZAL_INSECURE
+      value: "0"
+    - name: IGUAZU_WORKSPACE
+      value: "iguazu-workspace-v1"
 
 dask_scheduler:
   name: dask-scheduler
   image:
-    repository: gcr.io/quetzal-omind/iguazu/iguazu
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.0.1
     pullPolicy: Always
   replicas: 1
@@ -95,11 +101,11 @@ dask_scheduler_ui:
 dask_worker:
   name: dask-worker
   image:
-    repository: gcr.io/quetzal-omind/iguazu/iguazu
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.0.1
     pullPolicy: Always
   replicas: 3
-  maxReplicas: 4
+  maxReplicas: 6
   aptPackages: >-
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1

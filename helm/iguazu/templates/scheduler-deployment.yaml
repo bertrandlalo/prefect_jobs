@@ -39,6 +39,16 @@ spec:
           resources:
 {{ toYaml .Values.scheduler.resources | indent 12 }}
           env:
+            - name: QUETZAL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: username
+            - name: QUETZAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: password
 {{ toYaml .Values.scheduler.env | indent 12 }}
     {{- with .Values.scheduler.nodeSelector }}
       nodeSelector:
