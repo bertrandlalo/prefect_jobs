@@ -7,6 +7,7 @@ import prefect
 
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.files import LocalFile
+from iguazu.helpers.tasks import get_base_meta
 
 
 class ListFiles(prefect.Task):
@@ -97,37 +98,48 @@ class MergeFilesFromGroups(prefect.Task):
     def run(self, parent, **kwargs) -> FileProxy:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
-        with pd.option_context('mode.chained_assignment', None), \
-             pd.HDFStore(output.file, "a") as output_store:
-            for output_group, file_proxy in kwargs.items():
-                # Inherit the contents of the "task" family only for this input
-                output.metadata['iguazu'].setdefault(output_group, {})
-                output.metadata['iguazu'][output_group].update(file_proxy.metadata.get('iguazu', {}))
-                output_group = output_group.replace("_", "/")
-                with pd.HDFStore(file_proxy.file, "r") as input_store:
-                    groups = input_store.keys()
-                    if len(groups) > 1:
-                        # multiple groups in the HDF5, then get rid of the common path and
-                        # append it to the output group.
-                        common = os.path.commonprefix(input_store.keys())
-                        for group in groups:
-                            rel = os.path.relpath(group, common)
-                            data = pd.read_hdf(input_store, group)
+        try:
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(output.file, "a") as output_store:
+                for output_group, file_proxy in kwargs.items():
+                    # Inherit the contents of the "task" family only for this input
+                    output.metadata['iguazu'].setdefault(output_group, {})
+                    output.metadata['iguazu'][output_group].update(file_proxy.metadata.get('iguazu', {}))
+                    output_group = output_group.replace("_", "/")
+                    with pd.HDFStore(file_proxy.file, "r") as input_store:
+                        groups = input_store.keys()
+                        if len(groups) > 1:
+                            # multiple groups in the HDF5, then get rid of the common path and
+                            # append it to the output group.
+                            common = os.path.commonprefix(input_store.keys())
+                            for group in groups:
+                                rel = os.path.relpath(group, common)
+                                data = pd.read_hdf(input_store, group)
+                                assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
+                                data.to_hdf(output_store, os.path.join(output_group, rel))
+                        else:
+                            data = pd.read_hdf(input_store, groups[0])
                             assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
-                            data.to_hdf(output_store, os.path.join(output_group, rel))
-                    else:
-                        data = pd.read_hdf(input_store, groups[0])
-                        assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
-                        data.to_hdf(output_store, output_group)
+                            data.to_hdf(output_store, output_group)
 
-            output.upload()
+            state = 'SUCCESS'
+            meta = get_base_meta(self, state=state)
+
+        except Exception as ex:
+            self.logger.warning('MergeFilesFromGroups clean graceful fail: %s', ex)
+            state = 'FAILURE'
+            meta = get_base_meta(self, state=state)
+
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
+        output.upload()
 
         # Mark parent as processed
         parent.metadata['iguazu'][self.status_key] = {
-            'status': 'PROCESSED',  # TODO: discuss
+            'status': state,
             'date': prefect.context.scheduled_start_time,
         }
         parent.upload()
 
-        return output
+        # graceful_fail(meta, output, state='FAILURE')
 
+        return output
