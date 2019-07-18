@@ -54,7 +54,7 @@ scheduler:
   image:
     repository: gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.0.1
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicas: 1
   serviceType: "LoadBalancer"
   servicePort: 8786
@@ -78,13 +78,16 @@ worker:
   image:
     repository: gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.0.1
-    pullPolicy: IfNotPresent
-  replicas: 2
+    pullPolicy: Always
+  replicas: 1
+  maxReplicas: 4
   aptPackages: >-
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1
     memory: "2GiB"
   env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
     # - name: EXTRA_CONDA_PACKAGES
     #   value: numba xarray -c conda-forge
     # - name: EXTRA_PIP_PACKAGES
@@ -92,10 +95,10 @@ worker:
   resources:
      limits:
        cpu: 1     # note: use integer (round values) here
-       memory: 2G
+       memory: 4G
      requests:
        cpu: 1
-       memory: 2G
+       memory: 4G
   tolerations: []
   nodeSelector: {}
   affinity: {}

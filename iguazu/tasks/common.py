@@ -1,12 +1,11 @@
-import logging
 import os
 import pathlib
 
 import pandas as pd
 import prefect
 
-from iguazu.helpers.files import FileProxy, LocalFile
-from iguazu.helpers.tasks import graceful_fail, get_base_meta
+from iguazu.helpers.files import FileProxy
+from iguazu.helpers.files import LocalFile
 
 
 class ListFiles(prefect.Task):
@@ -46,31 +45,6 @@ class ListFiles(prefect.Task):
         return files
 
 
-class Log(prefect.Task):
-
-    def __init__(self, level=logging.INFO, **kwargs):
-        super().__init__(**kwargs)
-        self.level = level
-
-    def run(self, input):
-        self.logger.log(self.level, 'Received %s', input)
-
-
-class AlwaysFail(prefect.Task):
-
-    def __init__(self, msg=None, **kwargs):
-        super().__init__(**kwargs)
-        self.msg = msg or 'Always fails'
-
-    def run(self):
-        raise prefect.engine.signals.FAIL(self.msg)
-
-
-class AlwaysSucceed(prefect.Task):
-    def run(self):
-        pass
-
-
 class MergeFilesFromGroups(prefect.Task):
     ''' Merge HDF5 files with unique groups in one file containing all the groups.
     '''
@@ -93,36 +67,24 @@ class MergeFilesFromGroups(prefect.Task):
     def run(self, parent, **kwargs) -> FileProxy:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
-        try:
-            with pd.option_context('mode.chained_assignment', None), \
-                 pd.HDFStore(output.file, "a") as output_store:
-                for output_group, file_proxy in kwargs.items():
-                    # output.metadata['groups'][output_group] = file_proxy.metadata
-                    output_group = output_group.replace("_", "/")
-                    with pd.HDFStore(file_proxy.file, "r") as input_store:
-                        groups = input_store.keys()
-                        if len(groups) > 1:
-                            # multiple groups in the HDF5, then get rid of the common path and
-                            # append it to the output group.
-                            common = os.path.commonprefix(input_store.keys())
-                            for group in groups:
-                                rel = os.path.relpath(group, common)
-                                data = pd.read_hdf(input_store, group)
-                                data.to_hdf(output_store, os.path.join(output_group, rel))
-                        else:
-                            data = pd.read_hdf(input_store, groups[0])
-                            data.to_hdf(output_store, output_group)
-            state = 'SUCCESS'
-            meta = get_base_meta(self, state=state)
+        with pd.option_context('mode.chained_assignment', None), \
+             pd.HDFStore(output.file, "a") as output_store:
+            for output_group, file_proxy in kwargs.items():
+                output.metadata[output_group].update(file_proxy.metadata)
+                output_group = output_group.replace("_", "/")
+                with pd.HDFStore(file_proxy.file, "r") as input_store:
+                    groups = input_store.keys()
+                    if len(groups) > 1:
+                        # multiple groups in the HDF5, then get rid of the common path and
+                        # append it to the output group.
+                        common = os.path.commonprefix(input_store.keys())
+                        for group in groups:
+                            rel = os.path.relpath(group, common)
+                            data = pd.read_hdf(input_store, group)
+                            data.to_hdf(output_store, os.path.join(output_group, rel))
+                    else:
+                        data = pd.read_hdf(input_store, groups[0])
+                        data.to_hdf(output_store, output_group)
 
-        except Exception as ex:
-            self.logger.warning('MergeFilesFromGroups clean graceful fail: %s', ex)
-            state = 'FAILURE'
-            meta = get_base_meta(self, state=state)
-
-        output.metadata['iguazu'].update({self.name: meta, 'state': state})
-        output.upload()
-
-        graceful_fail(meta, output, state='FAILURE')
-
-        return output
+            output.upload()
+            return output

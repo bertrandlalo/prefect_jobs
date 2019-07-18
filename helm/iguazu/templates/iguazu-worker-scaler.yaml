@@ -1,0 +1,18 @@
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ template "iguazu.fullname" . }}-scaler
+  labels:
+    app: {{ template "iguazu.name" . }}
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: {{ template "iguazu.chart" . }}
+    component: worker
+spec:
+  minReplicas: {{ .Values.worker.replicas }}
+  maxReplicas: {{ .Values.worker.maxReplicas }}
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ template "iguazu.fullname" . }}-worker
+  targetCPUUtilizationPercentage: 50

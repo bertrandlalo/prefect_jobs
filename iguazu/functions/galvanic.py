@@ -125,7 +125,7 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda
     Returns
     -------
     data: pd.DataFrame
-          Dataframe with columns: ['xxx_SCR', 'xxx_SCL', 'bad']
+          Dataframe with columns: ['F_clean_inversed_lowpassed_zscored_SCR', 'F_clean_inversed_lowpassed_zscored°SCL', 'bad']
 
     Examples
     --------

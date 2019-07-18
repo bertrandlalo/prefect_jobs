@@ -186,10 +186,7 @@ class CreateWorkspace(QuetzalBaseTask):
                  exist_ok: bool = True,
                  **kwargs):
         super().__init__(**kwargs)
-        self.workspace_name = workspace_name or 'iguazu-{date}-{rnd}'.format(
-            date=datetime.datetime.now().strftime('%Y%m%d'),
-            rnd=''.join(random.choices(string.ascii_lowercase, k=5))
-        )
+        self.workspace_name = workspace_name
         self.description = description or 'Workspace created by iguazu'
         self.families = copy.deepcopy(families or {})
         self.exist_ok = exist_ok  # TODO: decide: should this be here or a run parameter?
@@ -221,8 +218,23 @@ class CreateWorkspace(QuetzalBaseTask):
 
         """
 
+        random_name = 'iguazu-{date}-{rnd}'.format(
+            date=datetime.datetime.now().strftime('%Y%m%d'),
+            rnd=''.join(random.choices(string.ascii_lowercase, k=5))
+        )
+
         families = families or self.families
-        workspace_name = workspace_name or self.workspace_name
+        workspace_name = (
+            # Workspace name parameter resolution priority:
+            # 1. the task run parameter
+            workspace_name or
+            # 2. the task parameter (set on constructor)
+            self.workspace_name or
+            # 3. the context value (set on a prefect context)
+            context.get('workspace_name', None) or
+            # 4. a random fallback name
+            random_name
+        )
         description = description or self.description
 
         # Check if the requested workspace already exists
