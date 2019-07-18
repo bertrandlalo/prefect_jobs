@@ -15,7 +15,7 @@ from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveB
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
 from iguazu.tasks.summarize import ExtractFeatures
-from iguazu.tasks.unity import ReportSequences
+from iguazu.tasks.unity import ExtractSequences
 
 
 @click.command()
@@ -121,7 +121,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
-    report_sequences = ReportSequences(
+    report_sequences = ExtractSequences(
         sequences=None,
         force=force,
         state_handlers=[logging_handler]
@@ -147,6 +147,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             }
         ),
         force=force,
+        name='ExtractFeatures__scr',
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False
     )
@@ -193,6 +194,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             },
         },
         force=force,
+        name='ExtractFeatures__scl',
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
     )
@@ -204,6 +206,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
         output_group="/gsr/features/scr_corrected",
         sequences=baseline_sequences,
         columns=['gsr_SCR_peaks_detected_rate'],
+        name='RemoveBaseline__scr',
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
@@ -218,6 +221,7 @@ def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_add
             'gsr_SCL_linregress_slope',
             'gsr_SCL_auc'
         ],
+        name='RemoveBaseline__scl',
         force=force,
         state_handlers=[logging_handler],
         skip_on_upstream_skip=False,
