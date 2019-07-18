@@ -1,6 +1,7 @@
 import logging
 import pathlib
 import tempfile
+import shutil
 
 from prefect import context
 from quetzal.client import helpers
@@ -14,6 +15,7 @@ class CustomFileHandler(logging.FileHandler):
 
 def logging_handler(task, old_state, new_state):
     logger.debug('logging inner handler %s -> %s', old_state, new_state)
+    state_name = str(type(new_state).__name__).upper()
 
     if new_state.is_running():
         temp_dir = context.get('temp_dir', None)
@@ -22,6 +24,7 @@ def logging_handler(task, old_state, new_state):
             pathlib.Path(temp_dir) /
             'logs' /
             context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
+            state_name /
             f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
         ).with_suffix('.log')
         log_filename.parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +66,25 @@ def logging_handler(task, old_state, new_state):
                 except:
                     # Catch any error, log it and keep going
                     logger.warning('Could not upload logs to quetzal', exc_info=True)
+
+            # Move to final directory on temp_dir with the state name
+            if 'temp_dir' in context:
+                log_filename = (
+                        pathlib.Path(context.temp_dir) /
+                        'logs' /
+                        context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
+                        state_name /
+                        f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
+                ).with_suffix('.log')
+                log_filename.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(hdlr.baseFilename, log_filename)
+                # Clear the parent directory when empty, in a "ask for forgiveness"
+                # instead of getting permission
+                try:
+                    log_filename.parent.rmdir()
+                except:
+                    # It was not empty
+                    pass
 
     return new_state
 
