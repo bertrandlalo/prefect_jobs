@@ -190,7 +190,7 @@ def run_flow_command(func):
 
         # Create dataframe report and save to CSV
         df = state_report(flow_state, flow)
-        report = ctx.obj.get('report_csv', None)
+        report = ctx.obj.get('csv_report', None)
         if report is None:
             tmpfile = tempfile.NamedTemporaryFile(prefix='iguazu_report_', suffix='.csv', delete=False)
             tmpfile.close()
