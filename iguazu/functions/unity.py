@@ -1,6 +1,7 @@
 import pandas as pd
 import prefect
-from dsu.unity import extract_marker_version, fix_unity_events, extract_complete_sequences, \
+from datascience_utils.unity import fix_unity_events
+from dsu.unity import extract_marker_version, extract_complete_sequences, \
     extract_complete_sequence_times
 
 logger = prefect.utilities.logging.get_logger(name=None)
