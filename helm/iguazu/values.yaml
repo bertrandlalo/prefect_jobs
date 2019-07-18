@@ -127,3 +127,13 @@ dask_worker:
   tolerations: []
   nodeSelector: {}
   affinity: {}
+
+quetzal:
+  # Set these values with the URL, username and password used
+  url: https://quetzal.omind.me/api/v1
+  username: iguazu
+  password:
+  insecure: "0"
+
+slack:
+  url: "https://hooks.slack.com/services/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"

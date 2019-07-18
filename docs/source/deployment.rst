@@ -118,7 +118,14 @@ follow these instructions:
 
    .. code-block:: console
 
-      $ helm install --name somename ./helm/iguazu
+      $ helm install --name somename \
+          --set-string quetzal.username=USERNAME \
+          --set-string quetzal.password=PASSWORD \
+          ./helm/iguazu
+
+   where ``somename`` is an optional name to keep track of helm applications,
+   ``USERNAME`` and ``PASSWORD`` are the Quetzal user and password that will
+   be used by Iguazu to run its scheduled flows.
 
 6. Get the scheduler service external IP. This is the IP that you will need to
    use as the dask scheduler.
