@@ -58,11 +58,14 @@ def local_dataset_flow(*, basedir=None) -> Flow:
 @click.option('--alt-query', required=False, type=click.File(),
               help='Filename to an secondary SQL query that defines the Quetzal '
                    'dataset, but only when the primary query fails.')
+@click.option('--limit', metavar='N', required=False, type=click.INT,
+              help='Only take the first N results of the Quetzal query.')
 def quetzal_dataset_flow(*,
                          workspace_name=None,
                          families=None,
                          query=None,
-                         alt_query=None) -> Flow:
+                         alt_query=None,
+                         limit=None) -> Flow:
     """Create file dataset from a Quetzal query"""
     logger.debug('Creating Quetzal dataset flow')
 
@@ -108,6 +111,7 @@ def quetzal_dataset_flow(*,
     query = Query(
         # Iguazu task constructor arguments
         as_proxy=True,
+        limit=limit,
         # Prefect task arguments
         state_handlers=[logging_handler],
         cache_validator=never_use,
@@ -139,7 +143,8 @@ def generic_dataset_flow(*,
                          workspace_name=None,
                          families=None,
                          query=None,
-                         alt_query=None) -> Flow:
+                         alt_query=None,
+                         limit=None) -> Flow:
     """Create file dataset from a local dir or Quetzal query"""
     logger.debug('Creating generic (local or quetzal) dataset flow')
 
@@ -147,7 +152,8 @@ def generic_dataset_flow(*,
     qtzal_flow = quetzal_dataset_flow(workspace_name=workspace_name,
                                       families=families,
                                       query=query,
-                                      alt_query=alt_query)
+                                      alt_query=alt_query,
+                                      limit=limit)
     merge = Merge()
 
     local_upstream_task = local_flow.get_tasks(name='trigger').pop()

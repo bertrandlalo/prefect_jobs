@@ -54,7 +54,6 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
             iguazu.id IS NULL AND                -- files *not* created by iguazu
             iguazu.gsr::json->>'status' IS NULL  -- files not yet processed by iguazu
-        LIMIT 10
     """
     default_alt_query = """\
         SELECT
@@ -65,7 +64,6 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         WHERE
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
             iguazu.id IS NULL                    -- files *not* created by iguazu
-        LIMIT 10
     """
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query

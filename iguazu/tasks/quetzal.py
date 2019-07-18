@@ -7,11 +7,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
-from prefect.engine.runner import ENDRUN
 from quetzal.client import QuetzalAPIException, helpers
 
 from iguazu.helpers.files import QuetzalFile
-from iguazu.helpers.states import SkippedResult
 
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
@@ -95,9 +93,11 @@ class Query(QuetzalBaseTask):
 
     def __init__(self,
                  as_proxy: bool = False,
+                 limit: Optional[int] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self._as_proxy = as_proxy
+        self.limit = limit
 
     def run(self,
             query: str,
@@ -153,6 +153,11 @@ class Query(QuetzalBaseTask):
 
         # Handle results
         self.logger.info('Query gave %d results', total)
+
+        if self.limit is not None and total > self.limit:
+            rows = rows[:self.limit]
+            total = len(rows)
+            self.logger.info('Query was limited to %d results', total)
 
         if self._as_proxy:
             proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
