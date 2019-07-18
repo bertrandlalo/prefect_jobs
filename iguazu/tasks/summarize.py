@@ -7,7 +7,7 @@ import prefect
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
 from iguazu.helpers.files import FileProxy, QuetzalFile
-from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.states import SkippedResult, Success
 
 
 class ExtractFeatures(prefect.Task):
@@ -75,8 +75,9 @@ class ExtractFeatures(prefect.Task):
 
             # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
             # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+            # skip = SkippedResult('Output already exists, skipping', result=output)
+            # raise ENDRUN(state=skip)
+            return output
 
         signals_file = signals.file.resolve()
         report_file = report.file.resolve()

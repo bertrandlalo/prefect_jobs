@@ -144,8 +144,9 @@ class CleanSignal(prefect.Task):
 
             # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
             # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+            # skip = SkippedResult('Output already exists, skipping', result=output)
+            # raise ENDRUN(state=skip)
+            return output
 
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
@@ -258,11 +259,13 @@ class ApplyCVX(prefect.Task):
             # TODO: consider a function that uses a FileProxy, in particular a
             #       QuetzalFile. In this case, we could read the metadata
             #       instead of downloading the file!
+            self.logger.info('Output already exists, skipping')
 
             # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
             # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+            # skip = SkippedResult('Output already exists, skipping', result=output)
+            # raise ENDRUN(state=skip)
+            return output
 
         signal_file = signal.file
 
@@ -375,8 +378,9 @@ class DetectSCRPeaks(prefect.Task):
 
             # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
             # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+            #skip = SkippedResult('Output already exists, skipping', result=output)
+            #raise ENDRUN(state=skip)
+            return output
 
         signal_file = signal.file
 

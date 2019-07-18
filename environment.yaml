@@ -14,7 +14,7 @@ dependencies:
   - tzlocal
   - simplegeneric
   - click
-  - prefect
+  - prefect==0.6
   - docker-py
   - pip
   - pip:

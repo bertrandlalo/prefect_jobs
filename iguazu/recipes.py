@@ -1,6 +1,7 @@
 # Note: this module cannot go in iguazu.flows due to circular dependency,
 #       we could eventually use a lazy dictionary or something like that
 
+import datetime
 import inspect
 import logging
 import pathlib
@@ -10,6 +11,7 @@ import traceback
 
 import click
 import pandas as pd
+import pendulum
 import prefect
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ registry = dict()
 
 
 def dump_pickle(obj, filename='my_pickle.pickle'):
-    logger.info('Trying to pickle %s in %s', obj, filename)
+    #logger.info('Trying to pickle %s in %s', obj, filename)
     path = pathlib.Path(filename)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "wb") as f:  # remember to open the file in binary mode
@@ -113,42 +115,55 @@ def _import_flows():
 _import_flows()
 
 
-def execute_flow(func, func_kwargs, executor, context_args, flow_kwargs=None):
+def execute_flow(func, func_kwargs, executor, context_args): #, flow_kwargs=None):
     flow_parameters = func_kwargs.copy()
-    flow_kwargs = flow_kwargs or {}
+    #flow_kwargs = flow_kwargs or {}
 
     # Create flow
-    flow = func(**flow_parameters)
+    flow = func(**flow_parameters)  # type: prefect.core.Flow
     for p in list(flow_parameters):
         if p not in flow.parameters():
             flow_parameters.pop(p)
 
     # Read cached states from a local file
-    state_filename = (
+    cache_filename = (
             pathlib.Path(context_args['temp_dir']) /
             'cache' /
             'task_states.pickle'
     )
+    context_args.setdefault('caches', {})
     try:
-        flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename, default={}),
-                                                       flow.sorted_tasks())
+        logger.info('Trying to restore previous cache from %s', cache_filename)
+        previous_cache = load_pickle(cache_filename, None)
+        logger.info('Restored cached had %d elements', len(previous_cache))
+        context_args['caches'] = previous_cache
+        # flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename, default={}),
+        #                                                flow.sorted_tasks())
     except:
-        logger.warning('Could not read cache at %s', state_filename, exc_info=True)
+        logger.warning('Could not read cache at %s', cache_filename, exc_info=True)
 
-    with prefect.context(**context_args):
+    with prefect.context(**context_args) as context:
+        # import ipdb; ipdb.set_trace(context=21)
+        # flow.schedule = prefect.schedules.OneTimeSchedule(start_date=pendulum.now() - datetime.timedelta(days=2))
         flow_state = flow.run(parameters=flow_parameters,
                               executor=executor,
-                              **flow_kwargs)
+                              run_on_schedule=True)
+        cache = context.caches
 
-    # Save cached states to a local file
-    if isinstance(flow_state.result, Exception):
-        logger.info('No cached saved because the flow result is an exception:\n%s',
-                    ''.join(traceback.TracebackException.from_exception(flow_state.result).format()))
-    else:
-        try:
-            update_task_states(flow_state.result, state_filename)
-        except:
-            logger.warning('Could not save cache to %s', state_filename, exc_info=True)
+    # # Save cached states to a local file
+    # if isinstance(flow_state.result, Exception):
+    #     logger.info('No cached saved because the flow result is an exception:\n%s',
+    #                 ''.join(traceback.TracebackException.from_exception(flow_state.result).format()))
+    # else:
+    #     try:
+    #         update_task_states(flow_state.result, state_filename)
+    #     except:
+    #         logger.warning('Could not save cache to %s', state_filename, exc_info=True)
+    try:
+        logger.info('Saving cache with %d elements to %s', len(cache), cache_filename)
+        dump_pickle(cache, cache_filename)
+    except:
+        logger.warning('Could not save cache to %s', cache_filename, exc_info=True)
 
     return flow, flow_state
 

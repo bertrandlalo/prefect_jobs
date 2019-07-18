@@ -7,7 +7,7 @@ tzlocal
 simplegeneric
 Click
 docker
-prefect==0.5.5  # Until we test 0.6
+prefect==0.6
 bokeh
 graphviz
 docker
