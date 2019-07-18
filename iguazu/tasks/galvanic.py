@@ -8,7 +8,8 @@ from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
 from iguazu.helpers.decorators import SubprocessException
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import SkippedResult, GracefulFail
+from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.tasks import get_base_meta, graceful_fail
 
 
 #     This task is a basic ETL where the input and output are HDF5 files and where the transformation is made on a DataFrame.
@@ -56,7 +57,6 @@ class CleanSignal(prefect.Task):
                  force: bool = False,
                  **kwargs):
         '''
-
         Parameters
         ----------
         signal_group: group in the input hdf5 where the input signals are stored.
@@ -169,19 +169,14 @@ class CleanSignal(prefect.Task):
                                        self.scaling_kwargs,
                                        self.corrupted_maxratio,
                                        self.sampling_rate)
-                meta = {
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                    'bad_ratio': clean.bad.mean(),
-                }
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state, bad_ratio=clean.bad.mean())
+
             except Exception as ex:
                 self.logger.warning('Galvanic clean graceful fail: %s', ex)
                 clean = pd.DataFrame()
-                meta = {
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                state = 'FAILURE'
+                meta = get_base_meta(self, state=state, exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -193,15 +188,11 @@ class CleanSignal(prefect.Task):
         with pd.HDFStore(output_file, 'w') as output_store:
             clean.to_hdf(output_store, output_group)
 
-        # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
+        # Update iguazu metadata with the current task
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
-        if meta.get('state', None) == 'FAILURE':
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
-            raise ENDRUN(state=grace)
+        graceful_fail(meta, output, state='FAILURE')
 
         return output
 
@@ -239,7 +230,6 @@ class ApplyCVX(prefect.Task):
         Parameters
         ----------
         signal: file proxy with input signals.
-        events:  file proxy with input events.
 
         Returns
         -------
@@ -280,22 +270,17 @@ class ApplyCVX(prefect.Task):
                                    self.warmup_duration,
                                    self.threshold_scr,
                                    self.cvxeda_kwargs)
-                meta = {
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                    'bad_ratio': cvx.bad.mean(),
-                }
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state, bad_ratio=cvx.bad.mean())
+
             except SubprocessException as ex:
                 self.logger.warning('Subprocess failed, propagating exception')
                 raise ex
             except Exception as ex:
                 self.logger.warning('Galvanic CVX graceful fail! %s', ex, exc_info=True)
                 cvx = pd.DataFrame()
-                meta = {
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                state = 'FAILURE'
+                meta = get_base_meta(self, state=state, exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -306,19 +291,12 @@ class ApplyCVX(prefect.Task):
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             cvx.to_hdf(output_store, output_group)
-            output_store.get_node(output_group)._v_attrs['meta'] = {
-                'galvanic': meta,
-            }
 
-        # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
+        # Update iguazu metadata with the current task
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
-        if meta.get('state', None) == 'FAILURE':
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
-            raise ENDRUN(state=grace)
+        graceful_fail(meta, output, state='FAILURE')
 
         return output
 
@@ -401,19 +379,14 @@ class DetectSCRPeaks(prefect.Task):
                                         self.warmup_duration,
                                         self.peaks_kwargs,
                                         self.max_increase_duration)
-                meta = {
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                    'bad_ratio': scr.bad.mean(),
-                }
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state, bad_ratio=scr.bad.mean())
+
             except Exception as ex:
                 self.logger.warning('Galvanic SCR peak detection graceful fail: %s', ex)
                 scr = pd.DataFrame()
-                meta = {
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                state = 'FAILURE'
+                meta = get_base_meta(self, state=state, exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -424,22 +397,18 @@ class DetectSCRPeaks(prefect.Task):
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             scr.to_hdf(output_store, output_group)
-        # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
+
+        # Update iguazu metadata with the current task
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
-        if meta.get('state', None) == 'FAILURE':
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
-            raise ENDRUN(state=grace)
+        graceful_fail(meta, output, state='FAILURE')
 
         return output
 
 
 class RemoveBaseline(prefect.Task):
     ''' Remove pseudo-baseline for each feature.
-
     '''
 
     def __init__(self,
@@ -524,21 +493,14 @@ class RemoveBaseline(prefect.Task):
                 df_features_corrected, valid_sequences_ratio = galvanic_baseline_correction(df_features,
                                                                                             sequences=self.sequences,
                                                                                             columns=self.columns)
-                meta = {
-                    'source': 'iguazu',
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                    'valid_sequences_ratio': valid_sequences_ratio
-                }
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state, valid_sequences_ratio=valid_sequences_ratio)
+
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail! %s', ex, exc_info=True)
                 df_features_corrected = pd.DataFrame()
-                meta = {
-                    'source': 'iguazu',
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                state = 'FAILURE'
+                meta = get_base_meta(self, state=state, exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -549,14 +511,11 @@ class RemoveBaseline(prefect.Task):
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             df_features_corrected.to_hdf(output_store, output_group)
-        # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata[self.__class__.__name__].update(meta)
+
+        # Update iguazu metadata with the current task
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
-        if meta.get('state', None) == 'FAILURE':
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
-            raise ENDRUN(state=grace)
+        graceful_fail(meta, output, state='FAILURE')
 
         return output

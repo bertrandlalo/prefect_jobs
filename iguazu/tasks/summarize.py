@@ -7,7 +7,8 @@ from prefect.engine.runner import ENDRUN
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
 from iguazu.helpers.files import FileProxy, QuetzalFile
-from iguazu.helpers.states import SkippedResult, GracefulFail
+from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.tasks import get_base_meta, graceful_fail
 
 
 class ExtractFeatures(prefect.Task):
@@ -46,6 +47,8 @@ class ExtractFeatures(prefect.Task):
             signals: FileProxy, report: FileProxy) -> FileProxy:
 
         output = signals.make_child(suffix='_features')
+        # Inherit from iguazu metadata of report also
+        output.metadata['iguazu'].update(report.metadata['iguazu'])
         self.logger.info('Extracting features from sequences for signals=%s -> %s',
                          signals, output)
 
@@ -95,20 +98,12 @@ class ExtractFeatures(prefect.Task):
                         "Received empty reports dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
                 features = signal_to_feature(df_signals, df_report,
                                              feature_definitions=self.feature_definitions, sequences=self.sequences)
-                meta = {
-                    'source': 'iguazu',
-                    'state': 'SUCCESS',
-                    'version': '0.0',  # Todo get version
-                }
+                meta = get_base_meta(self, state='SUCCESS')
+
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail: %s', ex)
                 features = pd.DataFrame()
-                meta = {
-                    'source': 'iguazu',
-                    'state': 'FAILURE',
-                    'version': '0.0',  # Todo get version
-                    'exception': str(ex),
-                }
+                meta = get_base_meta(self, state='FAILURE', exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -120,14 +115,13 @@ class ExtractFeatures(prefect.Task):
         with pd.HDFStore(output_file, 'w') as output_store:
             features.to_hdf(output_store, output_group)
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
+        # output.metadata['task'][self.__class__.__name__] = meta
+        # keep trace of parent tasks
+        output.metadata['iguazu'].update({self.name: meta})
+
         output.upload()
 
-        if meta.get('state', None) == 'FAILURE':
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            grace = GracefulFail('Task failed but generated empty dataframe', result=output)
-            raise ENDRUN(state=grace)
+        graceful_fail(meta, output, state='FAILURE')
 
         return output
 
@@ -152,6 +146,8 @@ class SummarizePopulation(prefect.Task):
 
         data_list_population = []
         for file in files:
+            if file.metadata['iguazu']['state'] != 'SUCCESS':
+                continue
             if isinstance(file, QuetzalFile):
                 file_id = file._file_id
             else:  # LocalFile
@@ -161,13 +157,7 @@ class SummarizePopulation(prefect.Task):
                 data_summary_file = pd.DataFrame()
                 for group, columns in self.groups.items():
                     data = pd.read_hdf(store, group, columns=columns)
-                    if not data.empty:
-                        # todo: add meta here
-                        data_summary_file = data_summary_file.join(data, how="outer")
-                    else:
-                        pass
-                        a = 1
-                        # todo: do something here
+                    data_summary_file = data_summary_file.join(data, how="outer")
                 if not data_summary_file.empty:
                     data_summary_file.loc[:, 'file_id'] = file_id
                     data_list_population.append(data_summary_file)
