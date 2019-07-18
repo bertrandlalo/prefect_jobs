@@ -12,4 +12,4 @@ bokeh
 graphviz
 docker
 git+https://github.com/quetz-al/quetzal-client.git@v0.3.0#egg=quetzal-client
-git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@01b4f57#egg=dsu
+git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@v0.3.0#egg=dsu

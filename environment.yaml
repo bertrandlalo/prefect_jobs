@@ -21,4 +21,4 @@ dependencies:
     - APScheduler
     - graphviz
     - git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client
-#    - git+https://github.com/OpenMindInnovation/datascience_utils
+    - git+https://github.com/OpenMindInnovation/datascience_utils.git@v0.3.0#egg=dsu
