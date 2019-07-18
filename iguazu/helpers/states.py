@@ -1,7 +1,7 @@
-from prefect.engine.state import Skipped
+from prefect.engine.state import Success
 
 
-class SkippedResult(Skipped):
+class SkippedResult(Success):
     """Skipped state with results
 
     This state represents a skipped state with results, used to express that a
@@ -15,6 +15,6 @@ class SkippedResult(Skipped):
     color = '#cab2d6'
 
 
-class GracefulFail(Skipped):
+class GracefulFail(Success):
     color = '#dd1c77'
 
