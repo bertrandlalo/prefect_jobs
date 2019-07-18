@@ -1,8 +1,8 @@
 import pandas as pd
-import numpy as np
-from datascience_utils.unity import fix_unity_events, print_subsequences_report, extract_unity_subsequence_times, extract_marker_version
-from datascience_utils.general import intersect
 import prefect
+from datascience_utils.unity import fix_unity_events
+from dsu.unity import extract_marker_version, extract_complete_sequences, \
+    extract_complete_sequence_times
 
 logger = prefect.utilities.logging.get_logger(name=None)
 
@@ -75,30 +75,30 @@ def report_sequences(events, sequences=None):
     ToDo: This function only works for post-legacy events.
     '''
 
-    if extract_marker_version(events) == "legacy":
+    if extract_marker_version(events) == 'legacy':
         # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
-        logger.warning("Sequences report for legacy events not yet implemented")
+        logger.warning('Sequences report for legacy events not yet implemented')
         return None
 
-    if "xdf_timestamps" in events:
-        events.drop("xdf_timestamps", axis=1, inplace=True)
+    if 'xdf_timestamp' in events:
+        events.drop('xdf_timestamps', axis=1, inplace=True)
 
     # correct unity events # TODO : put that in the conversion xdf to hdf
     events = fix_unity_events(events)
-    sequences_report = print_subsequences_report(events)
+    sequences_report = extract_complete_sequences(events)
     sequences = sequences or sequences_report
     # intersection between sequences found in events and sequences specified in the parameters
     available_sequences = [sequence for sequence in sequences_report if sequence in sequences ]
     if set(available_sequences) != set(sequences):
-        logger.warning("Could not find {missing} in the sequences.".format(
+        logger.warning('Could not find {missing} in the sequences.'.format(
             missing=','.join([str(a) for a in sequences if a not in available_sequences])))
 
     sequence_times = {}
     for sequence_name in available_sequences:
-        times = extract_unity_subsequence_times(events, sequence_name)
+        times = extract_complete_sequence_times(events, sequence_name, pedantic='warn')
         for k, (begin, end) in enumerate(times):
-            sequence_times[sequence_name + "_" + str(k)] = {"begin": begin, "end": end}
-    # This is a protector against corrupted events, that is, we keep only thee sequences keys that are
+            sequence_times[sequence_name + "_" + str(k)] = {'begin': begin, 'end': end}
+    # This is a protection against corrupted events, that is, we keep only the sequences keys that are
     # specified in list valid_sequences_keys
     sequence_times = {k:v for (k,v) in sequence_times.items() if k in valid_sequences_keys}
     report =  pd.DataFrame.from_dict(sequence_times)

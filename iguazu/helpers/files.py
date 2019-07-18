@@ -132,7 +132,7 @@ class QuetzalFile(FileProxy):
         child._metadata['base']['path'] = str(new.relative_to(temp_dir).parent)
         # unset all id columns
         for family in child._metadata:
-            child._metadata[family]['id'] = None
+            child._metadata[family].pop('id', None)
         # link child to parent
         child._metadata['iguazu']['parents'] = base_metadata['id']
 
@@ -269,9 +269,27 @@ class LocalFile(FileProxy):
         suffix = suffix or ''
         extension = extension or new.suffix
         new = new.with_name(new.stem + suffix + extension)
-
-        # Create new child proxy class and propagate metadata
+        child_exists = False
+        if new.exists():
+            child_exists = True
+        # Retrieve or create child
         child = LocalFile(new, base_dir=file_dir)
+        child._local_path = new
+        child._temporary = temporary
+
+        # If child has just been created, propagate metadata
+        if child_exists:
+            child = LocalFile(new, base_dir=file_dir)
+            child._local_path = new
+            child._temporary = temporary
+            child._metadata = copy.deepcopy(self._metadata)
+            if not isinstance(child._metadata, collections.defaultdict):
+                tmp = collections.defaultdict(dict)
+                tmp.update(child._metadata)
+                child._metadata = tmp
+            child._metadata.pop('base', None)
+            child._metadata['base']['filename'] = new.name
+            child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
         return child
 
     def upload(self):

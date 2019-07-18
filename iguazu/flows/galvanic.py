@@ -4,13 +4,14 @@ import logging
 from prefect import Flow
 from prefect.tasks.notifications import SlackTask
 
+
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.tasks.common import MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.summarize import ExtractFeatures
-from iguazu.tasks.unity import ReportSequences
+from iguazu.tasks.unity import ExtractSequences
 from iguazu.recipes import inherit_params, register_flow
 
 
@@ -77,41 +78,38 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
     # Instantiate tasks
     clean = CleanSignal(
         # Iguazu task constructor arguments
+        signal_column='F',
         warmup_duration=30,
-        glitch_kwargs=dict(
-            scaling='robust',
-            nu=1,
-            range=(-0.02, +0.02),
-            rejection_win=35,
+        quality_kwargs=dict(
+            sampling_rate=512,
+            oa_range=(1e-6, 2000),
+            glitch_range=(0.0, 180),
+            rejection_window=2,
         ),
         interpolation_kwargs=dict(
             method='pchip',
         ),
-        lowpass_kwargs=dict(
-            Wn=[35],
-            order=5,
+        filter_kwargs=dict(
+            order=10,
+            frequencies=30,
+            filter_type='lowpass',
         ),
         scaling_kwargs=dict(
             method='standard',
         ),
         corrupted_maxratio=0.3,
+        sampling_rate=256,
         force=force,
         # Prefect task arguments
         state_handlers=[logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
-        #cache_validator=debug,
     )
     apply_cvx = ApplyCVX(
         # Iguazu task constructor arguments
+        signal_column='F_filtered_clean_inversed_zscored',
         warmup_duration=15,
-        glitch_kwargs=dict(
-            scaling=False,
-            nu=0,
-            range=(0, 4),
-            rejection_win=20,
-        ),
-        cvxeda_kwargs=None,
+        threshold_scr=4,
         force=force,
         # Prefect task arguments
         state_handlers=[logging_handler],
@@ -120,23 +118,22 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
     )
     detect_scr_peaks = DetectSCRPeaks(
         # Iguazu task constructor arguments
+        signal_column='gsr_SCR',
         warmup_duration=15,
-        glitch_kwargs=dict(
-            nu=0,
-            range=(0, 7),
-        ),
-        peak_detection_kwargs=dict(
+        peaks_kwargs=dict(
             width=0.5,
-            prominence=0.1,
+            prominence=.1,
             prominence_window=15,
+            rel_height=.5,
         ),
+        max_increase_duration=7,  # seconds
         force=force,
         # Prefect task arguments
         state_handlers=[logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
-    report_sequences = ReportSequences(
+    report_sequences = ExtractSequences(
         # Iguazu task constructor arguments
         sequences=None,
         force=force,
@@ -153,14 +150,14 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         feature_definitions=dict(
             rate={
                 "class": "numpy.sum",
-                "columns": ["SCR_peaks_detected"],
+                "columns": ["gsr_SCR_peaks_detected"],
                 "divide_by_duration": True,
                 "empty_policy": 0.0,
                 "drop_bad_samples": True,
             },
             median={
                 "class": "numpy.nanmedian",
-                "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
+                "columns": ['gsr_SCR_peaks_increase-duration', 'gsr_SCR_peaks_increase-amplitude'],
                 "divide_by_duration": False,
                 "empty_policy": 0.0,
                 "drop_bad_samples": True,
@@ -168,12 +165,13 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         ),
         force=force,
         # Prefect task arguments
+        name='ExtractFeatures__scr',
         state_handlers=[logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
     scl_columns_definitions_kwargs = dict(
-        columns=['F_clean_inversed_lowpassed_zscored_SCL'],
+        columns=['gsr_SCL'],
         divide_by_duration=False,
         empty_policy='bad',
         drop_bad_sample=True,
@@ -207,6 +205,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         },
         force=force,
         # Prefect task arguments
+        name='ExtractFeatures__scl',
         state_handlers=[logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
@@ -219,7 +218,8 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         features_group="/gsr/features/scr",
         output_group="/gsr/features/scr_corrected",
         sequences=baseline_sequences,
-        columns=['SCR_peaks_detected_rate'],
+        columns=['gsr_SCR_peaks_detected_rate'],
+        name='RemoveBaseline__scr',
         force=force,
         # Prefect task arguments
         state_handlers=[logging_handler],
@@ -232,11 +232,12 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         output_group="/gsr/features/scl_corrected",
         sequences=baseline_sequences,
         columns=[
-            'F_clean_inversed_lowpassed_zscored_SCL_median',
-            'F_clean_inversed_lowpassed_zscored_SCL_ptp',
-            'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope',
-            'F_clean_inversed_lowpassed_zscored_SCL_auc'
+            'gsr_SCL_median',
+            'gsr_SCL_ptp',
+            'gsr_SCL_linregress_slope',
+            'gsr_SCL_auc'
         ],
+        name='RemoveBaseline__scl',
         force=force,
         # Prefect task arguments
         state_handlers=[logging_handler],
@@ -283,9 +284,10 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
                                    gsr_features_scl=scl_features_corrected,
                                    unity_sequences=sequences_reports)
 
+        # Send slack notification
         notify(upstream_tasks=[merged])
 
-        # TODO: what's the reference task of this?
+        # TODO: what's the reference task of this flow?
 
     logger.debug('Created flow %s with tasks %s', flow, flow.tasks)
     return flow

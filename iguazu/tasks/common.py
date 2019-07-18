@@ -72,11 +72,14 @@ class AlwaysSucceed(prefect.Task):
 
 
 class MergeFilesFromGroups(prefect.Task):
-    ''' Merge HDF5 files with unique groups in one file containing all the groups.
-    '''
+    """ Merge HDF5 files
+
+    This tasks merges HDF5 with with unique groups into one file containing all
+    the groups.
+    """
 
     def __init__(self, suffix=None, status_metadata_key=None, **kwargs):
-        '''
+        """
 
         Parameters
         ----------
@@ -86,7 +89,7 @@ class MergeFilesFromGroups(prefect.Task):
         kwargs:
             Keywords arguments with keys are hdf5 group to read and merge and
             values are hdf5 file proxy.
-        '''
+        """
         super().__init__(**kwargs)
         self.suffix = suffix or "_merged"
         self.status_key = status_metadata_key
@@ -98,8 +101,8 @@ class MergeFilesFromGroups(prefect.Task):
              pd.HDFStore(output.file, "a") as output_store:
             for output_group, file_proxy in kwargs.items():
                 # Inherit the contents of the "task" family only for this input
-                output.metadata['task'].setdefault(output_group, {})
-                output.metadata['task'][output_group].update(file_proxy.metadata.get('task', {}))
+                output.metadata['iguazu'].setdefault(output_group, {})
+                output.metadata['iguazu'][output_group].update(file_proxy.metadata.get('iguazu', {}))
                 output_group = output_group.replace("_", "/")
                 with pd.HDFStore(file_proxy.file, "r") as input_store:
                     groups = input_store.keys()
@@ -110,14 +113,13 @@ class MergeFilesFromGroups(prefect.Task):
                         for group in groups:
                             rel = os.path.relpath(group, common)
                             data = pd.read_hdf(input_store, group)
+                            assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
                             data.to_hdf(output_store, os.path.join(output_group, rel))
                     else:
                         data = pd.read_hdf(input_store, groups[0])
+                        assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
                         data.to_hdf(output_store, output_group)
 
-            # import json
-            # self.logger.info('Uploading file with metadata:\n%s',
-            #                  json.dumps(output.metadata, indent=2))
             output.upload()
 
         # Mark parent as processed

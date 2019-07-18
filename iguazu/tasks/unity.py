@@ -1,17 +1,17 @@
-from typing import Optional
 import gc
+from typing import Optional
 
-from prefect.engine.runner import ENDRUN
+
 import pandas as pd
 import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.unity import report_sequences
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.tasks import get_base_meta
 
 
-class ReportSequences(prefect.Task):
+class ExtractSequences(prefect.Task):
 
     def __init__(self,
                  events_group: Optional[str] = None,
@@ -30,7 +30,7 @@ class ReportSequences(prefect.Task):
 
         output = events.make_child(suffix='_sequences')
         self.logger.info('Reporting sequences for events=%s -> %s',
-                          events, output)
+                         events, output)
 
         # Notes on parameter management
         #
@@ -69,24 +69,14 @@ class ReportSequences(prefect.Task):
                 df_events = pd.read_hdf(events_store, events_group)
 
                 report = report_sequences(df_events, self.sequences)
-                meta = {
-                    'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                }
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state)
+
             except Exception as ex:
                 self.logger.warning('Report VR sequences graceful fail: %s', ex)
                 report = pd.DataFrame()
-                meta = {
-                    'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                state = 'FAILURE'
+                meta = get_base_meta(self, state=state, exception=str(ex))
 
         # TODO: re-code the failure handling with respect to a task parameter
         # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
@@ -98,11 +88,14 @@ class ReportSequences(prefect.Task):
         with pd.HDFStore(output_file, 'w') as output_store:
             report.to_hdf(output_store, output_group)
         # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
+        output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
         # Save memory, hdf5 is very bad at keeping memory
-        self.logger.info('Calling gc... ')
+        # TODO:  remove this in favor of a state_handler that calls the gc
+        self.logger.info('Calling gc...')
         gc.collect()
+
+        # graceful_fail(meta, output, state='FAILURE')
 
         return output
