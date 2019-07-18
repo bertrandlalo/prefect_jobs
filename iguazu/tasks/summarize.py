@@ -23,18 +23,6 @@ class ExtractFeatures(prefect.Task):
                  sequences: Optional[list] = None,
                  force: bool = False,
                  **kwargs):
-        '''
-
-        Parameters
-        ----------
-        signals_group
-        report_group
-        output_group
-        feature_definitions
-        sequences
-        force
-        kwargs
-        '''
         super().__init__(**kwargs)
         self.signals_group = signals_group
         self.report_group = report_group
