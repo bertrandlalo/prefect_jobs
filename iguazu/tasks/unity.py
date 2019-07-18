@@ -6,7 +6,7 @@ import pandas as pd
 import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
-from iguazu.functions.unity import report_sequences
+from iguazu.functions.unity import extract_sequences
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.tasks import get_base_meta
 
@@ -68,7 +68,7 @@ class ExtractSequences(prefect.Task):
                 # TODO discuss: select column before sending it to a column
                 df_events = pd.read_hdf(events_store, events_group)
 
-                report = report_sequences(df_events, self.sequences)
+                report = extract_sequences(df_events, self.sequences)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state)
 
