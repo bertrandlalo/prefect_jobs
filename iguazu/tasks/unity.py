@@ -54,7 +54,7 @@ class ExtractSequences(prefect.Task):
         events_file = events.file.resolve()
         try:
             # check if previous task succeeded
-            if events_file.metadata['iguazu']['state'] != 'SUCCESS':
+            if events.metadata['iguazu']['state'] != 'SUCCESS':
                 # Fail
                 self.logger.info('Previous task failed, propagating failure')
                 raise IguazuError('Previous task failed')
