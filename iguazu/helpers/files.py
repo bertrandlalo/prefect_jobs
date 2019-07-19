@@ -136,9 +136,15 @@ class QuetzalFile(FileProxy):
         # link child to parent
         child._metadata['iguazu']['parents'] = base_metadata['id']
 
-        new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
-        child._local_path = new
         child._temporary = temporary
+        # If we are creating a new child, but there is already a file with that
+        # name, we need to clear it to avoid confusion with old results
+        if new.exists():
+            child._local_path = None
+        else:
+            new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
+            child._local_path = new
+
         return child
 
     def _retrieve_child_meta(self, path, filename):
@@ -181,15 +187,19 @@ class QuetzalFile(FileProxy):
                 #     if k not in ('path', 'filename'):
                 #         metadata[family].pop(k)
         helpers.workspace.update_metadata(self.client, self._wid, self._file_id, metadata)
+        # unset the metadata so that next time it is refreshed
+        self._metadata.clear()
 
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['_local_path']
+        state.pop('_metadata', None)
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._local_path = None
+        self._metadata = collections.defaultdict(dict)
 
     def __repr__(self):
         base_metadata = self.metadata.get('base', {})

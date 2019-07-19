@@ -54,7 +54,12 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
             iguazu.id IS NULL AND                -- files *not* created by iguazu
             iguazu.gsr::json->>'status' IS NULL  -- files not yet processed by iguazu
+        ORDER BY base.date
     """
+    # This secondary, alternative query is defined for the case when a new
+    # quetzal workspace is created, and the iguazu.gsr metadata does not even
+    # exist. We need to to do this because the iguazu.gsr column does not exist
+    # and postgres does not permit querying a non-existent column
     default_alt_query = """\
         SELECT
         id,
@@ -64,6 +69,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         WHERE
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
             iguazu.id IS NULL                    -- files *not* created by iguazu
+        ORDER BY base.date
     """
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query

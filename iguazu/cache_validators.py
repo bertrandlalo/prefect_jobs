@@ -23,7 +23,7 @@ class ParametrizedValidator:
     def __call__(self, state: Cached, inputs: Dict[str, Any], parameters: Dict[str, Any]):
         # Never use cache when force is set
         if self.force:
-            logger.info('Cache miss: forced is set')
+            logger.debug('Cache miss: forced is set')
             return False
 
         # When caching with inputs and outputs, defer to the corresponding
@@ -31,26 +31,26 @@ class ParametrizedValidator:
         if self.use_inputs and self.use_parameters:
             input_cache = all_inputs(state, inputs, parameters)
             param_cache = all_parameters(state, inputs, parameters)
-            logger.info('Cache %s: inputs was %s, params was %s',
-                        'hit' if input_cache and param_cache else 'miss',
-                        input_cache, param_cache)
+            logger.debug('Cache %s: inputs was %s, params was %s',
+                         'hit' if input_cache and param_cache else 'miss',
+                         input_cache, param_cache)
             return input_cache and param_cache
 
         elif self.use_inputs:
             input_cache = all_inputs(state, inputs, parameters)
-            logger.info('Cache %s: inputs was %s',
-                        'hit' if input_cache else 'miss',
-                        input_cache)
+            logger.debug('Cache %s: inputs was %s',
+                         'hit' if input_cache else 'miss',
+                         input_cache)
             return input_cache
 
         elif self.use_parameters:
             param_cache = all_parameters(state, inputs, parameters)
-            logger.info('Cache %s: parameters was %s',
-                        'hit' if param_cache else 'miss',
-                        param_cache)
+            logger.debug('Cache %s: parameters was %s',
+                         'hit' if param_cache else 'miss',
+                         param_cache)
             return param_cache
 
-        logger.info('Cache miss: no cache configuration set')
+        logger.debug('Cache miss: no cache configuration set')
         return False
 
 

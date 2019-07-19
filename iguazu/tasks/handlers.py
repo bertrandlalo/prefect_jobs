@@ -14,7 +14,9 @@ class CustomFileHandler(logging.FileHandler):
 
 
 def logging_handler(task, old_state, new_state):
-    logger.debug('logging inner handler %s -> %s', old_state, new_state)
+    logger.debug('Managing log due to state change from %s to %s',
+                 type(old_state).__name__,
+                 type(new_state).__name__)
     state_name = str(type(new_state).__name__).upper()
 
     if new_state.is_running():
