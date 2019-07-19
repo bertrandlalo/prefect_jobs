@@ -125,9 +125,6 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
-        # for k,v in context.items():
-        #     self.logger.info('Context: %s = %s', k ,v)
-
         if not query:
             raise signals.FAIL('Query is empty')
 
