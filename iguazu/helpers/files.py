@@ -140,10 +140,9 @@ class QuetzalFile(FileProxy):
         # If we are creating a new child, but there is already a file with that
         # name, we need to clear it to avoid confusion with old results
         if new.exists():
-            child._local_path = None
-        else:
-            new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
-            child._local_path = new
+            new.unlink()
+        new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
+        child._local_path = new
 
         return child
 
