@@ -5,9 +5,9 @@ import logging
 import pandas as pd
 import prefect
 
-from iguazu.helpers.files import FileProxy
-from iguazu.helpers.files import LocalFile
+from iguazu.helpers.files import FileProxy, LocalFile
 from iguazu.helpers.tasks import get_base_meta
+from iguazu.helpers.states import GRACEFULFAIL
 
 
 class ListFiles(prefect.Task):
@@ -143,3 +143,13 @@ class MergeFilesFromGroups(prefect.Task):
         # graceful_fail(meta, output, state='FAILURE')
 
         return output
+
+
+class SlackTask(prefect.tasks.notifications.SlackTask):
+    """Extension of prefect's SlackTask that can gracefully fail"""
+    def run(self, **kwargs):
+        try:
+            super().run(**kwargs)
+        except Exception as ex:
+            self.logger.info('Could not send slack notification: %s', ex)
+            raise GRACEFULFAIL('Could not send notification') from None
