@@ -76,6 +76,8 @@ def run(scheduler_address):
     galvanic_features_kwargs = dict(
         data_source='quetzal',
         workspace_name=workspace_name,
+        limit=50,
+        shuffle=True,
     )
     scheduler.add_job(execute_flow,
                       args=(galvanic_features_flow, galvanic_features_kwargs, executor, context_parameters),

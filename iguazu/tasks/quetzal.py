@@ -93,11 +93,13 @@ class Query(QuetzalBaseTask):
 
     def __init__(self,
                  as_proxy: bool = False,
+                 shuffle: bool = False,
                  limit: Optional[int] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self._as_proxy = as_proxy
         self.limit = limit
+        self.shuffle = shuffle
 
     def run(self,
             query: str,
@@ -151,6 +153,11 @@ class Query(QuetzalBaseTask):
         # Handle results
         self.logger.info('Query gave %d results', total)
 
+        # Shuffle the results
+        if self.shuffle:
+            random.shuffle(rows)
+
+        # Only keep N results
         if self.limit is not None and total > self.limit:
             rows = rows[:self.limit]
             total = len(rows)

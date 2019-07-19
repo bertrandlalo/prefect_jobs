@@ -60,12 +60,16 @@ def local_dataset_flow(*, basedir=None) -> Flow:
                    'dataset, but only when the primary query fails.')
 @click.option('--limit', metavar='N', required=False, type=click.INT,
               help='Only take the first N results of the Quetzal query.')
+@click.option('--shuffle/--no-shuffle', is_flag=True, default=False,
+              help='Randomly shuffle the query results before selecting with '
+                   '--limit and returning the results.')
 def quetzal_dataset_flow(*,
                          workspace_name=None,
                          families=None,
                          query=None,
                          alt_query=None,
-                         limit=None) -> Flow:
+                         limit=None,
+                         shuffle=False) -> Flow:
     """Create file dataset from a Quetzal query"""
     logger.debug('Creating Quetzal dataset flow')
 
@@ -112,6 +116,7 @@ def quetzal_dataset_flow(*,
         # Iguazu task constructor arguments
         as_proxy=True,
         limit=limit,
+        shuffle=shuffle,
         # Prefect task arguments
         state_handlers=[logging_handler],
         cache_validator=never_use,
@@ -144,7 +149,8 @@ def generic_dataset_flow(*,
                          families=None,
                          query=None,
                          alt_query=None,
-                         limit=None) -> Flow:
+                         limit=None,
+                         shuffle=None) -> Flow:
     """Create file dataset from a local dir or Quetzal query"""
     logger.debug('Creating generic (local or quetzal) dataset flow')
 
@@ -153,7 +159,8 @@ def generic_dataset_flow(*,
                                       families=families,
                                       query=query,
                                       alt_query=alt_query,
-                                      limit=limit)
+                                      limit=limit,
+                                      shuffle=shuffle)
     merge = Merge()
 
     local_upstream_task = local_flow.get_tasks(name='trigger').pop()
