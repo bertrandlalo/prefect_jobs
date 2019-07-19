@@ -46,6 +46,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         LEFT JOIN iguazu USING (id)
         LEFT JOIN omi using (id)
         WHERE
+            base.state = 'READY' AND             -- no temporary files
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
             iguazu.gsr::json->>'status' IS NULL  -- files not yet processed by iguazu
         ORDER BY base.id                         -- always in the same order
@@ -61,8 +62,8 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         FROM base
         LEFT JOIN iguazu USING (id)
         WHERE
-            base.filename LIKE '%.hdf5' AND      -- only HDF5 files
-            iguazu.id IS NULL                    -- files *not* created by iguazu
+            base.state = 'READY' AND             -- no temporary files
+            base.filename LIKE '%.hdf5'          -- only HDF5 files
         ORDER BY base.id                         -- always in the same order
     """
     kwargs['query'] = query or default_query
