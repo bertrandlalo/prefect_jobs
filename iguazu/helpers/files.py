@@ -278,7 +278,7 @@ class LocalFile(FileProxy):
         child._temporary = temporary
 
         # If child has just been created, propagate metadata
-        if child_exists:
+        if not child_exists:
             child = LocalFile(new, base_dir=file_dir)
             child._local_path = new
             child._temporary = temporary
@@ -290,12 +290,14 @@ class LocalFile(FileProxy):
             child._metadata.pop('base', None)
             child._metadata['base']['filename'] = new.name
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
+            child._metadata['iguazu']['parents'] = str(self._file)
+
         return child
 
     def upload(self):
-        # Upload on local file does nothing
+        # Upload on local file dumps the meta in a json
         with open(self._meta_file, 'w') as outfile:
-            json.dump(self.metadata, outfile)
+            json.dump(self.metadata, outfile, indent=2)
 
     def __repr__(self):
         base_metadata = self.metadata.get('base', {})
