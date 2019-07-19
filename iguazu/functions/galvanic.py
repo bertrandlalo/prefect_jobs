@@ -87,8 +87,18 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
                                                                                   maxratio=corrupted_maxratio))
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
-    data_clean.interpolate(**interpolation_kwargs, inplace=True)
 
+    # Pandas does not like tz-aware timestamps when interpolating
+    if data_clean.index.tzinfo is None:
+        # old way: tz-naive
+        data_clean.interpolate(**interpolation_kwargs, inplace=True)
+    else:
+        # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
+        data_clean = (
+            data_clean.set_index(data_clean.index.tz_convert(None))
+                .interpolate(method='pchip')
+                .set_index(data_clean.index)
+        )
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
     data_clean = inverse_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_inversed')
 
