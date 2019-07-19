@@ -31,27 +31,34 @@ class ParametrizedValidator:
         if self.use_inputs and self.use_parameters:
             input_cache = all_inputs(state, inputs, parameters)
             param_cache = all_parameters(state, inputs, parameters)
+            result = input_cache and param_cache
             logger.debug('Cache %s: inputs was %s, params was %s',
-                         'hit' if input_cache and param_cache else 'miss',
+                         'hit' if result else 'miss',
                          input_cache, param_cache)
-            return input_cache and param_cache
 
         elif self.use_inputs:
             input_cache = all_inputs(state, inputs, parameters)
+            result = input_cache
             logger.debug('Cache %s: inputs was %s',
-                         'hit' if input_cache else 'miss',
+                         'hit' if result else 'miss',
                          input_cache)
             return input_cache
 
         elif self.use_parameters:
             param_cache = all_parameters(state, inputs, parameters)
+            result = param_cache
             logger.debug('Cache %s: parameters was %s',
-                         'hit' if param_cache else 'miss',
+                         'hit' if result else 'miss',
                          param_cache)
             return param_cache
+        else:
+            result = False
+            logger.debug('Cache miss: no cache configuration set')
 
-        logger.debug('Cache miss: no cache configuration set')
-        return False
+        if result:
+            logger.info('Cache hit!')
+
+        return result
 
 
 # def all_validator(use_inputs=True, use_parameters=True, force=False):
