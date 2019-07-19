@@ -2,14 +2,12 @@ import datetime
 import logging
 
 from prefect import Flow
-from prefect.tasks.notifications import SlackTask
-
 
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
-from iguazu.tasks.common import MergeFilesFromGroups
+from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
-from iguazu.tasks.handlers import logging_handler
+from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import ExtractFeatures
 from iguazu.tasks.unity import ExtractSequences
 from iguazu.recipes import inherit_params, register_flow
@@ -52,7 +50,6 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         LEFT JOIN omi using (id)
         WHERE
             base.filename LIKE '%.hdf5' AND      -- only HDF5 files
-            iguazu.id IS NULL AND                -- files *not* created by iguazu
             iguazu.gsr::json->>'status' IS NULL  -- files not yet processed by iguazu
         ORDER BY base.date
     """
@@ -105,7 +102,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         sampling_rate=256,
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -116,7 +113,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         threshold_scr=4,
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -133,7 +130,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         max_increase_duration=7,  # seconds
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -142,7 +139,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         sequences=None,
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -170,7 +167,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         force=force,
         # Prefect task arguments
         name='ExtractFeatures__scr',
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -210,7 +207,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         force=force,
         # Prefect task arguments
         name='ExtractFeatures__scl',
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -226,7 +223,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         name='RemoveBaseline__scr',
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -244,7 +241,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         name='RemoveBaseline__scl',
         force=force,
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
@@ -253,7 +250,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         suffix="_gsr",
         status_metadata_key='gsr',
         # Prefect task arguments
-        state_handlers=[logging_handler],
+        state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )

@@ -1,6 +1,4 @@
-import gc
 from typing import Optional
-
 
 import pandas as pd
 import prefect
@@ -90,11 +88,6 @@ class ExtractSequences(prefect.Task):
         # Set meta on FileProxy so that Quetzal knows about this metadata
         output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
-
-        # Save memory, hdf5 is very bad at keeping memory
-        # TODO:  remove this in favor of a state_handler that calls the gc
-        self.logger.info('Calling gc...')
-        gc.collect()
 
         # graceful_fail(meta, output, state='FAILURE')
 

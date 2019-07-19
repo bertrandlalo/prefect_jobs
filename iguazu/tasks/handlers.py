@@ -1,8 +1,11 @@
+import gc
 import logging
+import os
 import pathlib
 import tempfile
 import shutil
 
+import psutil
 from prefect import context
 from quetzal.client import helpers
 
@@ -90,3 +93,21 @@ def logging_handler(task, old_state, new_state):
 
     return new_state
 
+
+def garbage_collect_handler(task, old_state, new_state):
+
+    if new_state.is_finished():
+        logger.debug('Managing garbage collection on change from %s to %s',
+                     type(old_state).__name__,
+                     type(new_state).__name__)
+        try:
+            process = psutil.Process(os.getpid())
+            mem_percent = process.memory_percent()
+            logger.debug('Memory usage is %.2f %%', mem_percent)
+            if mem_percent >= 75:  # usage over 75%
+                logger.info('Calling gc, usage was over the limit')
+                gc.collect()
+        except:
+            logger.debug('Failed to garbage collect', exc_info=True)
+
+    return new_state
