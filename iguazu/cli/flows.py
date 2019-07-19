@@ -143,6 +143,9 @@ def run_flow_command(func):
             # Should not happen if click parameters are done correctly, but
             # kept for completeness
             raise ValueError(f'Unknown executor type "{executor_type}".')
+        # Handle --force , but note that TODO: I don't think we should be doing this here
+        if ctx.obj.get('force', False):
+            kwargs['force'] = True
 
         # Prepare context arguments
         context_args = dict(
@@ -169,11 +172,7 @@ def run_flow_command(func):
         ###
         # Flow execution
         ###
-
         flow, flow_state = execute_flow(func, kwargs, executor, context_args)
-        # with prefect.context(**context_args):
-        #     flow_state = flow.run(parameters=flow_parameters,
-        #                           executor=executor)
 
         ###
         # Flow post-processing: reports et al.
