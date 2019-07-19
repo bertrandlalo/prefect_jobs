@@ -48,16 +48,19 @@ class ExtractSequences(prefect.Task):
 
         # Our current force detection code
         if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
+            # TODO: I think .metadata is a default dict so the first get with default to {} is not needed
             self.logger.info('Output already exists, skipping')
             raise SKIPRESULT('Output already exists', result=output)
 
         events_file = events.file.resolve()
         try:
             # check if previous task succeeded
-            if events.metadata['iguazu']['state'] != 'SUCCESS':
-                # Fail
-                self.logger.info('Previous task failed, propagating failure')
-                raise IguazuError('Previous task failed')
+            # TODO: discuss the following: There is no previous task to extract
+            #  sequences, at least not now otherwise this fails
+            # if events.metadata['iguazu']['state'] != 'SUCCESS':
+            #     # Fail
+            #     self.logger.info('Previous task failed, propagating failure')
+            #     raise IguazuError('Previous task failed')
 
             with pd.HDFStore(events_file, 'r') as events_store:
 
@@ -66,7 +69,7 @@ class ExtractSequences(prefect.Task):
 
                 df_output = extract_sequences(df_events, self.sequences)
                 state = 'SUCCESS'
-                meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
+                meta = get_base_meta(self, state=state)
                 # Manage output, save to file
                 task_upload_result(self, df_output, meta, state, output, output_group)
                 return output
