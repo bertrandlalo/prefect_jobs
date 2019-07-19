@@ -1,4 +1,5 @@
-from prefect.engine.state import Success
+from prefect.engine.signals import PrefectStateSignal
+from prefect.engine.state import Success, State
 
 
 class SkippedResult(Success):  # TODO: revisit the need of this class
@@ -17,3 +18,15 @@ class SkippedResult(Success):  # TODO: revisit the need of this class
 
 class GracefulFail(Success):  # TODO: revisit the need of this class
     color = '#dd1c77'
+
+
+class SKIPRESULT(PrefectStateSignal):
+    _state_cls = SkippedResult
+
+
+class GRACEFULFAIL(PrefectStateSignal):
+    _state_cls = GracefulFail
+
+    def __init__(self, state: State):
+        self.state = state
+        super().__init__()
