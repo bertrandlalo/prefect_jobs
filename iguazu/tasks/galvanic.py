@@ -1,5 +1,4 @@
 from typing import Dict, Optional
-import gc
 
 import pandas as pd
 import prefect
@@ -9,6 +8,7 @@ from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_
 # from iguazu.helpers.decorators import SubprocessException
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.tasks import get_base_meta, graceful_fail
+from iguazu.helpers.states import GRACEFULFAIL, SKIPRESULT
 
 
 class CleanSignal(prefect.Task):
@@ -122,16 +122,8 @@ class CleanSignal(prefect.Task):
 
         # Our current force detection code
         if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
             self.logger.info('Output already exists, skipping')
-
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            # skip = SkippedResult('Output already exists, skipping', result=output)
-            # raise ENDRUN(state=skip)
-            return output
+            raise SKIPRESULT('Output already exists', result=output)
 
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
@@ -162,26 +154,18 @@ class CleanSignal(prefect.Task):
                 state = 'FAILURE'
                 meta = get_base_meta(self, state=state, exception=str(ex))
 
-        # TODO: re-code the failure handling with respect to a task parameter
-        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
-        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
-        # if fail_mode == 'fail':  ==> raise exception as it arrives
-
         # Manage output, save to file
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             clean.to_hdf(output_store, output_group)
 
-        # Save memory, hdf5 is very bad at keeping memory
-        # TODO:  remove this in favor of a state_handler that calls the gc
-        self.logger.info('Calling gc...')
-        gc.collect()
-
         # Update iguazu metadata with the current task
         output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
 
-        graceful_fail(meta, output, state='FAILURE')
+        # TODO: re-code when we find our holy grail base task class
+        if state == 'FAILURE':
+            raise GRACEFULFAIL('Graceful fail', result=output)
 
         return output
 
