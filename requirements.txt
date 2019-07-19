@@ -7,7 +7,8 @@ tzlocal
 simplegeneric
 Click
 docker
-prefect==0.6
+# prefect==0.6
+git+https://github.com/PrefectHQ/prefect.git@c7c00456#egg=prefect
 bokeh
 graphviz
 docker
