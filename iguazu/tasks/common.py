@@ -1,6 +1,6 @@
+import logging
 import os
 import pathlib
-import logging
 
 import pandas as pd
 import prefect
@@ -136,7 +136,7 @@ class MergeFilesFromGroups(prefect.Task):
         # Mark parent as processed
         parent.metadata['iguazu'][self.status_key] = {
             'status': state,
-            'date': prefect.context.scheduled_start_time,
+            'date': str(prefect.context.scheduled_start_time),
         }
         parent.upload()
 
