@@ -1,13 +1,15 @@
 import logging
-logger = logging.getLogger()
 
+import numpy as np
+import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.quality import quality_gsr
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
-import numpy as np
-import pandas as pd
 from sklearn.preprocessing import RobustScaler
+
+
+logger = logging.getLogger(__name__)
 
 
 def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interpolation_kwargs, filter_kwargs,
@@ -95,7 +97,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-            .interpolate(method='pchip')
+            .interpolate(**interpolation_kwargs)
             .set_index(data_clean.index)
         )
 
