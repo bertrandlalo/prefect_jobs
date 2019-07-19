@@ -158,6 +158,8 @@ class CleanSignal(prefect.Task):
                 meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
                 # Manage output, save to file
                 task_upload_result(self, df_output, meta, state, output, output_group)
+                self.logger.info('Clean galvanic signal finished successfully, '
+                                 'final dataframe has shape %s', df_output.shape)
                 return output
         except Exception as ex:
             # Manage output, save to file

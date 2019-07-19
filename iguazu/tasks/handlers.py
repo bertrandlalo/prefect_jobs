@@ -23,6 +23,7 @@ def logging_handler(task, old_state, new_state):
     state_name = str(type(new_state).__name__).upper()
 
     if new_state.is_running():
+        logger.debug('Configuring logs for task')
         temp_dir = context.get('temp_dir', None)
         temp_dir = temp_dir or tempfile.mkstemp(prefix=context.task_full_name, suffix='.log')[1]
         log_filename = (
@@ -57,6 +58,7 @@ def logging_handler(task, old_state, new_state):
             # Upload to quetzal if the context information has all the necessary information
             if 'quetzal_client' in context and 'quetzal_logs_workspace_name' is not None:
                 try:
+                    logger.debug('Uploading logs to quetzal')
                     client = helpers.get_client(**context.quetzal_client)
                     workspace_details = helpers.workspace.details(client, name=context.quetzal_logs_workspace_name)
                     state_name = str(type(new_state).__name__).upper()
@@ -96,7 +98,8 @@ def logging_handler(task, old_state, new_state):
 
 def garbage_collect_handler(task, old_state, new_state):
 
-    if new_state.is_finished():
+    # only trigger this when we pass from a non finished to a finished state
+    if not old_state.is_finished() and new_state.is_finished():
         logger.debug('Managing garbage collection on change from %s to %s',
                      type(old_state).__name__,
                      type(new_state).__name__)
