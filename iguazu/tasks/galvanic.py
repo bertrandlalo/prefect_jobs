@@ -410,7 +410,7 @@ class RemoveBaseline(prefect.Task):
              pd.HDFStore(features_file, 'r') as features_store:
             try:
                 # check if previous task succeeded
-                if features_file.metadata['iguazu']['state'] != 'SUCCESS':
+                if features.metadata['iguazu']['state'] != 'SUCCESS':
                     # Fail
                     self.logger.info('Previous task failed, propagating failure')
                     raise IguazuError('Previous task failed')

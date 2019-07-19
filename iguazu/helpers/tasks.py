@@ -2,7 +2,7 @@ import pandas as pd
 from prefect.engine.runner import ENDRUN
 
 from iguazu import __version__ as iguazu_version
-from iguazu.helpers.states import GracefulFail, GRACEFULFAIL, SKIPRESULT
+from iguazu.helpers.states import GRACEFULFAIL, SKIPRESULT
 
 
 class IguazuError(Exception):
@@ -31,10 +31,10 @@ def task_fail(task, ex, output, output_group, mode='grace'):
         output.metadata['iguazu'].update({task.name: meta, 'state': state})
         task_upload_result(task, pd.DataFrame(), meta, state, output, output_group)
         if mode == 'grace':
-            grace = GracefulFail(ex, result=output)
-            raise GRACEFULFAIL(state=grace)
+            # grace = GracefulFail(ex, result=output)
+            raise GRACEFULFAIL(f'Task failed gracefully due to {ex}.', result=output)
         else:  # mode == 'skip':
-            raise SKIPRESULT(ex)
+            raise SKIPRESULT('Task skipped with results.', result=output)
     else:  # mode == 'fail'
         # if fail_mode == 'fail':  ==> raise exception as it arrives
         raise ENDRUN

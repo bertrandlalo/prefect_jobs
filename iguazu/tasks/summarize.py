@@ -7,6 +7,7 @@ from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
 from iguazu.helpers.files import FileProxy, QuetzalFile
 from iguazu.helpers.tasks import get_base_meta
+from iguazu.helpers.states import SKIPRESULT
 
 
 class ExtractFeatures(prefect.Task):
@@ -29,7 +30,8 @@ class ExtractFeatures(prefect.Task):
         self.force = force
 
     def run(self,
-            signals: FileProxy, report: FileProxy) -> FileProxy:
+            signals: FileProxy,
+            report: FileProxy) -> FileProxy:
 
         output = signals.make_child(suffix='_features')
         # Inherit from iguazu metadata of report also
@@ -56,15 +58,8 @@ class ExtractFeatures(prefect.Task):
 
         # Our current force detection code
         if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
-
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            # skip = SkippedResult('Output already exists, skipping', result=output)
-            # raise ENDRUN(state=skip)
-            return output
+            self.logger.info('Output already exists, skipping')
+            raise SKIPRESULT('Output already exists', result=output)
 
         signals_file = signals.file.resolve()
         report_file = report.file.resolve()

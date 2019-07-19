@@ -133,6 +133,8 @@ class QuetzalFile(FileProxy):
         # unset all id columns
         for family in child._metadata:
             child._metadata[family].pop('id', None)
+        # unset iguazu state
+        child._metadata['iguazu'].pop('state', None)
         # link child to parent
         child._metadata['iguazu']['parents'] = base_metadata['id']
 

@@ -2,12 +2,11 @@ import datetime
 import logging
 
 from prefect import Flow
-from prefect.tasks.notifications import SlackTask
 
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
-from iguazu.tasks.common import MergeFilesFromGroups
+from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import ExtractFeatures
