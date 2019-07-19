@@ -16,6 +16,7 @@ dependencies:
   - click
   - prefect==0.6
   - docker-py
+  - coloredlogs
   - pip
   - pip:
     - APScheduler

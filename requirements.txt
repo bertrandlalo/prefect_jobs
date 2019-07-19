@@ -11,5 +11,6 @@ prefect==0.6
 bokeh
 graphviz
 docker
+coloredlogs
 git+https://github.com/quetz-al/quetzal-client.git@v0.3.0#egg=quetzal-client
 git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@v0.3.0#egg=dsu

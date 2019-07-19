@@ -18,6 +18,7 @@ dependencies = [
     "prefect",
     "graphviz",
     "docker",
+    "coloredlogs",
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0#egg=dsu',
     "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client"
  ]
