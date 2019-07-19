@@ -1,8 +1,6 @@
 # TODO: think about moving this module somewhere else like iguazu.prefect.cache_validators ?
 #       Maybe move iguazu.executors in it as well? Maybe not?
 
-# TODO: change all logger.info to logger.debug when we are sure about this validator
-
 from typing import Any, Dict
 import logging
 
@@ -59,42 +57,3 @@ class ParametrizedValidator:
             logger.info('Cache hit!')
 
         return result
-
-
-# def all_validator(use_inputs=True, use_parameters=True, force=False):
-#     def _combine(state: Cached,
-#                  inputs: Dict[str, Any],
-#                  parameters: Dict[str, Any]) -> bool:
-#         print('all_validator cache verification')
-#         if force:
-#             print('Not cached - reason = forced')
-#             return False
-#         elif use_inputs and use_parameters:
-#             tmp = all_inputs(state, inputs, parameters) and all_parameters(state, inputs, parameters)
-#             if tmp:
-#                 print('Cached - reason = same inputs and parameters')
-#             else:
-#                 print('Not cached - reason = different inputs or parameters')
-#             return tmp
-#         elif use_inputs:
-#             tmp = all_inputs(state, inputs, parameters)
-#             if tmp:
-#                 print('Cached - reason = same inputs')
-#             else:
-#                 print('Not cached - reason = different inputs')
-#             return tmp
-#         elif use_parameters:
-#             tmp = all_parameters(state, inputs, parameters)
-#             if tmp:
-#                 print('Cached - reason = same  parameters')
-#             else:
-#                 print('Not cached - reason = different parameters')
-#             return tmp
-#         print('Not cached - reason: no configuration')
-#         return False
-#     return _combine
-
-
-# def debug(*args, **kwargs):
-#     import ipdb; ipdb.set_trace(context=21)
-#     return all_inputs(*args, **kwargs)
