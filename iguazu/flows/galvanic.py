@@ -2,15 +2,16 @@ import datetime
 import logging
 
 from prefect import Flow
+from prefect.tasks.notifications import SlackTask
 
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
-from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
+from iguazu.recipes import inherit_params, register_flow
+from iguazu.tasks.common import MergeFilesFromGroups
 from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import ExtractFeatures
 from iguazu.tasks.unity import ExtractSequences
-from iguazu.recipes import inherit_params, register_flow
 
 
 logger = logging.getLogger(__name__)
@@ -31,10 +32,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
     # families: (nb: None means "latest" version)
     required_families = dict(
         iguazu=None,
-        galvanic=None,
         omi=None,
-        vr_sequences=None,
-        task=None,
     )
     families = kwargs.get('families', {}) or {}  # Could be None by default args
     for name in required_families:

@@ -3,12 +3,12 @@ from typing import Dict, Optional
 import pandas as pd
 import prefect
 
-from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
 # from iguazu.helpers.decorators import SubprocessException
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.tasks import get_base_meta, graceful_fail
 from iguazu.helpers.states import GRACEFULFAIL, SKIPRESULT
+from iguazu.helpers.states import SKIPRESULT
+from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
 
 
 class CleanSignal(prefect.Task):
@@ -121,53 +121,47 @@ class CleanSignal(prefect.Task):
         output_group = self.output_group or '/gsr/timeseries/preprocessed'
 
         # Our current force detection code
-        if not self.force and path_exists_in_hdf5(output.file, output_group):
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
             self.logger.info('Output already exists, skipping')
             raise SKIPRESULT('Output already exists', result=output)
+
+        # At that point, we are sure that the previous tasks succeeded and that
+        # the output has not yet been generated ()
 
         signal_file = signal.file.resolve()
         events_file = events.file.resolve()
 
-        with pd.option_context('mode.chained_assignment', None), \
-             pd.HDFStore(signal_file, 'r') as signal_store, \
-             pd.HDFStore(events_file, 'r') as events_store:
+        try:
+            # check if previous task succeeded
+            if signal.metadata.get('iguazu', {}).get('state') == 'FAILURE':
+                # Fail
+                self.logger.info('Previous task failed, propagating failure')
+                raise IguazuError('Previous task failed')
 
-            try:
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(signal_file, 'r') as signal_store, \
+                 pd.HDFStore(events_file, 'r') as events_store:
+
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signal_store, signal_group)
                 df_events = pd.read_hdf(events_store, events_group)
 
-                clean = galvanic_clean(df_signals, df_events, signals_column,
-                                       self.warmup_duration,
-                                       self.quality_kwargs,
-                                       self.interpolation_kwargs,
-                                       self.filter_kwargs,
-                                       self.scaling_kwargs,
-                                       self.corrupted_maxratio,
-                                       self.sampling_rate)
+                df_output = galvanic_clean(df_signals, df_events, signals_column,
+                                           self.warmup_duration,
+                                           self.quality_kwargs,
+                                           self.interpolation_kwargs,
+                                           self.filter_kwargs,
+                                           self.scaling_kwargs,
+                                           self.corrupted_maxratio,
+                                           self.sampling_rate)
                 state = 'SUCCESS'
-                meta = get_base_meta(self, state=state, bad_ratio=clean.bad.mean())
-
-            except Exception as ex:
-                self.logger.warning('Galvanic clean graceful fail: %s', ex)
-                clean = pd.DataFrame()
-                state = 'FAILURE'
-                meta = get_base_meta(self, state=state, exception=str(ex))
-
-        # Manage output, save to file
-        output_file = output.file
-        with pd.HDFStore(output_file, 'w') as output_store:
-            clean.to_hdf(output_store, output_group)
-
-        # Update iguazu metadata with the current task
-        output.metadata['iguazu'].update({self.name: meta, 'state': state})
-        output.upload()
-
-        # TODO: re-code when we find our holy grail base task class
-        if state == 'FAILURE':
-            raise GRACEFULFAIL('Graceful fail', result=output)
-
-        return output
+                meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                return output
+        except Exception as ex:
+            # Manage output, save to file
+            task_fail(self, ex, output, output_group)
 
 
 class ApplyCVX(prefect.Task):
@@ -209,6 +203,7 @@ class ApplyCVX(prefect.Task):
         output: file proxy with transformed signals.
 
         """
+
         output = signal.make_child(suffix='_cvx')
         self.logger.info('Galvanic CVXEDA for %s -> %s', signal, output)
 
@@ -217,67 +212,41 @@ class ApplyCVX(prefect.Task):
         output_group = self.output_group or '/gsr/timeseries/deconvoluted'
 
         # Our current force detection code
-        if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
             self.logger.info('Output already exists, skipping')
+            raise SKIPRESULT('Output already exists', result=output)
 
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            # skip = SkippedResult('Output already exists, skipping', result=output)
-            # raise ENDRUN(state=skip)
-            return output
+        # At that point, we are sure that the previous tasks succeeded and that
+        # the output has not yet been generated ()
 
         signal_file = signal.file
 
-        with pd.option_context('mode.chained_assignment', None), \
-             pd.HDFStore(signal_file, 'r') as signal_store:
+        try:
+            # check if previous task succeeded
+            if signal.metadata['iguazu']['state'] != 'SUCCESS':
+                # Fail
+                self.logger.info('Previous task failed, propagating failure')
+                raise IguazuError('Previous task failed')
 
-            try:
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(signal_file, 'r') as signal_store:
+
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signal_store, signal_group)
                 assert isinstance(df_signals, pd.DataFrame)
-                if df_signals.empty:
-                    # TODO: Handle FAIL in previous tasks to avoid having to check the emptiness here.
-                    raise Exception("Received empty dataframe. ")
-                cvx = galvanic_cvx(df_signals,
-                                   signals_column,
-                                   self.warmup_duration,
-                                   self.threshold_scr,
-                                   self.cvxeda_kwargs)
+                df_output = galvanic_cvx(df_signals,
+                                         signals_column,
+                                         self.warmup_duration,
+                                         self.threshold_scr,
+                                         self.cvxeda_kwargs)
                 state = 'SUCCESS'
-                meta = get_base_meta(self, state=state, bad_ratio=cvx.bad.mean())
-
-                # TODO: think again about this exception handling...
-                #        I am letting graceful fail this case because otherwise
-                #        the query will always keep these failed files
-                # except SubprocessException as ex:
-                #     self.logger.warning('Subprocess failed, propagating exception')
-                #     raise ex
-            except Exception as ex:
-                self.logger.warning('Galvanic CVX graceful fail! %s', ex, exc_info=True)
-                cvx = pd.DataFrame()
-                state = 'FAILURE'
-                meta = get_base_meta(self, state=state, exception=str(ex))
-
-        # TODO: re-code the failure handling with respect to a task parameter
-        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
-        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
-        # if fail_mode == 'fail':  ==> raise exception as it arrives
-
-        # Manage output, save to file
-        output_file = output.file
-        with pd.HDFStore(output_file, 'w') as output_store:
-            cvx.to_hdf(output_store, output_group)
-
-        # Update iguazu metadata with the current task
-        output.metadata['iguazu'].update({self.name: meta, 'state': state})
-        output.upload()
-
-        # graceful_fail(meta, output, state='FAILURE')
-
-        return output
+                meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                return output
+        except Exception as ex:
+            # Manage output, save to file
+            task_fail(self, ex, output, output_group)
 
 
 class DetectSCRPeaks(prefect.Task):
@@ -331,61 +300,44 @@ class DetectSCRPeaks(prefect.Task):
         output_group = self.output_group or '/gsr/timeseries/scrpeaks'
 
         # Our current force detection code
-        if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
             self.logger.info('Output already exists, skipping')
+            raise SKIPRESULT('Output already exists', result=output)
 
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            #skip = SkippedResult('Output already exists, skipping', result=output)
-            #raise ENDRUN(state=skip)
-            return output
+        # At that point, we are sure that the previous tasks succeeded and that
+        # the output has not yet been generated ()
 
         signal_file = signal.file
 
-        with pd.option_context('mode.chained_assignment', None), \
-             pd.HDFStore(signal_file, 'r') as signal_store:
+        try:
+            # check if previous task succeeded
+            if signal.metadata['iguazu']['state'] != 'SUCCESS':
+                # Fail
+                self.logger.info('Previous task failed, propagating failure')
+                raise IguazuError('Previous task failed')
 
-            try:
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(signal_file, 'r') as signal_store:
+
                 # TODO discuss: select column before sending it to a column
                 df_signals = pd.read_hdf(signal_store, signal_group)
                 assert isinstance(df_signals, pd.DataFrame)
                 if df_signals.empty:
                     raise Exception(
                         "Received empty dataframe. ")  # Todo: Handle FAIL in previous tasks to avoid having to check the emptyness here.
-                scr = galvanic_scrpeaks(df_signals,
-                                        signals_column,
-                                        self.warmup_duration,
-                                        self.peaks_kwargs,
-                                        self.max_increase_duration)
+                df_output = galvanic_scrpeaks(df_signals,
+                                              signals_column,
+                                              self.warmup_duration,
+                                              self.peaks_kwargs,
+                                              self.max_increase_duration)
                 state = 'SUCCESS'
-                meta = get_base_meta(self, state=state, bad_ratio=scr.bad.mean())
-
-            except Exception as ex:
-                self.logger.warning('Galvanic SCR peak detection graceful fail: %s', ex)
-                scr = pd.DataFrame()
-                state = 'FAILURE'
-                meta = get_base_meta(self, state=state, exception=str(ex))
-
-        # TODO: re-code the failure handling with respect to a task parameter
-        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
-        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
-        # if fail_mode == 'fail':  ==> raise exception as it arrives
-
-        # Manage output, save to file
-        output_file = output.file
-        with pd.HDFStore(output_file, 'w') as output_store:
-            scr.to_hdf(output_store, output_group)
-
-        # Update iguazu metadata with the current task
-        output.metadata['iguazu'].update({self.name: meta, 'state': state})
-        output.upload()
-
-        # graceful_fail(meta, output, state='FAILURE')
-
-        return output
+                meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                return output
+        except Exception as ex:
+            # Manage output, save to file
+            task_fail(self, ex, output, output_group)
 
 
 class RemoveBaseline(prefect.Task):
@@ -448,56 +400,36 @@ class RemoveBaseline(prefect.Task):
         output_group = self.output_group  # No default value is given here
 
         # Our current force detection code
-        if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
             self.logger.info('Output already exists, skipping')
-            # raise signals.SKIP('Output already exists', result=output) #  Does not work!
-            # TODO: consider a way to raise a skip with results. Currently, the
-            #       only way I think this is possible is by making a new signal
-            #       that derives from PrefectStateSignal and that uses a new
-            #       custom state class as well.
-            #       Another solution could be to use a custom state handler
-            return output
+            raise SKIPRESULT('Output already exists', result=output)
 
         features_file = features.file.resolve()
 
         with pd.option_context('mode.chained_assignment', None), \
              pd.HDFStore(features_file, 'r') as features_store:
             try:
+                # check if previous task succeeded
+                if features_file.metadata['iguazu']['state'] != 'SUCCESS':
+                    # Fail
+                    self.logger.info('Previous task failed, propagating failure')
+                    raise IguazuError('Previous task failed')
+
                 # TODO discuss: select column before sending it to a column
                 df_features = pd.read_hdf(features_store, features_group)
                 assert isinstance(df_features, pd.DataFrame)
                 if df_features.empty:
                     # TODO: Handle FAIL in previous tasks to avoid having to check the emptiness here.
                     raise Exception("Received empty dataframe. ")
-                df_features_corrected, valid_sequences_ratio = galvanic_baseline_correction(df_features,
-                                                                                            sequences=self.sequences,
-                                                                                            columns=self.columns)
+                df_output, valid_sequences_ratio = galvanic_baseline_correction(df_features,
+                                                                                sequences=self.sequences,
+                                                                                columns=self.columns)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state, valid_sequences_ratio=valid_sequences_ratio)
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                return output
 
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail! %s', ex, exc_info=True)
-                df_features_corrected = pd.DataFrame()
-                state = 'FAILURE'
-                meta = get_base_meta(self, state=state, exception=str(ex))
-
-        # TODO: re-code the failure handling with respect to a task parameter
-        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
-        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
-        # if fail_mode == 'fail':  ==> raise exception as it arrives
-
-        # Manage output, save to file
-        output_file = output.file
-        with pd.HDFStore(output_file, 'w') as output_store:
-            df_features_corrected.to_hdf(output_store, output_group)
-
-        # Update iguazu metadata with the current task
-        output.metadata['iguazu'].update({self.name: meta, 'state': state})
-        output.upload()
-
-        # graceful_fail(meta, output, state='FAILURE')
-
-        return output
+                # Manage output, save to file
+                task_fail(self, ex, output, output_group)

@@ -7,8 +7,8 @@ import traceback
 from typing import Optional
 
 import click
-from prefect.engine.state import State
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor
+from prefect.engine.state import State
 
 from iguazu.executors import DaskExecutor
 from iguazu.recipes import registry
@@ -94,8 +94,12 @@ class RunFlowGroup(click.core.Group):
 @click.option('--report', type=click.Path(dir_okay=False),
               required=False,
               help='Output CSV report of the execution')
+@click.option('--force', required=False, is_flag=True, default=False,
+              help='Whether to force the processing if the path already exists in the output file. ')
+@click.option('--cache/--no-cache', 'cache', is_flag=True, default=True,
+              help='Use the prefect cache. ')
 @click.pass_context
-def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report):
+def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report, force, cache):
     """Run the flow registered as FLOW_NAME
 
     Use command `iguazu flows run --help` to get a list of all available flows.
@@ -107,6 +111,8 @@ def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report
         'executor_type': executor_type,
         'executor_address': executor_address,
         'csv_report': report,
+        'force': force,
+        'cache': cache
     }
     ctx.obj.update(opts)
 

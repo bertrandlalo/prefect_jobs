@@ -1,5 +1,5 @@
-from prefect.engine.state import Success
 from prefect.engine.signals import PrefectStateSignal
+from prefect.engine.state import Success, State
 
 
 class SkippedResult(Success):  # TODO: revisit the need of this class
