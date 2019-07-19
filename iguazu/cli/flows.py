@@ -160,17 +160,6 @@ def run_flow_command(func):
         if 'SLACK_WEBHOOK_URL' in os.environ:
             context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
 
-        # force = ctx.obj.get('force', False)
-        #
-        # # Prepare flow parameters
-        # flow_parameters = kwargs.copy()
-        #
-        # # Create flow
-        # flow = func(**flow_parameters)
-        # for p in list(flow_parameters):
-        #     if p not in flow.parameters():
-        #         flow_parameters.pop(p)
-
         ###
         # Flow execution
         ###
@@ -186,7 +175,6 @@ def run_flow_command(func):
         if isinstance(flow_state.result, Exception):
             click.secho(f'Flow state was an exception: {flow_state.result}', fg='red')
             ctx.fail(f'Flow run failed: {flow_state.result}.')
-            #raise click.ClickException('Flow run failed')
 
         # Create dataframe report and save to CSV
         df = state_report(flow_state, flow)
@@ -219,7 +207,6 @@ def run_flow_command(func):
 # add all flows to the run_group
 def _init_run_group():
     for flow_name, wrapper in registry.items():
-        #cmd = click.command(flow_name)(wrapper)#(run_flow()(wrapper))
         cmd = click.command(flow_name)(run_flow_command(wrapper))
         run_group.add_command(cmd)
 
