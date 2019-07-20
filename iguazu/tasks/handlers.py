@@ -106,8 +106,9 @@ def garbage_collect_handler(task, old_state, new_state):
         try:
             process = psutil.Process(os.getpid())
             mem_percent = process.memory_percent()
-            logger.debug('Memory usage is %.2f %%', mem_percent)
-            if mem_percent >= 75:  # usage over 75%
+            mem_usage_gb = process.memory_info().rss / (1 << 30)
+            logger.debug('Memory usage is %.2f Gb (%.2f %%)', mem_usage_gb, mem_percent)
+            if mem_usage_gb > 2 or mem_percent >= 75:  # usage over 75%
                 logger.info('Calling gc, usage was over the limit')
                 gc.collect()
         except:
