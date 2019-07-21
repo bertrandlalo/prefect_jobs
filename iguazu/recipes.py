@@ -1,7 +1,6 @@
 # Note: this module cannot go in iguazu.flows due to circular dependency,
 #       we could eventually use a lazy dictionary or something like that
 
-import datetime
 import inspect
 import logging
 import pathlib
@@ -11,7 +10,6 @@ import traceback
 
 import click
 import pandas as pd
-import pendulum
 import prefect
 
 logger = logging.getLogger(__name__)
@@ -110,7 +108,8 @@ def _import_flows():
     logger.debug('Loaded flows in %s', iguazu.flows.datasets)
     import iguazu.flows.galvanic
     logger.debug('Loaded flows in %s', iguazu.flows.galvanic)
-
+    import iguazu.flows.summarize_galvanic
+    logger.debug('Loaded flows in %s', iguazu.flows.summarize_galvanic)
 
 _import_flows()
 
