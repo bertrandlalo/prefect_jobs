@@ -1,185 +1,75 @@
-import os
-import tempfile
-import time
-import traceback
+import logging
 
-import click
-import pandas as pd
-from prefect import Flow, Parameter, context
-from prefect.engine.executors import DaskExecutor, LocalExecutor, SynchronousExecutor
-from prefect.engine.state import Mapped, Failed
-from prefect.tasks.control_flow import switch, merge
-from prefect.utilities.debug import raise_on_exception
+from prefect import Flow
+from prefect.tasks.notifications import SlackTask
 
-from iguazu.tasks.common import ListFiles
-from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace, Query
+from iguazu.flows.datasets import generic_dataset_flow
+from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.summarize import SummarizePopulation
 
+logger = logging.getLogger(__name__)
 
-@click.command()
-@click.option('-b', '--base-dir', type=click.Path(file_okay=False, dir_okay=True, exists=True),
-              required=False, help='Path from where the files with raw data are read. ')
-@click.option('-t', '--temp-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=False, help='Path where temporary files with processed data are saved. ')
-@click.option('-o', '--output-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=False, help='Path where final files with processed data are saved. ')
-@click.option('--data-source', type=click.Choice(['local', 'quetzal']),
-              default='local', help='Data source that provides input files for this flow.')
-@click.option('--executor-type', type=click.Choice(['local', 'synchronous', 'dask']),
-              default='local', help='Type of executor to run the flow. Default is local.')
-@click.option('--executor-address', required=False,
-              help='Address for a remote executor. Only used when --executor-type=dask.')
-@click.option('--visualize-flow', is_flag=True,
-              help='Whether to visualize the flow graphs')
-@click.option('--force', is_flag=True,
-              help='Whether to force the processing if the path already exists in the output file. ')
-@click.option('--raise/--no-raise', 'raise_exc', is_flag=True, default=False,
-              help='Raise the exceptions encountered during execution when scheduler is local')
-def cli(base_dir, temp_dir, output_dir, data_source, executor_type, executor_address, visualize_flow, force, raise_exc):
-    """ Run the HDF5 pipeline on the specified FILENAMES.
-    Do not specify any FILENAMES to run on *all* files found on DATAFOLDER.
-    """
-    if executor_type == 'dask':
-        if executor_address:
-            executor = DaskExecutor(executor_address)
-        else:
-            executor = DaskExecutor(local_processes=True)
-    elif executor_type == "synchronous":
-        executor = SynchronousExecutor()
-    else:  # default
-        executor = LocalExecutor()
 
-    # Context/global arguments
-    context_args = dict(
-        quetzal_client=dict(
-            url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-            username=os.getenv('QUETZAL_USER', 'admin'),
-            password=os.getenv('QUETZAL_PASSWORD', 'secret'),
-            insecure=True,
-        ),
-        temp_dir=temp_dir or tempfile.mkdtemp(),
-        output_dir=output_dir or tempfile.mkdtemp(),
-        raise_on_exception=raise_exc,
+@register_flow('summarize_galvanic')
+@inherit_params(generic_dataset_flow)
+def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
+                          **kwargs) -> Flow:
+    """Extract galvanic features"""
+    logger.debug('Summarizing galvanic features flow')
+
+    # Manage parameters
+    kwargs = kwargs.copy()
+    # Propagate workspace name because we captured it on kwargs
+    kwargs['workspace_name'] = workspace_name
+    # Force required families: Quetzal workspace must have the following
+    # families: (nb: None means "latest" version)
+    required_families = dict(
+        iguazu=None,
+        omi=None,
     )
-
-    # Tasks and task arguments
-    list_files = ListFiles(as_proxy=True)
-    quetzal_create = CreateWorkspace(
-        workspace_name='iguazu-dev-8',
-        exist_ok=True,
-        families=dict(
-            iguazu=None,
-            galvanic=None,
-            omi=None,
-            vr_sequences=None,
-        ),
-    )
-    quetzal_scan = ScanWorkspace(
-        name='Update workspace SQL views',
-    )
-    quetzal_query = Query(
-        name='Query quetzal',
-        as_proxy=True,
-    )
-
-    merge_population = SummarizePopulation(groups={'gsr_features_scr': None,
-                                                   'gsr_features_scl': None})
-
-    # Flow/runtime arguments
-    flow_parameters = dict(
-        basedir=base_dir,
-        data_source=data_source,
-        sql="""
+    families = kwargs.get('families', {}) or {}  # Could be None by default args
+    for name in required_families:
+        families.setdefault(name, required_families[name])
+    kwargs['families'] = families
+    # In case there was no query, set a default one
+    default_query = """\
             SELECT id, filename FROM base
             LEFT JOIN iguazu USING (id)
             WHERE 
             base.filename LIKE '%_gsr.hdf5' AND 
             iguazu.id IS NOT NULL
             LIMIT 3
-        """,
-    )
+    """
+    default_alt_query = """\
+            SELECT id, filename FROM base
+            LEFT JOIN iguazu USING (id)
+            WHERE 
+            base.filename LIKE '%_gsr.hdf5' AND 
+            iguazu.id IS NOT NULL
+            LIMIT 3
+    """
+    # Todo : change default_alt_query?
+    kwargs['query'] = query or default_query
+    kwargs['alt_query'] = alt_query or default_alt_query
 
-    # Flow definition
-    with Flow('galvanic-population-summarize-flow') as flow:
-        sql = Parameter('sql')
-        basedir = Parameter('basedir')
-        data_source = Parameter('data_source')
+    # Manage connections to other flows
+    dataset_flow = generic_dataset_flow(**kwargs)
+    features_files = dataset_flow.terminal_tasks().pop()
 
-        # For file data source: extract files
-        local_files_dataset = list_files(basedir)
+    # instantiate tasks
+    merge_population = SummarizePopulation(groups={'gsr_features_scr': None,
+                                                   'gsr_features_scl': None})
+    notify = SlackTask(message='Galvanic feature summarization finished!')
 
-        # For quetzal data source: query files
-        wid = quetzal_create()
-        wid_bis = quetzal_scan(wid)
-        remote_files_dataset = quetzal_query(query=sql, workspace_id=wid_bis)
-
-        # conditional on the local or quetzal data source
-        switch(condition=data_source,
-               cases={'local': local_files_dataset, 'quetzal': wid})
-        features_files = merge(local_files_dataset, remote_files_dataset)
-
-        # Summary flow
+    with Flow('galvanic_summary_flow') as flow:
+        # Connect/extend this flow with the dataset flow
+        flow.update(dataset_flow)
         population_summary = merge_population(features_files)
 
-    if visualize_flow:
-        flow.visualize()
+        # Send slack notification
+        notify(upstream_tasks=[population_summary])
 
-    # Flow execution
-    t0 = time.time()
-    with raise_on_exception(), context(**context_args):
-        flow_state = flow.run(parameters=flow_parameters,
-                              executor=executor)
-    local_execution_duration = time.time() - t0
-    print(f'{executor_type} executor ran in {local_execution_duration} seconds')
+        # TODO: what's the reference task of this flow?
 
-    if visualize_flow:
-        flow.visualize(flow_state=flow_state)
-
-    # TODO: refactor this report somewhere else!
-    task_rows = []
-    exceptions = []
-    if isinstance(flow_state.result, Exception):
-        exceptions.append(flow_state.result)
-
-    else:
-        for t in flow_state.result:
-            state = flow_state.result[t]
-            if isinstance(state, Mapped):
-                for i, s in enumerate(state.map_states):
-                    task_rows.append({
-                        'task class': type(t).__name__,
-                        'task name': f'{t.name}[{i}]',
-                        'status': type(s).__name__.upper(),
-                        'message': s.message,
-                        'exception': s.result if isinstance(s, Failed) else '',
-                    })
-                    if isinstance(s, Failed):
-                        exceptions.append(s.result)
-            else:
-                task_rows.append({
-                    'task class': type(t).__name__,
-                    'task name': t.name,
-                    'status': type(state).__name__.upper(),
-                    'message': state.message,
-                    'exception': t.result if isinstance(t, Failed) else '',
-                })
-                if isinstance(t, Failed):
-                    exceptions.append(t.result)
-
-        df = pd.DataFrame.from_records(task_rows)
-        if not df.empty:
-            df = df[['status', 'task class', 'task name', 'message', 'exception']]
-            df.columns = [col.upper() for col in df.columns]
-            print(df.to_string(index=False))
-
-    if exceptions:
-        print('\n\n\nEncountered the following exceptions:')
-        for i, exc in enumerate(exceptions, 1):
-            print(f'Exception {i} / {len(exceptions)}:')
-            traceback.print_tb(exc.__traceback__)
-            print('\n')
-
-
-if __name__ == '__main__':  # __name__ is the process id, that decides for what the process is supposed to work on
-    #cli()
-    print('Removed this cli!')
+    logger.debug('Created flow %s with tasks %s', flow, flow.tasks)
+    return flow
