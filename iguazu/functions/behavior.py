@@ -281,10 +281,3 @@ def extract_space_stress_scores(spawns_stimulations, participant_actions):
         scores_df.append(score_df)
     out = pd.concat(scores_df, 1, sort=True).T
     return out
-
-# Test purpose #Todo: delete that.
-# fname = '/Users/raph/OMIND_SERVER/DATA_vr/raw_hdf5/data_2019-04-03.10.18.45_398a77cb6b2c3315200246d2d4143f8d7ec5efa6150bc7263419afc47ee38156.hdf5'
-# events = pd.read_hdf(fname, '/unity/events/unity_events')
-# participant_events = extract_space_stress_participant_actions(events)
-# spawns_events = extract_space_stress_spawns_events(events)
-# participant_scores = space_stress_scores(participant_events, spawns_events)
