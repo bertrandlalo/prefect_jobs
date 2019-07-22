@@ -1,11 +1,14 @@
+import functools
+
 import numpy as np
 import pandas as pd
-
 from dsu.events import extract_metas
 from dsu.pandas_helpers import truncate
 from dsu.space_stress import categorize_failure
 from dsu.unity import extract_complete_sequences, extract_complete_sequence_times, extract_marker_version
 from scipy.spatial import distance
+
+from iguazu.helpers.tasks import IguazuError
 
 
 def estimate_trajectory_length(data, columns):
@@ -20,7 +23,7 @@ def estimate_trajectory_length(data, columns):
         List of columns with space coordinates
     """
     if not set(columns).issubset(data.columns):
-        raise Exception('columns should be a subset of data columns')
+        raise ValueError('Columns should be a subset of data columns')
     coordinate_data = data[columns]
     out = data.copy()
     dists = [np.NaN]  # First distance is NaN
@@ -73,10 +76,10 @@ def extract_space_stress_participant_actions(events):
 
     """
     if extract_marker_version(events) == 'legacy':
-        raise Exception('Processing of legacy events not yet implemented')
+        raise IguazuError('Processing of legacy events not yet implemented')
 
     if 'space-stress_sequence' not in extract_complete_sequences(events):
-        raise Exception('Could not find "space-stress_sequence".')
+        raise IguazuError('Could not find "space-stress_sequence".')
 
     space_stress_times = extract_complete_sequence_times(events, 'space-stress_sequence', pedantic='warn')
     begins, ends = space_stress_times[0]
@@ -90,12 +93,12 @@ def extract_space_stress_participant_actions(events):
 
     for button in ['pad', 'trigger']:
         # classify failure reason depending on button type
-        out.loc[out.button == button, 'failure_reason'] = out.loc[
-            out.button == button].result.apply(
-            lambda x: categorize_failure(x, button=button))
+        idx_button = (out.button == button)
+        func_button = functools.partial(categorize_failure, button=button)
+        out.loc[idx_button, 'failure_reason'] = out.loc[idx_button, 'result'].apply(func_button)
 
-    for k_wave, (wave_begins, wave_ends) in enumerate(
-            extract_complete_sequence_times(events, 'space-stress_game_enemy-wave', pedantic='warn')):
+    sequence_times = extract_complete_sequence_times(events, 'space-stress_game_enemy-wave', pedantic='warn')
+    for k_wave, (wave_begins, wave_ends) in enumerate(sequence_times):
         # add a column with wave index and difficulty
         out.loc[wave_begins:wave_ends, 'wave'] = k_wave
         out.loc[wave_begins:wave_ends, 'difficulty'] = \
@@ -107,7 +110,7 @@ def extract_space_stress_participant_actions(events):
 
 
 def extract_space_stress_spawns_stimulations(events):
-    ''' Extract information about spawns in space stress events
+    """ Extract information about spawns in space stress events
     This function extracts events with label "unity_space-stress_game_breach_spawns" and
     "unity_space-stress_game_enemy_spawns". It returns a dataframe with interesting features
     associated to these actions (spawn position, type, id ).
@@ -150,12 +153,12 @@ def extract_space_stress_spawns_stimulations(events):
 2019-04-03 08:36:08.142808336+00:00  enemy  1.591  4.102  4.411    1.         5.           2.547441
 2019-04-03 08:36:08.324275836+00:00  enemy -1.140  1.840  5.230    1.         5.           3.546125
 
-    '''
+    """
     if extract_marker_version(events) == 'legacy':
-        raise Exception('Processing of legacy events not yet implemented')
+        raise IguazuError('Processing of legacy events not yet implemented')
 
     if 'space-stress_sequence' not in extract_complete_sequences(events):
-        raise Exception('Could not find "space-stress_sequence".')
+        raise IguazuError('Could not find "space-stress_sequence".')
 
     enemy_spawns = extract_metas(events, labels=['unity_space-stress_game_enemy_spawns'],
                                  meta_keys=['enemy_id', 'x', 'y', 'z']).rename(columns={'enemy_id': 'id'})
