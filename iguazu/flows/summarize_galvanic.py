@@ -77,7 +77,7 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     with Flow('galvanic_summary_flow') as flow:
         # Connect/extend this flow with the dataset flow
         flow.update(dataset_flow)
-        population_summary = merge_population(features_files)
+        population_summary = merge_population(features_files, filename='galvanic_summary')
 
         # Send slack notification
         notify(upstream_tasks=[population_summary])
