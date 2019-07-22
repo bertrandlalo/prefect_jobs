@@ -1,25 +1,21 @@
-import datetime
 import logging
 
 from prefect import Flow
 
-from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.common import SlackTask
-from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
-
 
 logger = logging.getLogger(__name__)
 
 
-@register_flow('summarize_galvanic')
+@register_flow('summarize_behavior')
 @inherit_params(generic_dataset_flow)
-def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
+def behavior_summary_flow(*, workspace_name=None, query=None, alt_query=None,
                           **kwargs) -> Flow:
-    """Collect all galvanic features in a single file"""
-    logger.debug('Summarizing galvanic features flow')
+    """Summarize behavior features"""
+    logger.debug('Summarizing behavior features flow')
 
     # Manage parameters
     kwargs = kwargs.copy()
@@ -35,30 +31,28 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     for name in required_families:
         families.setdefault(name, required_families[name])
     kwargs['families'] = families
-    # This is the main query that defines the dataset for merging the galvanic
-    # features. There is a secondary query because some of the tables may not
-    # be available on a new workspace.
+    # In case there was no query, set a default one
+    # In case there was no query, set a default one
     default_query = """\
         SELECT
             id,
             filename,
-            iguazu.gsr::json->>'status' AS status,
+            iguazu.behavior::json->>'status' AS status,
             iguazu.state
         FROM base
         LEFT JOIN iguazu USING (id)
         LEFT JOIN omi using (id)
         WHERE
             base.state = 'READY' AND                    -- no temporary files
-            base.filename LIKE '%_gsr.hdf5' AND         -- only HDF5 files
-            base.filename NOT LIKE '%_gsr_gsr.hdf5' AND -- remove incorrect cases where we processed twice
+            base.filename LIKE '%_behavior.hdf5' AND         -- only HDF5 files
+            base.filename NOT LIKE '%__behavior_behavior.hdf5' AND -- remove incorrect cases where we processed twice
             COALESCE(iguazu."MergeFilesFromGroups", '{}')::json->>'state' = 'SUCCESS' -- Only files whose mergefilefromgroups was successful
             -- AND iguazu.state = 'SUCCESS'
             --iguazu.gsr::json->>'status' = 'SUCCESS'     -- files not fully processed by iguazu on this flow
         ORDER BY base.id                                -- always in the same order
     """
-    # There is no secondary query because this flow only makes sense *after*
-    # the galvanic extract features flow has run
     default_alt_query = None
+
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query
 
@@ -67,21 +61,14 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     features_files = dataset_flow.terminal_tasks().pop()
 
     # instantiate tasks
-    merge_population = SummarizePopulation(
-        # Iguazu task constructor arguments
-        groups={'gsr_features_scr': None,
-                'gsr_features_scl': None},
-        # Prefect task arguments
-        state_handlers=[garbage_collect_handler, logging_handler],
-        cache_for=datetime.timedelta(days=7),
-        cache_validator=ParametrizedValidator(),
-    )
-    notify = SlackTask(message='Galvanic feature summarization finished!')
+    merge_population = SummarizePopulation(groups={'behavior_spacestress_scores': None})
 
-    with Flow('galvanic_summary_flow') as flow:
+    notify = SlackTask(message='Behavior feature summarization finished!')
+
+    with Flow('behavior_summary_flow') as flow:
         # Connect/extend this flow with the dataset flow
         flow.update(dataset_flow)
-        population_summary = merge_population(features_files, filename='galvanic_summary')
+        population_summary = merge_population(features_files, filename='behavior_summary')
 
         # Send slack notification
         notify(upstream_tasks=[population_summary])
