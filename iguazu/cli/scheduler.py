@@ -7,10 +7,10 @@ import click
 from apscheduler.schedulers.background import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from prefect.engine.executors import DaskExecutor
 
 from iguazu.cli.flows import str2bool
 from iguazu.recipes import execute_flow, registry
-from iguazu.executors import DaskExecutor
 
 
 logger = logging.getLogger(__name__)

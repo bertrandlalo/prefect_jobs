@@ -7,10 +7,9 @@ import traceback
 from typing import Optional
 
 import click
-from prefect.engine.executors import LocalExecutor, SynchronousExecutor
+from prefect.engine.executors import LocalExecutor, SynchronousExecutor, DaskExecutor
 from prefect.engine.state import State
 
-from iguazu.executors import DaskExecutor
 from iguazu.recipes import registry
 
 
