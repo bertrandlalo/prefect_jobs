@@ -1,11 +1,15 @@
+import datetime
 import logging
 
 from prefect import Flow
-from prefect.tasks.notifications import SlackTask
 
+from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
+from iguazu.tasks.common import SlackTask
+from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +18,7 @@ logger = logging.getLogger(__name__)
 @inherit_params(generic_dataset_flow)
 def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
                           **kwargs) -> Flow:
-    """Extract galvanic features"""
+    """Collect all galvanic features in a single file"""
     logger.debug('Summarizing galvanic features flow')
 
     # Manage parameters
@@ -31,37 +35,30 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     for name in required_families:
         families.setdefault(name, required_families[name])
     kwargs['families'] = families
-    # In case there was no query, set a default one
-    # In case there was no query, set a default one
+    # This is the main query that defines the dataset for merging the galvanic
+    # features. There is a secondary query because some of the tables may not
+    # be available on a new workspace.
     default_query = """\
-            SELECT
+        SELECT
             id,
-            filename
-            FROM base
-            LEFT JOIN iguazu USING (id)
-            LEFT JOIN omi using (id)
-            WHERE
-                base.state = 'READY' AND                 -- no temporary files
-                base.filename LIKE '%.hdf5' AND          -- only HDF5 files
-                iguazu.gsr::json->>'status'  = 'SUCCESS'   -- files not fully processed by iguazu on this flow
-            ORDER BY base.id                             -- always in the same order
-        """
-    # This secondary, alternative query is defined for the case when a new
-    # quetzal workspace is created, and the iguazu.gsr metadata does not even
-    # exist. We need to to do this because the iguazu.gsr column does not exist
-    # and postgres does not permit querying a non-existent column
-    default_alt_query = """\
-            SELECT
-            id,
-            filename
-            FROM base
-            LEFT JOIN iguazu USING (id)
-            WHERE
-                base.state = 'READY' AND             -- no temporary files
-                base.filename LIKE '%.hdf5'          -- only HDF5 files
-                AND base.size < 10000000
-            ORDER BY base.id                         -- always in the same order
-        """
+            filename,
+            iguazu.gsr::json->>'status' AS status,
+            iguazu.state
+        FROM base
+        LEFT JOIN iguazu USING (id)
+        LEFT JOIN omi using (id)
+        WHERE
+            base.state = 'READY' AND                    -- no temporary files
+            base.filename LIKE '%_gsr.hdf5' AND         -- only HDF5 files
+            base.filename NOT LIKE '%_gsr_gsr.hdf5' AND -- remove incorrect cases where we processed twice
+            COALESCE(iguazu."MergeFilesFromGroups", '{}')::json->>'state' = 'SUCCESS' -- Only files whose mergefilefromgroups was successful
+            -- AND iguazu.state = 'SUCCESS'
+            --iguazu.gsr::json->>'status' = 'SUCCESS'     -- files not fully processed by iguazu on this flow
+        ORDER BY base.id                                -- always in the same order
+    """
+    # There is no secondary query because this flow only makes sense *after*
+    # the galvanic extract features flow has run
+    default_alt_query = None
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query
 
@@ -70,8 +67,15 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     features_files = dataset_flow.terminal_tasks().pop()
 
     # instantiate tasks
-    merge_population = SummarizePopulation(groups={'gsr_features_scr': None,
-                                                   'gsr_features_scl': None})
+    merge_population = SummarizePopulation(
+        # Iguazu task constructor arguments
+        groups={'gsr_features_scr': None,
+                'gsr_features_scl': None},
+        # Prefect task arguments
+        state_handlers=[garbage_collect_handler, logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(),
+    )
     notify = SlackTask(message='Galvanic feature summarization finished!')
 
     with Flow('galvanic_summary_flow') as flow:

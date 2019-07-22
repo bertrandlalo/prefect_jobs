@@ -48,6 +48,7 @@ setup_args = dict(
             'iguazu = iguazu.cli.main:cli',
         ],
     },
+    version='0.0.3',  # TODO: use versioneer
 )
 
 setup(**setup_args)

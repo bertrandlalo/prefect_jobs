@@ -37,7 +37,7 @@ spec:
             - --memory-limit
             - {{ .Values.dask_worker.resources.limits.memory | default .Values.dask_worker.default_resources.memory | quote }}
           {{- end }}
-            - --no-bokeh
+            - --no-dashboard
             - --no-nanny
           ports:
             - containerPort: 8789

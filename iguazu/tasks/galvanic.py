@@ -4,9 +4,7 @@ import pandas as pd
 import prefect
 
 from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
-# from iguazu.helpers.decorators import SubprocessException
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import GRACEFULFAIL, SKIPRESULT
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
 
@@ -163,6 +161,7 @@ class CleanSignal(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('CleanSignal failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
@@ -248,6 +247,7 @@ class ApplyCVX(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('ApplyCVX failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
@@ -339,6 +339,7 @@ class DetectSCRPeaks(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('DetectSCRPeaks failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
@@ -434,4 +435,5 @@ class RemoveBaseline(prefect.Task):
 
             except Exception as ex:
                 # Manage output, save to file
+                self.logger.warning('RemoveBaseline failed with an exception', exc_info=True)
                 task_fail(self, ex, output, output_group)

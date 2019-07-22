@@ -108,10 +108,9 @@ class ExtractFeatures(prefect.Task):
 
 
 class SummarizePopulation(prefect.Task):
-    def __init__(self, groups, filename='population', axis_name='sequence', **kwargs):
+    def __init__(self, groups, axis_name='sequence', **kwargs):
         super().__init__(**kwargs)
         self.groups = {group.replace('_', '/'): groups[group] for group in groups}
-        self.filename = filename
         self.axis_name = axis_name
 
     def run(self, files: List[FileProxy]) -> Optional[FileProxy]:
@@ -120,13 +119,18 @@ class SummarizePopulation(prefect.Task):
             self.logger.warning("SummarizePopulation received an empty list. ")
             return None
 
+        n_files = len(files)
+        self.logger.info('Summarize population on %d files...', n_files)
+
         parent = files[0]
         output = parent.make_child(filename=self.filename, path=None, suffix=None,
                                    extension=".csv", temporary=False)
         output._metadata.clear()
 
         data_list_population = []
-        for file in files:
+        for i, file in enumerate(files, 1):
+            self.logger.info('Extracting data %d / %d (%.2f %%) from %s',
+                             i, n_files, 100 * i / n_files, file)
             if file.metadata['iguazu']['state'] != 'SUCCESS':
                 continue
             file_id = file._file_id
@@ -146,4 +150,8 @@ class SummarizePopulation(prefect.Task):
         data_output.to_csv(output.file)
 
         output.upload()
+
+        self.logger.info('Summarize population succeeded, saved output at %s',
+                         output)
+
         return output
