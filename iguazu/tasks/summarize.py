@@ -5,9 +5,9 @@ import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
-from iguazu.helpers.files import FileProxy, QuetzalFile
-from iguazu.helpers.tasks import get_base_meta
+from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
+from iguazu.helpers.tasks import get_base_meta
 
 
 class ExtractFeatures(prefect.Task):
@@ -108,9 +108,10 @@ class ExtractFeatures(prefect.Task):
 
 
 class SummarizePopulation(prefect.Task):
-    def __init__(self, groups, axis_name='sequence', **kwargs):
+    def __init__(self, groups, filename='population', axis_name='sequence', **kwargs):
         super().__init__(**kwargs)
         self.groups = {group.replace('_', '/'): groups[group] for group in groups}
+        self.filename = filename
         self.axis_name = axis_name
 
     def run(self, files: List[FileProxy]) -> Optional[FileProxy]:
@@ -120,7 +121,7 @@ class SummarizePopulation(prefect.Task):
             return None
 
         parent = files[0]
-        output = parent.make_child(filename=None, path=None, suffix="_population",
+        output = parent.make_child(filename=self.filename, path=None, suffix=None,
                                    extension=".csv", temporary=False)
         output._metadata.clear()
 
@@ -128,14 +129,10 @@ class SummarizePopulation(prefect.Task):
         for file in files:
             if file.metadata['iguazu']['state'] != 'SUCCESS':
                 continue
-            # TODO: make file_id or some abstract id property in FileProxy to
-            #       avoid this manual management according to the proxy type
-            if isinstance(file, QuetzalFile):
-                file_id = file._file_id
-            else:  # LocalFile
-                file_id = file._file.stem
+            file_id = file._file_id
+
             with pd.option_context('mode.chained_assignment', None), \
-                 pd.HDFStore(file._file, 'r') as store:
+                 pd.HDFStore(file.file, 'r') as store:
                 data_summary_file = pd.DataFrame()
                 for group, columns in self.groups.items():
                     data = pd.read_hdf(store, group, columns=columns)
