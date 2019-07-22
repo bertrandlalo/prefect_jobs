@@ -110,7 +110,8 @@ def _import_flows():
     logger.debug('Loaded flows in %s', iguazu.flows.galvanic)
     import iguazu.flows.summarize_galvanic
     logger.debug('Loaded flows in %s', iguazu.flows.summarize_galvanic)
-
+    import iguazu.flows.behavior
+    logger.debug('Loaded flows in %s', iguazu.flows.behavior)
 _import_flows()
 
 
