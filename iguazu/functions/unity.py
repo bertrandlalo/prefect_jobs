@@ -110,7 +110,7 @@ def extract_sequences(events: pd.DataFrame, sequences: List[str] = None) -> pd.D
         logger.warning('Sequences report for legacy events not yet implemented')
         return pd.DataFrame()
 
-    if 'xdf_timestamp' in events:
+    if 'xdf_timestamps' in events:
         events.drop('xdf_timestamps', axis=1, inplace=True)
 
     # correct unity events # TODO : put that in the conversion xdf to hdf
