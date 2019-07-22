@@ -37,11 +37,13 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
     for name in required_families:
         families.setdefault(name, required_families[name])
     kwargs['families'] = families
-    # In case there was no query, set a default one
+    # This is the main query that defines the dataset for extracting galvanic
+    # features. There is a secondary query because some of the tables may not
+    # be available on a new workspace.
     default_query = """\
         SELECT
-        id,
-        filename
+            id,
+            filename
         FROM base
         LEFT JOIN iguazu USING (id)
         LEFT JOIN omi using (id)
@@ -58,14 +60,13 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
     # and postgres does not permit querying a non-existent column
     default_alt_query = """\
         SELECT
-        id,
-        filename
+            id,
+            filename
         FROM base
         LEFT JOIN iguazu USING (id)
         WHERE
             base.state = 'READY' AND             -- no temporary files
             base.filename LIKE '%.hdf5'          -- only HDF5 files
-            AND base.size < 10000000
         ORDER BY base.id                         -- always in the same order
     """
     kwargs['query'] = query or default_query

@@ -126,7 +126,7 @@ class MergeFilesFromGroups(prefect.Task):
             meta = get_base_meta(self, state=state)
 
         except Exception as ex:
-            self.logger.warning('MergeFilesFromGroups clean graceful fail: %s', ex)
+            self.logger.warning('MergeFilesFromGroups clean graceful fail', exc_info=True)
             state = 'FAILURE'
             meta = get_base_meta(self, state=state)
 

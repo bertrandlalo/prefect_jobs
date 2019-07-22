@@ -193,7 +193,7 @@ def generic_dataset_flow(*,
 @register_flow('print_dataset')
 @inherit_params(generic_dataset_flow)
 def print_dataset_flow(**kwargs) -> Flow:
-    """Flow that prints each file in its dataset"""
+    """Print each file in a dataset"""
 
     logger.debug('Creating print dataset flow')
 

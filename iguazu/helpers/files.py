@@ -171,7 +171,7 @@ class QuetzalFile(FileProxy):
         else:
             with open(self._local_path, 'rb') as fd:
                 details = helpers.workspace.upload(self.client, self._wid, fd,
-                                                   path=self.metadata['base']['path'],
+                                                   path=self.metadata['base'].get('path', None) or '',
                                                    temporary=self._temporary)
             self._file_id = details.id
 

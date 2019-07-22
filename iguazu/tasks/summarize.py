@@ -82,7 +82,7 @@ class ExtractFeatures(prefect.Task):
                 meta = get_base_meta(self, state='SUCCESS')
 
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail: %s', ex)
+                self.logger.warning('Report VR sequences graceful fail', exc_info=True)
                 features = pd.DataFrame()
                 meta = get_base_meta(self, state='FAILURE', exception=str(ex))
 
@@ -119,13 +119,18 @@ class SummarizePopulation(prefect.Task):
             self.logger.warning("SummarizePopulation received an empty list. ")
             return None
 
+        n_files = len(files)
+        self.logger.info('Summarize population on %d files...', n_files)
+
         parent = files[0]
-        output = parent.make_child(filename=None, path=None, suffix="_population",
+        output = parent.make_child(filename='gsr', path='populations',
                                    extension=".csv", temporary=False)
         output._metadata.clear()
 
         data_list_population = []
-        for file in files:
+        for i, file in enumerate(files, 1):
+            self.logger.info('Extracting data %d / %d (%.2f %%) from %s',
+                             i, n_files, 100 * i / n_files, file)
             if file.metadata['iguazu']['state'] != 'SUCCESS':
                 continue
             # TODO: make file_id or some abstract id property in FileProxy to
@@ -135,18 +140,26 @@ class SummarizePopulation(prefect.Task):
             else:  # LocalFile
                 file_id = file._file.stem
             with pd.option_context('mode.chained_assignment', None), \
-                 pd.HDFStore(file._file, 'r') as store:
+                 pd.HDFStore(file.file, 'r') as store:
+
                 data_summary_file = pd.DataFrame()
                 for group, columns in self.groups.items():
                     data = pd.read_hdf(store, group, columns=columns)
                     data_summary_file = data_summary_file.join(data, how="outer")
-                if not data_summary_file.empty:
+
+                if data_summary_file.empty:
+                    self.logger.info('File %s was empty', file)
+                else:
                     data_summary_file.loc[:, 'file_id'] = file_id
                     data_list_population.append(data_summary_file)
 
-        data_output = pd.concat(data_list_population, axis=0)
+        self.logger.info('Final concatenation of all files...')
+        data_output = pd.concat(data_list_population, axis=0, sort=False)
         data_output = data_output.rename_axis(self.axis_name).reset_index()
-        data_output.to_csv(output.file)
-
+        data_output.to_csv(output.file, index=False)
         output.upload()
+
+        self.logger.info('Summarize population succeeded, saved output at %s',
+                         output)
+
         return output
