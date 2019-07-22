@@ -109,7 +109,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(method='pchip')
+                .interpolate(**interpolation_kwargs)
                 .set_index(data_clean.index)
         )
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
