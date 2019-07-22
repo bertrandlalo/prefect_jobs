@@ -3,11 +3,10 @@ import logging
 import numpy as np
 import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
-from dsu.quality import quality_gsr
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
+from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
 
         - detect bad samples calling :py:func:dsu.quality.detect_bad_from_amplitude with `glitch_kwargs`
         - lowpass the resulting signal using :py:func:dsu.filters.dsp.bandpass_signal with `filter_kwargs`
-        - decimate signal at sampling_rate
+        - decimate signal at rate `sampling_rate`
         - remove the bad samples and evaluate the corruption ratio. If too high, then raise an error.
         - interpolate the missing signal e calling :py:meth:pandas.Series.interpolat with `interpolation_kwargs`.
         - inverse the signal to access galvanic conductance (G=1/R)
@@ -51,6 +50,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         Keywords arguments to scale the data.
     corrupted_maxratio: float
         Maximum acceptable ratio of corrupted (bad) samples.
+    sampling_rate: float
+        Rate of output signal (after decimation)
 
     Returns
     -------
