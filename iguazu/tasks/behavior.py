@@ -2,9 +2,9 @@ from typing import Optional
 
 import pandas as pd
 import prefect
+
 from iguazu.functions.behavior import extract_space_stress_spawns_stimulations, \
     extract_space_stress_participant_actions, extract_space_stress_scores
-
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
@@ -192,22 +192,22 @@ class SpaceStressScores(prefect.Task):
                 self.logger.info('Previous task failed, propagating failure')
                 raise IguazuError('Previous task failed')
 
-                actions_file = actions.file
-                stimulations_file = stimulations.file
-                with pd.option_context('mode.chained_assignment', None), \
-                     pd.HDFStore(actions_file, 'r') as actions_store, \
-                        pd.HDFStore(stimulations_file, 'r') as stimulations_store:
-                    df_actions = pd.read_hdf(actions_store, actions_group)
-                    df_stimulations = pd.read_hdf(stimulations_store, stimulations_group)
+            actions_file = actions.file
+            stimulations_file = stimulations.file
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(actions_file, 'r') as actions_store, \
+                    pd.HDFStore(stimulations_file, 'r') as stimulations_store:
+                df_actions = pd.read_hdf(actions_store, actions_group)
+                df_stimulations = pd.read_hdf(stimulations_store, stimulations_group)
 
-                    df_output = extract_space_stress_scores(df_stimulations, df_actions)
-                    state = 'SUCCESS'
-                    meta = get_base_meta(self, state=state)
-                    # Manage output, save to file
-                    task_upload_result(self, df_output, meta, state, output, output_group)
-                    self.logger.info('Extract space-stress final scores finished successfully, '
-                                     'final dataframe has shape %s', df_output.shape)
-                    return output
+                df_output = extract_space_stress_scores(df_stimulations, df_actions)
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state)
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                self.logger.info('Extract space-stress final scores finished successfully, '
+                                 'final dataframe has shape %s', df_output.shape)
+                return output
         except Exception as ex:
             # Manage output, save to file
             task_fail(self, ex, output, output_group)
