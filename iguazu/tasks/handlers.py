@@ -100,7 +100,8 @@ def garbage_collect_handler(task, old_state, new_state):
 
     # only trigger this when we pass from a non finished to a finished state
     if not old_state.is_finished() and new_state.is_finished():
-        logger.debug('Managing garbage collection on change from %s to %s',
+        logger.debug('Managing garbage collection for %s on change from %s to %s',
+                     task.name,
                      type(old_state).__name__,
                      type(new_state).__name__)
         try:

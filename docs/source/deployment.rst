@@ -92,7 +92,9 @@ follow these instructions:
 
    .. code-block:: console
 
-      $ python iguazu/cli.py --registry gcr.io/your-gcp-project-id
+      $ iguazu deploy images --registry eu.gcr.io/your-gcp-project-id
+
+   In our case, ``your-gcp-project-id`` is ``quetzal-omind``.
 
 3. Create a kubernetes cluster. On minikube, follow the
    `minikube documentation <https://kubernetes.io/docs/setup/learning-environment/minikube/>`_.
@@ -119,7 +121,7 @@ follow these instructions:
 
       $ helm init
 
-6. Install the Helm chart into the kubernetes cluster to deploy the Iguazu:
+6. Install the Helm chart into the kubernetes cluster to deploy the Iguazu application:
 
    .. code-block:: console
 

@@ -170,10 +170,12 @@ class ExtractFeatures(prefect.Task):
 
 
 class SummarizePopulation(prefect.Task):
-    def __init__(self, groups, axis_name='sequence', **kwargs):
+    def __init__(self, groups, filename='summary', path='populations', axis_name='sequence', **kwargs):
         super().__init__(**kwargs)
         self.groups = {group.replace('_', '/'): groups[group] for group in groups}
         self.axis_name = axis_name
+        self.filename = filename
+        self.path = path
 
     def run(self, files: List[FileProxy]) -> Optional[FileProxy]:
 
@@ -185,7 +187,7 @@ class SummarizePopulation(prefect.Task):
         self.logger.info('Summarize population on %d files...', n_files)
 
         parent = files[0]
-        output = parent.make_child(filename=self.filename, path=None, suffix=None,
+        output = parent.make_child(filename=self.filename, path=self.path, suffix=None,
                                    extension=".csv", temporary=False)
         output._metadata.clear()
 

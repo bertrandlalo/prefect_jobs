@@ -1,10 +1,13 @@
+import datetime
 import logging
 
 from prefect import Flow
 
+from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.common import SlackTask
+from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
 
 logger = logging.getLogger(__name__)
@@ -61,14 +64,22 @@ def behavior_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     features_files = dataset_flow.terminal_tasks().pop()
 
     # instantiate tasks
-    merge_population = SummarizePopulation(groups={'behavior_spacestress_scores': None})
+    merge_population = SummarizePopulation(
+        # Iguazu task constructor arguments
+        groups={'behavior_spacestress_scores': None},
+        filename='behavior_summary',
+        # Prefect task arguments
+        state_handlers=[garbage_collect_handler, logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(),
+    )
 
     notify = SlackTask(message='Behavior feature summarization finished!')
 
     with Flow('behavior_summary_flow') as flow:
         # Connect/extend this flow with the dataset flow
         flow.update(dataset_flow)
-        population_summary = merge_population(features_files, filename='behavior_summary')
+        population_summary = merge_population(features_files)
 
         # Send slack notification
         notify(upstream_tasks=[population_summary])

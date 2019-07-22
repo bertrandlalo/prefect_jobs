@@ -71,6 +71,7 @@ class SpaceStressSpawnsStimulations(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('SpaceStressSpawnsStimulations failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
@@ -132,6 +133,7 @@ class SpaceStressParticipantActions(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('SpaceStressSpawnsParticipantActions failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
@@ -210,4 +212,5 @@ class SpaceStressScores(prefect.Task):
                 return output
         except Exception as ex:
             # Manage output, save to file
+            self.logger.warning('SpaceStressScores failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)

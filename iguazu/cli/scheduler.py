@@ -59,7 +59,6 @@ def run(scheduler_address):
                       trigger=IntervalTrigger(minutes=1))
 
     # Run the galvanic feature extraction every hour
-    # For the moment, this is every 2 minutes (for testing/debugging purposes)
     galvanic_features_flow = registry['galvanic_features']
     galvanic_features_kwargs = dict(
         data_source='quetzal',
@@ -73,12 +72,6 @@ def run(scheduler_address):
                       #trigger=CronTrigger(minute=20))
                       trigger=IntervalTrigger(minutes=60),
                       max_instances=1)
-    # trigger=CronTrigger(minute=23))
-    #
-    # for flow_name in ('print_dataset', 'galvanic_features'):
-    #     scheduler.add_job(execute_flow, args=(registry[flow_name], {}, executor, context_parameters),
-    #                       id=flow_name, name=flow_name,
-    #                       trigger=CronTrigger(minute=57))
 
     # Galvanic summarization every X time
     galvanic_summary_flow = registry['summarize_galvanic']
@@ -89,9 +82,26 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(galvanic_summary_flow, galvanic_summary_kwags, executor, context_parameters),
                       id=f'galvanic-summary-{uuid.uuid4()}', name='galvanic-summary',
+                      #trigger=IntervalTrigger(minutes=1),
+                      trigger=CronTrigger(day=7, hour=0),
+                      max_instances=1)
+
+    # Run the behavior feature extraction every hour
+    behavior_features_flow = registry['behavior_features']
+    behavior_features_kwargs = dict(
+        data_source='quetzal',
+        workspace_name=workspace_name,
+        limit=50,
+        shuffle=True,
+    )
+    scheduler.add_job(execute_flow,
+                      args=(behavior_features_flow, behavior_features_kwargs, executor, context_parameters),
+                      id=f'behavior-features-{uuid.uuid4()}', name='behavior-features',
+                      #trigger=CronTrigger(minute=20))
                       trigger=IntervalTrigger(minutes=1),
                       max_instances=1)
 
+    logger.info('Scheduler jobs configured. Running scheduler...')
     scheduler.start()
 
 
