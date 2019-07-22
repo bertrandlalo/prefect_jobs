@@ -5,9 +5,9 @@ import prefect
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
-from iguazu.helpers.files import FileProxy, QuetzalFile
-from iguazu.helpers.tasks import get_base_meta
+from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
+from iguazu.helpers.tasks import get_base_meta
 
 
 class ExtractFeatures(prefect.Task):
@@ -82,7 +82,7 @@ class ExtractFeatures(prefect.Task):
                 meta = get_base_meta(self, state='SUCCESS')
 
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail', exc_info=True)
+                self.logger.warning('Report VR sequences graceful fail: %s', ex)
                 features = pd.DataFrame()
                 meta = get_base_meta(self, state='FAILURE', exception=str(ex))
 
@@ -185,7 +185,7 @@ class SummarizePopulation(prefect.Task):
         self.logger.info('Summarize population on %d files...', n_files)
 
         parent = files[0]
-        output = parent.make_child(filename='gsr', path='populations',
+        output = parent.make_child(filename=self.filename, path=None, suffix=None,
                                    extension=".csv", temporary=False)
         output._metadata.clear()
 
@@ -195,30 +195,22 @@ class SummarizePopulation(prefect.Task):
                              i, n_files, 100 * i / n_files, file)
             if file.metadata['iguazu']['state'] != 'SUCCESS':
                 continue
-            # TODO: make file_id or some abstract id property in FileProxy to
-            #       avoid this manual management according to the proxy type
-            if isinstance(file, QuetzalFile):
-                file_id = file._file_id
-            else:  # LocalFile
-                file_id = file._file.stem
+            file_id = file._file_id
+
             with pd.option_context('mode.chained_assignment', None), \
                  pd.HDFStore(file.file, 'r') as store:
-
                 data_summary_file = pd.DataFrame()
                 for group, columns in self.groups.items():
                     data = pd.read_hdf(store, group, columns=columns)
                     data_summary_file = data_summary_file.join(data, how="outer")
-
-                if data_summary_file.empty:
-                    self.logger.info('File %s was empty', file)
-                else:
+                if not data_summary_file.empty:
                     data_summary_file.loc[:, 'file_id'] = file_id
                     data_list_population.append(data_summary_file)
 
-        self.logger.info('Final concatenation of all files...')
-        data_output = pd.concat(data_list_population, axis=0, sort=False)
+        data_output = pd.concat(data_list_population, axis=0)
         data_output = data_output.rename_axis(self.axis_name).reset_index()
-        data_output.to_csv(output.file, index=False)
+        data_output.to_csv(output.file)
+
         output.upload()
 
         self.logger.info('Summarize population succeeded, saved output at %s',
