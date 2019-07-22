@@ -219,6 +219,7 @@ class LocalFile(FileProxy):
     def __init__(self, file, base_dir):
         super().__init__()
         self._file = pathlib.Path(file)
+        self._file_id = str(self._file)
         self._base_dir = pathlib.Path(base_dir)
         self._relative_dir = self._file.relative_to(base_dir).parent
         self._meta_file = self._file.with_name(self._file.name + ".json")
@@ -238,6 +239,8 @@ class LocalFile(FileProxy):
         if not self._metadata:  # TODO: if json is present but not metadata, read it from there
             self._metadata['base']['filename'] = str(self._file.name)
             self._metadata['base']['path'] = str(self._file.parent)
+            self._metadata['base']['id'] = self._file_id
+
         return self._metadata
 
     def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'LocalFile':
@@ -301,7 +304,8 @@ class LocalFile(FileProxy):
             child._metadata.pop('base', None)
             child._metadata['base']['filename'] = new.name
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
-            child._metadata['iguazu']['parents'] = str(self._file)
+            child._metadata['base']['id'] = child._file_id
+            child._metadata['iguazu']['parents'] = base_metadata['id']
 
         return child
 

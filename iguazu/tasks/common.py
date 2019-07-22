@@ -6,8 +6,8 @@ import pandas as pd
 import prefect
 
 from iguazu.helpers.files import FileProxy, LocalFile
-from iguazu.helpers.tasks import get_base_meta
 from iguazu.helpers.states import GRACEFULFAIL
+from iguazu.helpers.tasks import get_base_meta
 
 
 class ListFiles(prefect.Task):
@@ -128,7 +128,7 @@ class MergeFilesFromGroups(prefect.Task):
         except Exception as ex:
             self.logger.warning('MergeFilesFromGroups clean graceful fail', exc_info=True)
             state = 'FAILURE'
-            meta = get_base_meta(self, state=state)
+            meta = get_base_meta(self, state=state, ex=ex)
 
         output.metadata['iguazu'].update({self.name: meta, 'state': state})
         output.upload()
