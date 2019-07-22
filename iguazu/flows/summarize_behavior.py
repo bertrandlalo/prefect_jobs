@@ -34,32 +34,25 @@ def behavior_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     # In case there was no query, set a default one
     # In case there was no query, set a default one
     default_query = """\
-            SELECT
+        SELECT
             id,
-            filename
-            FROM base
-            LEFT JOIN iguazu USING (id)
-            LEFT JOIN omi using (id)
-            WHERE
-                base.state = 'READY' AND                 -- no temporary files
-                base.filename LIKE '%.hdf5' AND          -- only HDF5 files
-                iguazu.gsr::json->>'status'  = 'SUCCESS'   -- files not fully processed by iguazu on this flow
-            ORDER BY base.id                             -- always in the same order
-        """
-    # This secondary, alternative query is defined for the case when a new
-    # quetzal workspace is created, and the iguazu.gsr metadata does not even
-    # exist. We need to to do this because the iguazu.gsr column does not exist
-    # and postgres does not permit querying a non-existent column
-    default_alt_query = """\
-            SELECT
-            id,
-            filename
-            FROM base
-            LEFT JOIN iguazu USING (id)
-            WHERE
-                base.state = 'READY'           -- no temporary files
-            ORDER BY base.id                         -- always in the same order
-        """
+            filename,
+            iguazu.behavior::json->>'status' AS status,
+            iguazu.state
+        FROM base
+        LEFT JOIN iguazu USING (id)
+        LEFT JOIN omi using (id)
+        WHERE
+            base.state = 'READY' AND                    -- no temporary files
+            base.filename LIKE '%_behavior.hdf5' AND         -- only HDF5 files
+            base.filename NOT LIKE '%__behavior_behavior.hdf5' AND -- remove incorrect cases where we processed twice
+            COALESCE(iguazu."MergeFilesFromGroups", '{}')::json->>'state' = 'SUCCESS' -- Only files whose mergefilefromgroups was successful
+            -- AND iguazu.state = 'SUCCESS'
+            --iguazu.gsr::json->>'status' = 'SUCCESS'     -- files not fully processed by iguazu on this flow
+        ORDER BY base.id                                -- always in the same order
+    """
+    default_alt_query = None
+
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query
 
