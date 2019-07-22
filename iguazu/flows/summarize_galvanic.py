@@ -32,23 +32,36 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
         families.setdefault(name, required_families[name])
     kwargs['families'] = families
     # In case there was no query, set a default one
+    # In case there was no query, set a default one
     default_query = """\
-            SELECT id, filename FROM base
+            SELECT
+            id,
+            filename
+            FROM base
             LEFT JOIN iguazu USING (id)
-            WHERE 
-            base.filename LIKE '%_gsr.hdf5' AND 
-            iguazu.id IS NOT NULL
-            LIMIT 3
-    """
+            LEFT JOIN omi using (id)
+            WHERE
+                base.state = 'READY' AND                 -- no temporary files
+                base.filename LIKE '%.hdf5' AND          -- only HDF5 files
+                iguazu.gsr::json->>'status'  = 'SUCCESS'   -- files not fully processed by iguazu on this flow
+            ORDER BY base.id                             -- always in the same order
+        """
+    # This secondary, alternative query is defined for the case when a new
+    # quetzal workspace is created, and the iguazu.gsr metadata does not even
+    # exist. We need to to do this because the iguazu.gsr column does not exist
+    # and postgres does not permit querying a non-existent column
     default_alt_query = """\
-            SELECT id, filename FROM base
+            SELECT
+            id,
+            filename
+            FROM base
             LEFT JOIN iguazu USING (id)
-            WHERE 
-            base.filename LIKE '%_gsr.hdf5' AND 
-            iguazu.id IS NOT NULL
-            LIMIT 3
-    """
-    # Todo : change default_alt_query?
+            WHERE
+                base.state = 'READY' AND             -- no temporary files
+                base.filename LIKE '%.hdf5'          -- only HDF5 files
+                AND base.size < 10000000
+            ORDER BY base.id                         -- always in the same order
+        """
     kwargs['query'] = query or default_query
     kwargs['alt_query'] = alt_query or default_alt_query
 
