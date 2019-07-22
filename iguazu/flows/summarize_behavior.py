@@ -1,10 +1,10 @@
 import logging
 
 from prefect import Flow
-from prefect.tasks.notifications import SlackTask
 
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
+from iguazu.tasks.common import SlackTask
 from iguazu.tasks.summarize import SummarizePopulation
 
 logger = logging.getLogger(__name__)
