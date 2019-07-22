@@ -106,12 +106,12 @@ def behavior_features_flow(*, force=False, workspace_name=None, query=None, alt_
         flow.update(dataset_flow)
 
         # Behavior flow
-        participant_actions = extract_participant_actions.map(events=events)
-        spawns_stimulations = extract_spawns_stimulations.map(events=events)
-        scores = extract_scores.map(parent=events, stimulations=spawns_stimulations, actions=participant_actions)
+        actions = extract_participant_actions.map(events=events)
+        stimulations = extract_spawns_stimulations.map(events=events)
+        scores = extract_scores.map(parent=events, stimulations=stimulations, actions=actions)
 
         subject_summary = merge_subject.map(parent=events,
-                                            behavior_spacestress_actions=participant_actions,
-                                            behavior_spacestress_stimulations=spawns_stimulations,
+                                            behavior_spacestress_actions=actions,
+                                            behavior_spacestress_stimulations=stimulations,
                                             behavior_spacestress_scores=scores)
     return flow
