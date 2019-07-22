@@ -107,6 +107,68 @@ class ExtractFeatures(prefect.Task):
         return output
 
 
+# class ExtractPopulationDataFrame(prefect.Task):
+#
+#     def __init__(self, groups, **kwargs):
+#         super().__init__(**kwargs)
+#         self.groups = groups
+#
+#     def run(self, file: FileProxy) -> pd.DataFrame:
+#         self.logger.info('Extracting data from %s', file)
+#
+#         df = pd.DataFrame()
+#         if file.metadata['iguazu']['state'] != 'SUCCESS':
+#             return df
+#
+#         # TODO: make file_id or some abstract id property in FileProxy to
+#         #       avoid this manual management according to the proxy type
+#         if isinstance(file, QuetzalFile):
+#             file_id = file._file_id
+#         else:  # LocalFile
+#             file_id = file._file.stem
+#
+#         with pd.option_context('mode.chained_assignment', None), \
+#              pd.HDFStore(str(file.file), 'r') as store:
+#
+#             for group, columns in self.groups.items():
+#                 data = pd.read_hdf(store, group, columns=columns)
+#                 df = df.join(data, how="outer")
+#
+#             if df.empty:
+#                 self.logger.info('File %s was empty', file)
+#             else:
+#                 df.loc[:, 'file_id'] = file_id
+#
+#         return df
+#
+#
+# class SummarizePopulationNew(prefect.Task):
+#
+#     def __init__(self, axis_name='sequence', filename='summary', **kwargs):
+#         super().__init__(**kwargs)
+#         self.axis_name = axis_name
+#         self.filename = filename
+#
+#     def run(self,
+#             dataframes: List[pd.DataFrame],
+#             workspace_id: int) -> Optional[FileProxy]:
+#
+#         if not dataframes:
+#             self.logger.warning('Cannot summarize population with empty results')
+#             return None
+#
+#         n_df = len(dataframes)
+#         self.logger.info('Summarize population on %d dataframes...', n_df)
+#
+#         output = reference_file.make_child(filename=self.filename,
+#                                            path='populations',
+#                                            extension='.csv',
+#                                            temporary=False)
+#         output._metadata.clear()
+#
+#         # TODO: the rest...
+
+
 class SummarizePopulation(prefect.Task):
     def __init__(self, groups, axis_name='sequence', **kwargs):
         super().__init__(**kwargs)

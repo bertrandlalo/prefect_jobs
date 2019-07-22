@@ -4,7 +4,7 @@ import copy
 import json
 import logging
 import pathlib
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from prefect import context
 from quetzal.client import helpers
@@ -23,6 +23,11 @@ class FileProxy(abc.ABC):
     @property
     @abc.abstractmethod
     def metadata(self) -> Dict[str, Dict[str, Any]]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def id(self) -> Optional[str]:
         pass
 
     @abc.abstractmethod
@@ -67,6 +72,12 @@ class QuetzalFile(FileProxy):
             quetzal_metadata = helpers.file.metadata(self.client, self._file_id, self._wid)
             self._metadata.update(quetzal_metadata)
         return self._metadata
+
+    @property
+    def id(self) -> Optional[str]:
+        if self._file_id is None:
+            return None
+        return str(self._file_id)
 
     @property
     def client(self):
@@ -239,6 +250,10 @@ class LocalFile(FileProxy):
             self._metadata['base']['filename'] = str(self._file.name)
             self._metadata['base']['path'] = str(self._file.parent)
         return self._metadata
+
+    @property
+    def id(self) -> Optional[str]:
+        return str(self._file)
 
     def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'LocalFile':
         """ Creates a child FileProxy that inherits from its parent's metadata.
