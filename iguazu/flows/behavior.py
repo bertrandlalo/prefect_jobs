@@ -62,7 +62,6 @@ def behavior_features_flow(*, force=False, workspace_name=None, query=None, alt_
         WHERE
             base.state = 'READY' AND             -- no temporary files
             base.filename LIKE '%.hdf5'          -- only HDF5 files
-            AND base.size < 10000000
         ORDER BY base.id                         -- always in the same order
     """
     kwargs['query'] = query or default_query
