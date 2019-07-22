@@ -1,16 +1,16 @@
 import logging
 
+logger = logging.getLogger()
+
 import numpy as np
 import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
-from dsu.quality import quality_gsr
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
+from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
-
-logger = logging.getLogger(__name__)
-
+from iguazu.helpers.tasks import IguazuError  # Todo: move IguazuError to a module exceptions.py
 
 def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio, sampling_rate):
@@ -24,7 +24,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
 
         - detect bad samples calling :py:func:dsu.quality.detect_bad_from_amplitude with `glitch_kwargs`
         - lowpass the resulting signal using :py:func:dsu.filters.dsp.bandpass_signal with `filter_kwargs`
-        - decimate signal at sampling_rate
+        - decimate signal at rate `sampling_rate`
         - remove the bad samples and evaluate the corruption ratio. If too high, then raise an error.
         - interpolate the missing signal e calling :py:meth:pandas.Series.interpolat with `interpolation_kwargs`.
         - inverse the signal to access galvanic conductance (G=1/R)
@@ -51,6 +51,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         Keywords arguments to scale the data.
     corrupted_maxratio: float
         Maximum acceptable ratio of corrupted (bad) samples.
+    sampling_rate: float
+        Rate of output signal (after decimation)
 
     Returns
     -------
@@ -84,9 +86,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
-        raise Exception(
-            'Artifact corruption of {corrupted_ratio} exceeds {maxratio}.'.format(corrupted_ratio=corrupted_ratio,
-                                                                                  maxratio=corrupted_maxratio))
+        raise IguazuError('Artifact corruption of %s exceeds  %s.', corrupted_ratio, corrupted_maxratio)
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
     # Pandas does not like tz-aware timestamps when interpolating
@@ -97,8 +97,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-            .interpolate(**interpolation_kwargs)
-            .set_index(data_clean.index)
+                .interpolate(**interpolation_kwargs)
+                .set_index(data_clean.index)
         )
 
     # Pandas does not like tz-aware timestamps when interpolating
@@ -109,7 +109,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(method='pchip')
+                .interpolate(**interpolation_kwargs)
                 .set_index(data_clean.index)
         )
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
@@ -221,7 +221,7 @@ def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
 
     if 'bad' not in data:
-        raise Exception('Received data without a column named "bad"')
+        raise ValueError('Received data without a column named "bad"')
 
     bad = data.bad
 

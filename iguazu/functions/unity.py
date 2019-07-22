@@ -1,14 +1,12 @@
 import logging
+
+logger = logging.getLogger()
 from typing import List
 
 import pandas as pd
 from datascience_utils.unity import fix_unity_events
 from dsu.unity import extract_marker_version, extract_complete_sequences, \
     extract_complete_sequence_times
-
-
-logger = logging.getLogger(__name__)
-
 
 # TODO: schema xdf_validation should avoid using this ugly trick.
 #       When refactoring and migrating pipeline_hdf to iguazu,
@@ -112,7 +110,7 @@ def extract_sequences(events: pd.DataFrame, sequences: List[str] = None) -> pd.D
         logger.warning('Sequences report for legacy events not yet implemented')
         return pd.DataFrame()
 
-    if 'xdf_timestamp' in events:
+    if 'xdf_timestamps' in events:
         events.drop('xdf_timestamps', axis=1, inplace=True)
 
     # correct unity events # TODO : put that in the conversion xdf to hdf
