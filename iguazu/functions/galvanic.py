@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger()
 
 import numpy as np
@@ -9,6 +10,7 @@ from dsu.dsp.peaks import detect_peaks
 from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
+from iguazu.helpers.tasks import IguazuError  # Todo: move IguazuError to a module exceptions.py
 
 def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio, sampling_rate):
@@ -84,9 +86,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
-        raise Exception(
-            'Artifact corruption of {corrupted_ratio} exceeds {maxratio}.'.format(corrupted_ratio=corrupted_ratio,
-                                                                                  maxratio=corrupted_maxratio))
+        raise IguazuError('Artifact corruption of %s exceeds  %s.', corrupted_ratio, corrupted_maxratio)
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
     # Pandas does not like tz-aware timestamps when interpolating
@@ -221,7 +221,7 @@ def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
 
     if 'bad' not in data:
-        raise Exception('Received data without a column named "bad"')
+        raise ValueError('Received data without a column named "bad"')
 
     bad = data.bad
 
