@@ -7,11 +7,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
-from prefect.engine.runner import ENDRUN
 from quetzal.client import QuetzalAPIException, helpers
 
 from iguazu.helpers.files import QuetzalFile
-from iguazu.helpers.states import SkippedResult
 
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
@@ -93,12 +91,19 @@ class Query(QuetzalBaseTask):
 
     """
 
-    def __init__(self, as_proxy: bool = False, **kwargs):
+    def __init__(self,
+                 as_proxy: bool = False,
+                 shuffle: bool = False,
+                 limit: Optional[int] = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self._as_proxy = as_proxy
+        self.limit = limit
+        self.shuffle = shuffle
 
     def run(self,
             query: str,
+            alt_query: Optional[str] = None,
             workspace_id: Optional[int] = None,
             id_column: Optional[str] = None) -> List[ResultSetType]:
         """ Perform the Quetzal SQL query
@@ -107,6 +112,9 @@ class Query(QuetzalBaseTask):
         ----------
         query: str
             Query in postgreSQL dialect.
+        alt_query: str
+            Alternate query, also in postgreSQL dialect, to perform in case the
+            initial `query` fails.
         workspace_id: int
             Workspace where the query should be executed. If not set, it uses
             the global workspace.
@@ -119,19 +127,41 @@ class Query(QuetzalBaseTask):
             A list of dictionaries, one for each result row.
 
         """
-        for k,v in context.items():
-            self.logger.info('Context: %s = %s', k ,v)
-        # from remote_pdb import RemotePdb
-        # RemotePdb('0.0.0.0', 4444).set_trace()
-        self.logger.debug('Querying Quetzal at %s with SQL=%s',
-                          self.client.configuration.host,
-                          query)
+        if not query:
+            raise signals.FAIL('Query is empty')
+
+        self.logger.info('Querying Quetzal at %s with SQL=\n%s',
+                         self.client.configuration.host,
+                         query)
+        rows, total = None, 0
         try:
             rows, total = helpers.query(self.client, workspace_id, query)
         except QuetzalAPIException as ex:
-            self.logger.warning('Quetzal query task failed: %s', ex.title)
-            raise
-        self.logger.debug('Query gave %d results', total)
+            self.logger.warning('Quetzal query failed: %s', ex.title)
+            if not alt_query:
+                raise
+
+        # Try the alt query if we failed and alt_query exists
+        if rows is None and alt_query:
+            self.logger.info('Querying Quetzal with alternate query SQL=\n%s', alt_query)
+            try:
+                rows, total = helpers.query(self.client, workspace_id, alt_query)
+            except QuetzalAPIException as ex:
+                self.logger.warning('Quetzal alternate query also failed: %s', ex.title)
+                raise
+
+        # Handle results
+        self.logger.info('Query gave %d results', total)
+
+        # Shuffle the results
+        if self.shuffle:
+            random.shuffle(rows)
+
+        # Only keep N results
+        if self.limit is not None and total > self.limit:
+            rows = rows[:self.limit]
+            total = len(rows)
+            self.logger.info('Query was limited to %d results', total)
 
         if self._as_proxy:
             proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
@@ -217,7 +247,6 @@ class CreateWorkspace(QuetzalBaseTask):
             Workspace identifier on the Quetzal API.
 
         """
-
         random_name = 'iguazu-{date}-{rnd}'.format(
             date=datetime.datetime.now().strftime('%Y%m%d'),
             rnd=''.join(random.choices(string.ascii_lowercase, k=5))

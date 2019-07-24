@@ -52,8 +52,33 @@
 scheduler:
   name: scheduler
   image:
-    repository: gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.0.1
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
+    tag: 0.0.4
+    pullPolicy: Always
+  replicas: 1
+  resources: {}
+    # limits:
+    #   cpu: 1.8
+    #   memory: 6G
+    # requests:
+    #   cpu: 1.8
+    #   memory: 6G
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+  env:
+    - name: QUETZAL_URL
+      value: "https://quetzal.omind.me/api/v1"
+    - name: QUETZAL_INSECURE
+      value: "0"
+    - name: IGUAZU_WORKSPACE
+      value: "iguazu-workspace-v2"
+
+dask_scheduler:
+  name: dask-scheduler
+  image:
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
+    tag: 0.0.4
     pullPolicy: Always
   replicas: 1
   serviceType: "LoadBalancer"
@@ -69,18 +94,18 @@ scheduler:
   nodeSelector: {}
   affinity: {}
 
-webUI:
+dask_scheduler_ui:
   name: webui
   servicePort: 80
 
-worker:
-  name: worker
+dask_worker:
+  name: dask-worker
   image:
-    repository: gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.0.1
+    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
+    tag: 0.0.4
     pullPolicy: Always
-  replicas: 1
-  maxReplicas: 4
+  replicas: 2         # Number of MINIMUM dask-workers
+  maxReplicas: 16     # Number of MAXIMUM dkas-workers
   aptPackages: >-
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1
@@ -102,3 +127,13 @@ worker:
   tolerations: []
   nodeSelector: {}
   affinity: {}
+
+quetzal:
+  # Set these values with the URL, username and password used
+  url: https://quetzal.omind.me/api/v1
+  username: iguazu
+  password:
+  insecure: "0"
+
+slack:
+  url: "https://hooks.slack.com/services/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"

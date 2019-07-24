@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ template "iguazu.fullname" . }}-scheduler
+  name: {{ template "iguazu.fullname" . }}-dask-scheduler
   labels:
     app: {{ template "iguazu.name" . }}
     heritage: {{ .Release.Service | quote }}
     release: {{ .Release.Name | quote }}
     chart: {{ template "iguazu.chart" . }}
-    component: scheduler
+    component: dask-scheduler
 spec:
-  replicas: {{ .Values.scheduler.replicas }}
+  replicas: {{ .Values.dask_scheduler.replicas }}
   selector:
     matchLabels:
       app: {{ template "iguazu.name" . }}
       release: {{ .Release.Name | quote }}
-      component: scheduler
+      component: dask-scheduler
   strategy:
     type: RollingUpdate
   template:
@@ -22,34 +22,34 @@ spec:
       labels:
         app: {{ template "iguazu.name" . }}
         release: {{ .Release.Name | quote }}
-        component: scheduler
+        component: dask-scheduler
     spec:
       containers:
-        - name: {{ template "iguazu.fullname" . }}-scheduler
-          image: "{{ .Values.scheduler.image.repository }}:{{ .Values.scheduler.image.tag }}"
-          imagePullPolicy: {{ .Values.scheduler.image.pullPolicy }}
+        - name: {{ template "iguazu.fullname" . }}-dask-scheduler
+          image: "{{ .Values.dask_scheduler.image.repository }}:{{ .Values.dask_scheduler.image.tag }}"
+          imagePullPolicy: "{{ .Values.dask_scheduler.image.pullPolicy }}"
           args:
             - dask-scheduler
             - --port
-            - "{{ .Values.scheduler.servicePort }}"
-            - --bokeh-port
-            - "8787"
+            - "{{ .Values.dask_scheduler.servicePort }}"
+            - --dashboard-address
+            - ":8787"
           ports:
             - containerPort: 8786
             - containerPort: 8787
           resources:
-{{ toYaml .Values.scheduler.resources | indent 12 }}
+{{ toYaml .Values.dask_scheduler.resources | indent 12 }}
           env:
-{{ toYaml .Values.scheduler.env | indent 12 }}
-    {{- with .Values.scheduler.nodeSelector }}
+{{ toYaml .Values.dask_scheduler.env | indent 12 }}
+    {{- with .Values.dask_scheduler.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
     {{- end }}
-    {{- with .Values.scheduler.affinity }}
+    {{- with .Values.dask_scheduler.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}
     {{- end }}
-    {{- with .Values.scheduler.tolerations }}
+    {{- with .Values.dask_scheduler.tolerations }}
       tolerations:
 {{ toYaml . | indent 8 }}
     {{- end }}

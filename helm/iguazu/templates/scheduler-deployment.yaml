@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "iguazu.fullname" . }}-scheduler
+  labels:
+    app: {{ template "iguazu.name" . }}
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: {{ template "iguazu.chart" . }}
+    component: scheduler
+spec:
+  replicas: {{ .Values.scheduler.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "iguazu.name" . }}
+      release: {{ .Release.Name | quote }}
+      component: scheduler
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: {{ template "iguazu.name" . }}
+        release: {{ .Release.Name | quote }}
+        component: scheduler
+    spec:
+      containers:
+        - name: {{ template "iguazu.fullname" . }}-scheduler
+          image: "{{ .Values.scheduler.image.repository }}:{{ .Values.scheduler.image.tag }}"
+          imagePullPolicy: "{{ .Values.scheduler.image.pullPolicy }}"
+          args:
+            - iguazu
+            - --log-level
+            - DEBUG
+            - scheduler
+            - run
+            - --scheduler-address
+            - {{ template "iguazu.fullname" . }}-dask-scheduler:{{ .Values.dask_scheduler.servicePort }}
+          resources:
+{{ toYaml .Values.scheduler.resources | indent 12 }}
+          env:
+            - name: QUETZAL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: username
+            - name: QUETZAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: password
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "iguazu.fullname" . }}-secrets
+                  key: slack_url
+{{ toYaml .Values.scheduler.env | indent 12 }}
+    {{- with .Values.scheduler.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.scheduler.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.scheduler.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

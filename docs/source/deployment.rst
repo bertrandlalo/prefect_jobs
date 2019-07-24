@@ -22,8 +22,11 @@ Status
 - FAIL
 
 
-Cluster
-=======
+Clusters
+========
+
+Docker-compose
+--------------
 
 To deploy a docker-compose "cluster" (it's not really a cluster), please follow
 these steps:
@@ -76,20 +79,24 @@ these steps:
       $ docker-compose up --scale worker=2
 
 
-Kubernetes cluster
-==================
+Kubernetes
+----------
 
 To deploy on kubernetes (either a Google Cloud Platform or a local minikube),
 follow these instructions:
 
-1. Before doing anything, publish the Iguazu Docker images to a registry. In
+1. Make sure to follow steps 1 and 2 on the docker-compose section above.
+
+2. Publish the Iguazu Docker images to a registry. In
    this case, the Google Cloud Registry:
 
    .. code-block:: console
 
-      $ python iguazu/cli.py --registry gcr.io/your-gcp-project-id
+      $ iguazu deploy images --registry eu.gcr.io/your-gcp-project-id
 
-2. Create a kubernetes cluster. On minikube, follow the
+   In our case, ``your-gcp-project-id`` is ``quetzal-omind``.
+
+3. Create a kubernetes cluster. On minikube, follow the
    `minikube documentation <https://kubernetes.io/docs/setup/learning-environment/minikube/>`_.
    For Google Cloud Platform (GCP), create one with:
 
@@ -106,21 +113,28 @@ follow these instructions:
       CURRENT   NAME                 CLUSTER             AUTHINFO                                                      NAMESPACE
       *         xxx_iguazu-cluster   xxx_iguazu-cluster  xxx_iguazu-cluster
 
-3. Install `Helm <https://helm.sh/>`_ on your local computer.
+4. Install `Helm <https://helm.sh/>`_ on your local computer.
 
-4. Deploy *Tiller* (the Helm kubernetes application) on your kubernetes cluster with:
+5. Deploy *Tiller* (the Helm kubernetes application) on your kubernetes cluster with:
 
    .. code-block:: console
 
       $ helm init
 
-5. Install the Helm chart into the kubernetes cluster to deploy the Iguazu:
+6. Install the Helm chart into the kubernetes cluster to deploy the Iguazu application:
 
    .. code-block:: console
 
-      $ helm install --name somename ./helm/iguazu
+      $ helm install --name somename \
+          --set-string quetzal.username=USERNAME \
+          --set-string quetzal.password=PASSWORD \
+          ./helm/iguazu
 
-6. Get the scheduler service external IP. This is the IP that you will need to
+   where ``somename`` is an optional name to keep track of helm applications,
+   ``USERNAME`` and ``PASSWORD`` are the Quetzal user and password that will
+   be used by Iguazu to run its scheduled flows.
+
+7. Get the scheduler service external IP. This is the IP that you will need to
    use as the dask scheduler.
 
    .. code-block:: console
@@ -129,7 +143,7 @@ follow these instructions:
       NAME                        TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)                       AGE
       somename-iguazu-scheduler   LoadBalancer   10.47.255.179   35.240.37.119   8786:30392/TCP,80:31366/TCP   67s
 
-7. If you want to pause the cluster on GCP:
+8. If you want to pause the cluster on GCP:
 
    .. code-block:: console
 

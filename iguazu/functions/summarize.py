@@ -127,32 +127,33 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                     custom = feature_definition["custom"]
                     if custom == "linregress":
                         if tmp.empty:
-                            feat =  pd.DataFrame(columns=[column], index=[feature_name + "_slope", feature_name + "_rvalue"],
-                                    data=[empty_policy, empty_policy] ).T
+                            feat = pd.DataFrame(columns=columns,
+                                                index=[feature_name + "_slope", feature_name + "_rvalue"],
+                                                data=np.array([[empty_policy] * len(columns)] * 2)).T
                         else:
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
                                 if tmp_col.empty:
-                                    slope,  rvalue = empty_policy, empty_policy
+                                    slope, rvalue = empty_policy, empty_policy
                                 else:
                                     x = tmp_col.values.astype(float)
                                     y = tmp_col.index
                                     slope, intercept, rvalue, pvalue, stderr = linregress(x, y)
 
                                 feat.append(pd.DataFrame(index=[feature_name + "_slope", feature_name + "_rvalue"],
-                                                           data=[slope, rvalue], columns=[column]))
+                                                         data=[slope, rvalue], columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
                     elif custom == "auc":
                         if tmp.empty:
                             feat = pd.DataFrame(columns=columns,
                                                 index=[feature_name],
-                                                data=[empty_policy]*len(columns)).T
+                                                data=[empty_policy] * len(columns)).T
                         else:
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
-                                if len(tmp_col) <=1 : # At least 2 points are needed to compute area under curve
+                                if len(tmp_col) <= 1:  # At least 2 points are needed to compute area under curve
                                     auc_value = empty_policy
                                 else:
                                     y = tmp_col.values.astype(float)
@@ -177,7 +178,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                         _func = getattr(m, class_name)
                         feat = tmp.astype(float).apply(_func)
 
-                if feature_definition["divide_by_duration"] and type(feat) in [int, float]:
+                if feature_definition["divide_by_duration"]:
                     feat /= duration
 
                 if type(feat) == pd.Series:
@@ -190,47 +191,17 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
             # small magic to melt the DataFrame in a flat (one row) one, with columns are
             # renamed with their name with as suffix "_" + index name,
             #  that is columns are: column-name_feature-name
-            features_on_sequence_flat = features_on_sequence.reset_index().melt(id_vars=['index'], value_vars=features_on_sequence.columns)
-            features_on_sequence_flat['name'] = features_on_sequence_flat['variable'] + '_' + features_on_sequence_flat['index']
+            features_on_sequence_flat = features_on_sequence.reset_index().melt(id_vars=['index'],
+                                                                                value_vars=features_on_sequence.columns)
+            features_on_sequence_flat['name'] = features_on_sequence_flat['variable'] + '_' + features_on_sequence_flat[
+                'index']
             features_on_sequence_flat = features_on_sequence_flat[['name', 'value']].set_index('name').transpose()
             features_on_sequence_flat.index = [sequence_occurence]
+            # drop columns that have ONLY NaNs
             features_on_sequence_flat = features_on_sequence_flat.dropna(how="all", axis=1)
 
-            # drop columns that have ONLY NaNs
-
-            # features_on_sequence.index = pd.MultiIndex.from_product([features_on_sequence.index, [sequence_occurence]],
-            #                                                         names=["feature", "sequence"])
             features.append(features_on_sequence_flat)
     features = pd.concat(features, sort=False)
 
     return features
 
-
-
-## For testing purpose
-
-# fname = "/Users/raph/OMIND_SERVER/DATA/DATA_testing/poc_jobs_preprocessed3/data_2019-03-29.14.36.17_df30e76534f6aa2f53cb9bbe3a4d9dd135c5c2da8ce8b7645bb8fdd6461c3b2a"
-# scr_data = pd.read_hdf(fname + "_clean_cvx_scr.hdf5", "/gsr/timeseries/scrpeaks")
-# scl_data = pd.read_hdf(fname + "_clean_cvx.hdf5", "/gsr/timeseries/deconvoluted")
-#
-# sequences_report = pd.read_hdf(fname + "_sequences.hdf5", "/offline/sequences_report")
-# scr_feature_definitions = { "tau": {"class": "numpy.sum", "columns": ["SCR_peaks_detected"],
-#                                 "divide_by_duration": True, "empty_policy": 0.0, "drop_bad_samples": True},
-#                             "median": {"class": "numpy.nanmedian", "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True}}
-#
-# scl_columns = ['F_clean_inversed_lowpassed_zscored_SCL']
-# scl_feature_definitions = {
-# "median": {"class": "numpy.nanmedian", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "std": {"class": "numpy.nanstd", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "ptp": {"class": "numpy.ptp", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "linregress": {"custom": "linregress", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-# "auc": {"custom": "auc", "columns": scl_columns,
-#                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True},
-#                              }
-# scr_features = signal_to_feature(scr_data, sequences_report, feature_definitions=scr_feature_definitions, sequences=None)
-# scl_features = signal_to_feature(scl_data, sequences_report, feature_definitions=scl_feature_definitions, sequences=None)

@@ -6,16 +6,20 @@ from setuptools import setup, find_packages
 
 
 dependencies = [
+    "APScheduler",
     "numpy",
     "scipy",
     "pandas",
+    "matplotlib",
     "tables",
     "tzlocal",
     "simplegeneric",
     "click",
     "prefect",
     "graphviz",
-    "dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@01b4f57#egg=dsu",
+    "docker",
+    "coloredlogs",
+    'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0#egg=dsu',
     "quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@268b5f9#egg=quetzal-client"
  ]
 build_dependencies = dependencies + ['pytest-runner']
@@ -39,6 +43,12 @@ setup_args = dict(
     install_requires=dependencies,
     python_requires='>=3.6',
     zip_safe=False,
+    entry_points={
+        'console_scripts': [
+            'iguazu = iguazu.cli.main:cli',
+        ],
+    },
+    version='0.0.4',  # TODO: use versioneer
 )
 
 setup(**setup_args)

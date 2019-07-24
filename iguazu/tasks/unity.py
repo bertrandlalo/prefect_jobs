@@ -1,16 +1,15 @@
 from typing import Optional
 
-from prefect.engine.runner import ENDRUN
 import pandas as pd
 import prefect
 
-from iguazu.functions.common import path_exists_in_hdf5
-from iguazu.functions.unity import report_sequences
+from iguazu.functions.unity import extract_sequences
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import SkippedResult
+from iguazu.helpers.states import SKIPRESULT
+from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
 
 
-class ReportSequences(prefect.Task):
+class ExtractSequences(prefect.Task):
 
     def __init__(self,
                  events_group: Optional[str] = None,
@@ -29,7 +28,7 @@ class ReportSequences(prefect.Task):
 
         output = events.make_child(suffix='_sequences')
         self.logger.info('Reporting sequences for events=%s -> %s',
-                          events, output)
+                         events, output)
 
         # Notes on parameter management
         #
@@ -48,54 +47,33 @@ class ReportSequences(prefect.Task):
         output_group = self.output_group or '/unity/sequences_report'
 
         # Our current force detection code
-        if not self.force and path_exists_in_hdf5(output.file, output_group):
-            # TODO: consider a function that uses a FileProxy, in particular a
-            #       QuetzalFile. In this case, we could read the metadata
-            #       instead of downloading the file!
-
-            # Until https://github.com/PrefectHQ/prefect/issues/1163 is fixed,
-            # this is the only way to skip with results
-            skip = SkippedResult('Output already exists, skipping', result=output)
-            raise ENDRUN(state=skip)
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
+            # TODO: I think .metadata is a default dict so the first get with default to {} is not needed
+            self.logger.info('Output already exists, skipping')
+            raise SKIPRESULT('Output already exists', result=output)
 
         events_file = events.file.resolve()
+        try:
+            # check if previous task succeeded
+            # TODO: discuss the following: There is no previous task to extract
+            #  sequences, at least not now otherwise this fails
+            # if events.metadata['iguazu']['state'] != 'SUCCESS':
+            #     # Fail
+            #     self.logger.info('Previous task failed, propagating failure')
+            #     raise IguazuError('Previous task failed')
 
-        with pd.HDFStore(events_file, 'r') as events_store:
-            try:
+            with pd.HDFStore(events_file, 'r') as events_store:
+
                 # TODO discuss: select column before sending it to a column
                 df_events = pd.read_hdf(events_store, events_group)
 
-                report = report_sequences(df_events, self.sequences)
-                meta = {
-                    'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
-                    'state': 'SUCCESS',
-                    'version': '0.0',
-                }
-            except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail: %s', ex)
-                report = pd.DataFrame()
-                meta = {
-                    'source': 'iguazu',
-                    'task_name': self.__class__.__name__,
-                    'task_module': self.__class__.__module__,
-                    'state': 'FAILURE',
-                    'version': '0.0',
-                    'exception': str(ex),
-                }
+                df_output = extract_sequences(df_events, self.sequences)
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state)
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                return output
+        except Exception as ex:
+            # Manage output, save to file
+            task_fail(self, ex, output, output_group)
 
-        # TODO: re-code the failure handling with respect to a task parameter
-        # if fail_mode == 'grace': ==> generate empty dataframe, set metadata, return file (prefect raises success)
-        # if fail_mode == 'skip':  ==> generate empty dataframe, set metadata, raise skip
-        # if fail_mode == 'fail':  ==> raise exception as it arrives
-
-        # Manage output, save to file
-        output_file = output.file
-        with pd.HDFStore(output_file, 'w') as output_store:
-            report.to_hdf(output_store, output_group)
-        # Set meta on FileProxy so that Quetzal knows about this metadata
-        output.metadata['task'][self.__class__.__name__] = meta
-        output.upload()
-
-        return output

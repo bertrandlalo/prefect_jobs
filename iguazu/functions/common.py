@@ -2,6 +2,7 @@ import pathlib
 
 import pandas as pd
 
+
 def safe_read_hdf5(filename, path):
     """
     Read a HDF5 file given its file name and path, in "read mode". If the Key does not exists, it returns None.
