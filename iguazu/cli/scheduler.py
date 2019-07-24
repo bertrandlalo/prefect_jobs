@@ -35,6 +35,9 @@ def run(scheduler_address):
     context_parameters = dict(
         temp_dir=tempfile.mkdtemp(),
         quetzal_logs_workspace_name=workspace_name,
+        secrets=dict(
+            SLACK_WEBHOOK_URL=os.environ['SLACK_WEBHOOK_URL'],
+        )
     )
     quetzal_required_envvars = {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD', 'QUETZAL_INSECURE'}
     if quetzal_required_envvars <= set(os.environ):
@@ -58,7 +61,7 @@ def run(scheduler_address):
     scheduler.add_job(_ping_job, id='ping', name='ping',
                       trigger=IntervalTrigger(minutes=1))
 
-    # Run the galvanic feature extraction every hour
+    # Run the galvanic feature extraction every day at noon
     galvanic_features_flow = registry['galvanic_features']
     galvanic_features_kwargs = dict(
         data_source='quetzal',
@@ -69,11 +72,10 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(galvanic_features_flow, galvanic_features_kwargs, executor, context_parameters),
                       id=f'galvanic-features-{uuid.uuid4()}', name='galvanic-features',
-                      #trigger=CronTrigger(minute=20))
-                      trigger=IntervalTrigger(minutes=60),
+                      trigger=CronTrigger(hour=12),
                       max_instances=1)
 
-    # Galvanic summarization every X time
+    # Galvanic summarization once a week
     galvanic_summary_flow = registry['summarize_galvanic']
     galvanic_summary_kwags = dict(
         data_source='quetzal',
@@ -82,11 +84,10 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(galvanic_summary_flow, galvanic_summary_kwags, executor, context_parameters),
                       id=f'galvanic-summary-{uuid.uuid4()}', name='galvanic-summary',
-                      #trigger=IntervalTrigger(minutes=1),
                       trigger=CronTrigger(day=7, hour=0),
                       max_instances=1)
 
-    # Run the behavior feature extraction every hour
+    # Run the behavior feature extraction every day at 3 pm
     behavior_features_flow = registry['behavior_features']
     behavior_features_kwargs = dict(
         data_source='quetzal',
@@ -97,8 +98,19 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(behavior_features_flow, behavior_features_kwargs, executor, context_parameters),
                       id=f'behavior-features-{uuid.uuid4()}', name='behavior-features',
-                      #trigger=CronTrigger(minute=20))
-                      trigger=IntervalTrigger(minutes=1),
+                      trigger=CronTrigger(hour=15),
+                      max_instances=1)
+
+    # Behavior summarization once a week
+    behavior_summary_flow = registry['summarize_behavior']
+    behavior_summary_kwags = dict(
+        data_source='quetzal',
+        workspace_name=workspace_name,
+    )
+    scheduler.add_job(execute_flow,
+                      args=(behavior_summary_flow, behavior_summary_kwags, executor, context_parameters),
+                      id=f'behavior-summary-{uuid.uuid4()}', name='behavior-summary',
+                      trigger=CronTrigger(day=7, hour=1),
                       max_instances=1)
 
     logger.info('Scheduler jobs configured. Running scheduler...')
