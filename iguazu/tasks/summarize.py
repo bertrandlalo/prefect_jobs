@@ -197,7 +197,11 @@ class SummarizePopulation(prefect.Task):
                              i, n_files, 100 * i / n_files, file)
             if file.metadata['iguazu']['state'] != 'SUCCESS':
                 continue
-            file_id = file._file_id
+
+            # Get the file id from the file that *generated* this file
+            parent_id = file.metadata['iguazu'].get('parents', None)
+            if not parent_id:
+                self.logger.warning('File %s did not have a iguazu parent id!', file)
 
             with pd.option_context('mode.chained_assignment', None), \
                  pd.HDFStore(file.file, 'r') as store:
@@ -206,12 +210,12 @@ class SummarizePopulation(prefect.Task):
                     data = pd.read_hdf(store, group, columns=columns)
                     data_summary_file = data_summary_file.join(data, how="outer")
                 if not data_summary_file.empty:
-                    data_summary_file.loc[:, 'file_id'] = file_id
+                    data_summary_file.loc[:, 'file_id'] = parent_id
                     data_list_population.append(data_summary_file)
 
         data_output = pd.concat(data_list_population, axis=0)
         data_output = data_output.rename_axis(self.axis_name).reset_index()
-        data_output.to_csv(output.file)
+        data_output.to_csv(output.file)  # TODO: put index=False an re-generate
 
         output.upload()
 
