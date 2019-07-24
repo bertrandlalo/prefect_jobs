@@ -1,12 +1,14 @@
 import logging
-
-logger = logging.getLogger()
 from typing import List
 
 import pandas as pd
 from datascience_utils.unity import fix_unity_events
 from dsu.unity import extract_marker_version, extract_complete_sequences, \
     extract_complete_sequence_times
+
+
+logger = logging.getLogger(__name__)
+
 
 # TODO: schema xdf_validation should avoid using this ugly trick.
 #       When refactoring and migrating pipeline_hdf to iguazu,

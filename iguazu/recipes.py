@@ -114,6 +114,8 @@ def _import_flows():
     logger.debug('Loaded flows in %s', iguazu.flows.behavior)
     import iguazu.flows.summarize_behavior
     logger.debug('Loaded flows in %s', iguazu.flows.summarize_behavior)
+
+
 _import_flows()
 
 
@@ -196,9 +198,9 @@ def state_report(flow_state, flow=None):
 
     df = (
         pd.DataFrame.from_records(rows)
-            # Show tasks by their topological order, then reset the index
-            .sort_values(by='order')
-            .reset_index(drop=True)
+        # Show tasks by their topological order, then reset the index
+        .sort_values(by='order')
+        .reset_index(drop=True)
     )
     return df
 
