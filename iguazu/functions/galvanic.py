@@ -1,7 +1,5 @@
 import logging
 
-logger = logging.getLogger()
-
 import numpy as np
 import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
@@ -11,6 +9,10 @@ from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
 from iguazu.helpers.tasks import IguazuError  # Todo: move IguazuError to a module exceptions.py
+
+
+logger = logging.getLogger(__name__)
+
 
 def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interpolation_kwargs, filter_kwargs,
                    scaling_kwargs, corrupted_maxratio, sampling_rate):
