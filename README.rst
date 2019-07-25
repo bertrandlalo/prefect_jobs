@@ -1,8 +1,18 @@
-=================
+======
 Iguazu
-=================
+======
 
 Open Mind Innovation Python jobs platform.
+Using `Prefect <https://www.prefect.io/>`_ to handle the definition, composition
+and execution of tasks as data processing pipelines, or more simply, *flows*.
+
+.. pull-quote::
+
+    The name "Iguazú" comes from the Guarani or Tupi words "y" [ɨ], meaning "water",
+    and "ûasú "[waˈsu], meaning "big".[3] Legend has it that a deity planned to
+    marry a beautiful woman named Naipí, who fled with her mortal lover Tarobá in a
+    canoe. In a rage, the deity sliced the river, creating the waterfalls and
+    condemning the lovers to an eternal fall.
 
 Installation
 ------------

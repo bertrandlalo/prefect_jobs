@@ -53,7 +53,7 @@ scheduler:
   name: scheduler
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.0.4
+    tag: 0.1.0
     pullPolicy: Always
   replicas: 1
   resources: {}
@@ -78,7 +78,7 @@ dask_scheduler:
   name: dask-scheduler
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.0.4
+    tag: 0.1.0
     pullPolicy: Always
   replicas: 1
   serviceType: "LoadBalancer"
@@ -102,7 +102,7 @@ dask_worker:
   name: dask-worker
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.0.4
+    tag: 0.1.0
     pullPolicy: Always
   replicas: 2         # Number of MINIMUM dask-workers
   maxReplicas: 16     # Number of MAXIMUM dkas-workers

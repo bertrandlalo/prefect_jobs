@@ -1,7 +1,7 @@
 apiVersion: v1
 name: iguazu
-version: 0.0.2     # Chart version
-appVersion: 0.0.4  # Iguazu app version
+version: 0.1.0     # Chart version
+appVersion: 0.1.0  # Iguazu app version
 description: A Helm chart for an Iguazu cluster
 # home: https://our-site.omind.me
 maintainers:
