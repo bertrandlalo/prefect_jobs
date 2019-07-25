@@ -1,0 +1,23 @@
+version: '3'
+services:
+  scheduler:
+    build:
+      context: .
+    command: dask-scheduler
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PREFECT__LOGGING__LEVEL: "DEBUG"
+    ports:
+      - "8786:8786"  # Scheduler port
+      - "8787:8787"  # UI port
+
+  worker:
+    build:
+      context: .
+    command: dask-worker --nthreads 1 scheduler:8786 --memory-limit 4GB --no-nanny
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PREFECT__LOGGING__LEVEL: "DEBUG"
+    restart: on-failure
+    links:
+      - scheduler

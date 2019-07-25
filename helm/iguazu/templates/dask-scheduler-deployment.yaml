@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "iguazu.fullname" . }}-dask-scheduler
+  labels:
+    app: {{ template "iguazu.name" . }}
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: {{ template "iguazu.chart" . }}
+    component: dask-scheduler
+spec:
+  replicas: {{ .Values.dask_scheduler.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "iguazu.name" . }}
+      release: {{ .Release.Name | quote }}
+      component: dask-scheduler
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: {{ template "iguazu.name" . }}
+        release: {{ .Release.Name | quote }}
+        component: dask-scheduler
+    spec:
+      containers:
+        - name: {{ template "iguazu.fullname" . }}-dask-scheduler
+          image: "{{ .Values.dask_scheduler.image.repository }}:{{ .Values.dask_scheduler.image.tag }}"
+          imagePullPolicy: "{{ .Values.dask_scheduler.image.pullPolicy }}"
+          args:
+            - dask-scheduler
+            - --port
+            - "{{ .Values.dask_scheduler.servicePort }}"
+            - --dashboard-address
+            - ":8787"
+          ports:
+            - containerPort: 8786
+            - containerPort: 8787
+          resources:
+{{ toYaml .Values.dask_scheduler.resources | indent 12 }}
+          env:
+{{ toYaml .Values.dask_scheduler.env | indent 12 }}
+    {{- with .Values.dask_scheduler.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.dask_scheduler.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.dask_scheduler.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

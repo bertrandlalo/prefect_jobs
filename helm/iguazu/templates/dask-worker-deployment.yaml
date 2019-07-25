@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "iguazu.fullname" . }}-dask-worker
+  labels:
+    app: {{ template "iguazu.name" . }}
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: {{ template "iguazu.chart" . }}
+    component: dask-worker
+spec:
+  replicas: {{ .Values.dask_worker.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "iguazu.name" . }}
+      release: {{ .Release.Name | quote }}
+      component: dask-worker
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: {{ template "iguazu.name" . }}
+        release: {{ .Release.Name | quote }}
+        component: dask-worker
+    spec:
+      containers:
+        - name: {{ template "iguazu.fullname" . }}-dask-worker
+          image: "{{ .Values.dask_worker.image.repository }}:{{ .Values.dask_worker.image.tag }}"
+          imagePullPolicy: {{ .Values.dask_worker.image.pullPolicy }}
+          args:
+            - dask-worker
+            - {{ template "iguazu.fullname" . }}-dask-scheduler:{{ .Values.dask_scheduler.servicePort }}
+          {{- if .Values.dask_worker.resources.limits }}
+            - --nthreads
+            - {{ .Values.dask_worker.resources.limits.cpu | default .Values.dask_worker.default_resources.cpu | quote }}
+            - --memory-limit
+            - {{ .Values.dask_worker.resources.limits.memory | default .Values.dask_worker.default_resources.memory | quote }}
+          {{- end }}
+            - --no-dashboard
+            - --no-nanny
+          ports:
+            - containerPort: 8789
+          resources:
+{{ toYaml .Values.dask_worker.resources | indent 12 }}
+          env:
+{{ toYaml .Values.dask_worker.env | indent 12 }}
+    {{- with .Values.dask_worker.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.dask_worker.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.dask_worker.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
