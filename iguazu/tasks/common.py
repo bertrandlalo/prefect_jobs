@@ -5,6 +5,7 @@ import pathlib
 import pandas as pd
 import prefect
 
+from iguazu import __version__
 from iguazu.helpers.files import FileProxy, LocalFile
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
@@ -137,6 +138,7 @@ class MergeFilesFromGroups(prefect.Task):
         parent.metadata['iguazu'][self.status_key] = {
             'status': state,
             'date': str(prefect.context.scheduled_start_time),
+            'version': __version__,
         }
         parent.upload()
 

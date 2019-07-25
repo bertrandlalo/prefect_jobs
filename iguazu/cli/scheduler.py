@@ -9,6 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from prefect.engine.executors import DaskExecutor
 
+import iguazu
 from iguazu.cli.flows import str2bool
 from iguazu.recipes import execute_flow, registry
 
@@ -25,8 +26,12 @@ def scheduler_group():
 @scheduler_group.command()
 @click.option('--scheduler-address', required=True,
               help='Scheduler address')
-def run(scheduler_address):
+@click.option('--every-minute', type=click.STRING, multiple=True,
+              help='Run these pipelines every minute')
+def run(scheduler_address, every_minute):
     """Run the iguazu scheduler"""
+
+    logger.info('Running iguazu scheduler. Iguazu is version %s', iguazu.__version__)
 
     workspace_name = os.environ['IGUAZU_WORKSPACE']
 
@@ -72,7 +77,7 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(galvanic_features_flow, galvanic_features_kwargs, executor, context_parameters),
                       id=f'galvanic-features-{uuid.uuid4()}', name='galvanic-features',
-                      trigger=CronTrigger(hour=12),
+                      trigger=CronTrigger(hour=12) if 'galvanic_features' not in every_minute else IntervalTrigger(minutes=1),
                       max_instances=1)
 
     # Galvanic summarization once a week
@@ -84,7 +89,7 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(galvanic_summary_flow, galvanic_summary_kwags, executor, context_parameters),
                       id=f'galvanic-summary-{uuid.uuid4()}', name='galvanic-summary',
-                      trigger=CronTrigger(day=7, hour=0),
+                      trigger=CronTrigger(day=7, hour=0) if 'summarize_galvanic' not in every_minute else IntervalTrigger(minutes=1),
                       max_instances=1)
 
     # Run the behavior feature extraction every day at 3 pm
@@ -98,7 +103,7 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(behavior_features_flow, behavior_features_kwargs, executor, context_parameters),
                       id=f'behavior-features-{uuid.uuid4()}', name='behavior-features',
-                      trigger=CronTrigger(hour=15),
+                      trigger=CronTrigger(hour=15) if 'behavior_features' not in every_minute else IntervalTrigger(minutes=1),
                       max_instances=1)
 
     # Behavior summarization once a week
@@ -110,7 +115,7 @@ def run(scheduler_address):
     scheduler.add_job(execute_flow,
                       args=(behavior_summary_flow, behavior_summary_kwags, executor, context_parameters),
                       id=f'behavior-summary-{uuid.uuid4()}', name='behavior-summary',
-                      trigger=CronTrigger(day=7, hour=1),
+                      trigger=CronTrigger(day=7, hour=1) if 'summarize_behavior' not in every_minute else IntervalTrigger(minutes=1),
                       max_instances=1)
 
     logger.info('Scheduler jobs configured. Running scheduler...')

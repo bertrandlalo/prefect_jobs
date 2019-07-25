@@ -54,7 +54,7 @@ scheduler:
   name: scheduler
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
+    tag: 0.1.1
     pullPolicy: Always
   replicas: 1
   resources: {}
@@ -79,7 +79,7 @@ dask_scheduler:
   name: dask-scheduler
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
+    tag: 0.1.1
     pullPolicy: Always
   replicas: 1
   serviceType: ClusterIP  # Change to LoadBalancer if you want to access from outside (this is dangerous!)
@@ -103,9 +103,9 @@ dask_worker:
   name: dask-worker
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
+    tag: 0.1.1
     pullPolicy: Always
-  replicas: 2         # Number of MINIMUM dask-workers
+  replicas: 15         # Number of MINIMUM dask-workers
   maxReplicas: 16     # Number of MAXIMUM dkas-workers
   aptPackages: >-
   default_resources:  # overwritten by resource limits if they exist
