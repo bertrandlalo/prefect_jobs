@@ -1,7 +1,6 @@
-from typing import List, Optional
-
 import pandas as pd
 import prefect
+from typing import List, Optional
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
@@ -172,7 +171,8 @@ class ExtractFeatures(prefect.Task):
 class SummarizePopulation(prefect.Task):
     def __init__(self, groups, filename='summary', path='populations', axis_name='sequence', **kwargs):
         super().__init__(**kwargs)
-        self.groups = {group.replace('_', '/'): groups[group] for group in groups}
+        # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
+        self.groups = {group.replace('_', '/').replace('//', '_'): groups[group] for group in groups}
         self.axis_name = axis_name
         self.filename = filename
         self.path = path

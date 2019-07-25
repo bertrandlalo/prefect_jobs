@@ -1,6 +1,5 @@
 import datetime
 import logging
-
 from prefect import Flow
 
 from iguazu import __version__
@@ -10,7 +9,6 @@ from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.common import SlackTask
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
-
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +75,10 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     )
     merge_population_corrected = SummarizePopulation(
         # Iguazu task constructor arguments
-        groups={'gsr_features_scr_corrected': None,
-                'gsr_features_scl_corrected': None},
+        groups={'gsr_features_scr__corrected': None,
+                # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
+                'gsr_features_scl__corrected': None},
+        # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
         filename='galvanic_summary_corrected',
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],
