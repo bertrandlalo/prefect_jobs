@@ -22,14 +22,8 @@ Status
 - FAIL
 
 
-Clusters
-========
-
-Docker-compose
---------------
-
-To deploy a docker-compose "cluster" (it's not really a cluster), please follow
-these steps:
+Preparations
+============
 
 1. Generate a public/private key with an empty passphrase for github. This is
    needed for the automatic build of a Docker image that contains some of
@@ -46,7 +40,16 @@ these steps:
 2. Add the public key pair contents in ``conf/github.pub`` to your
     `Github SSH keys <https://github.com/settings/ssh/new>`_ settings.
 
-3. Build your docker-compose services.
+Docker-compose
+==============
+
+A docker-compose "cluster" (it's not really a cluster) is a simple environment
+to test iguazu and dask. To create this environment, follow these steps:
+
+1. Make sure you followed the Preparations_ instructions to create a private and
+   public key pair.
+
+2. Build your docker-compose services.
 
    .. code-block:: console
 
@@ -62,7 +65,7 @@ these steps:
         Successfully built 1c2f33a1c85a
         Successfully tagged iguazu_worker:latest
 
-4. Adapt the worker memory limits if needed on the ``docker.compose.yaml``:
+3. Adapt the worker memory limits if needed on the ``docker.compose.yaml``:
 
    .. code-block:: yaml
 
@@ -71,7 +74,7 @@ these steps:
           command: dask-worker --nthreads 1 scheduler:8786 --memory-limit 4GB
           ...
 
-5. Start the docker-compose "cluster" and adapt the number of workers as needed.
+4. Start the docker-compose "cluster" and adapt the number of workers as needed.
    For example, the following command creates a "cluster" with two workers:
 
    .. code-block:: console
@@ -80,21 +83,34 @@ these steps:
 
 
 Kubernetes
-----------
+==========
 
-To deploy on kubernetes (either a Google Cloud Platform or a local minikube),
-follow these instructions:
 
-1. Make sure to follow steps 1 and 2 on the docker-compose section above.
+To deploy on a kubernetes cluster (in this case using Google Cloud Platform),
+follow these instructions. If you already have set up a iguazu cluster, you can
+skip the steps on the first section.
 
-2. Publish the Iguazu Docker images to a registry. In
-   this case, the Google Cloud Registry:
+Setup
+-----
+
+1. Make sure you followed the Preparations_ instructions to create a private and
+   public key pair.
+
+2. Publish the Iguazu Docker images to a registry. In this case, the
+   Google Cloud Registry. First, make sure that the Docker images can be built
+   successfully:
 
    .. code-block:: console
 
-      $ iguazu deploy images --registry eu.gcr.io/your-gcp-project-id
+      $ docker build .
 
-   In our case, ``your-gcp-project-id`` is ``quetzal-omind``.
+   Then, publish them:
+
+   .. code-block:: console
+
+      $ iguazu deploy images --registry eu.gcr.io/GCP_PROJECT_ID
+
+   In our case, our ``GCP_PROJECT_ID`` is ``quetzal-omind``.
 
 3. Create a kubernetes cluster. On minikube, follow the
    `minikube documentation <https://kubernetes.io/docs/setup/learning-environment/minikube/>`_.
@@ -102,7 +118,7 @@ follow these instructions:
 
    .. code-block:: console
 
-      $ gcloud container clusters create iguazu-cluster --num-nodes=1 --machine-type=n1-standard-4
+      $ gcloud container clusters create iguazu --num-nodes=1 --machine-type=n1-standard-4
 
    On either case, make sure that you have ``kubectl`` installed and that you are
    using the cluster you just created:
@@ -110,18 +126,50 @@ follow these instructions:
    .. code-block:: console
 
       $ kubectl config get-context
-      CURRENT   NAME                 CLUSTER             AUTHINFO                                                      NAMESPACE
-      *         xxx_iguazu-cluster   xxx_iguazu-cluster  xxx_iguazu-cluster
+      CURRENT   NAME                                       CLUSTER                                    AUTHINFO                                   NAMESPACE
+      *         gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu
 
-4. Install `Helm <https://helm.sh/>`_ on your local computer.
-
-5. Deploy *Tiller* (the Helm kubernetes application) on your kubernetes cluster with:
+4. Install `Helm <https://helm.sh/>`_ on your local computer.  In general,
+   follow the `installing helm guide <https://helm.sh/docs/using_helm/#installing-helm>`_.
+   For the particular case of OSX (with homebrew), this can be done with:
 
    .. code-block:: console
 
-      $ helm init
+    $ brew install kubernetes-helm
 
-6. Install the Helm chart into the kubernetes cluster to deploy the Iguazu application:
+5. Install helm k8s service account. This is explained in the
+   `helm installation guide <https://helm.sh/docs/using_helm/#tiller-and-role-based-access-control>`_:
+
+   .. code-block:: console
+
+    $ kubectl create -f helm/rbac-config.yaml
+
+6. Install helm k8s resources (also known as tiller) with a service account:
+
+   .. code-block:: console
+
+    $ helm init --service-account tiller --wait
+
+7. Verify that helm was correctly installed:
+
+   .. code-block:: console
+
+    $ helm version
+    Client: &version.Version{SemVer:"v2.14.3", GitCommit:"0e7f3b6637f7af8fcfddb3d2941fcc7cbebb0085", GitTreeState:"clean"}
+    Server: &version.Version{SemVer:"v2.14.3", GitCommit:"0e7f3b6637f7af8fcfddb3d2941fcc7cbebb0085", GitTreeState:"clean"}
+
+8. Install ingress resources and the ingress chart. There are more details in
+   the `ingress installation guide <https://kubernetes.github.io/ingress-nginx/deploy/#prerequisite-generic-deployment-command>`_.
+
+   .. code-block:: console
+
+    $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/mandatory.yaml
+    $ helm install stable/nginx-ingress --name nginx-ingress
+
+Deployment
+----------
+
+1. Install the Helm chart into the kubernetes cluster to deploy the Iguazu application:
 
    .. code-block:: console
 
@@ -134,19 +182,32 @@ follow these instructions:
    ``USERNAME`` and ``PASSWORD`` are the Quetzal user and password that will
    be used by Iguazu to run its scheduled flows.
 
-7. Get the scheduler service external IP. This is the IP that you will need to
-   use as the dask scheduler.
+2. Get the scheduler service external IP if you want to see the UI. It will be
+   listed on the ``EXTERNAL-IP`` of the ``nginx-ingress-controller`` service.
 
    .. code-block:: console
 
       $ kubectl get services
-      NAME                        TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)                       AGE
-      somename-iguazu-scheduler   LoadBalancer   10.47.255.179   35.240.37.119   8786:30392/TCP,80:31366/TCP   67s
+        NAME                            TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)                      AGE
+        dask-scheduler                  ClusterIP      10.47.248.79   <none>           8786/TCP,8787/TCP            4m12s
+        kubernetes                      ClusterIP      10.47.240.1    <none>           443/TCP                      41m
+        nginx-ingress-controller        LoadBalancer   10.47.250.82   XXX.XXX.XXX.XXX  80:30439/TCP,443:32645/TCP   34m
+        nginx-ingress-default-backend   ClusterIP      10.47.245.99   <none>           80/TCP                       34m
 
-8. If you want to pause the cluster on GCP:
+   You can open a browser at ``https://XXX.XXX.XXX.XXX/`` to see the dask UI.
 
-   .. code-block:: console
 
-      $ gcloud container clusters resize iguazu-cluster --size 0
+Post-installation
+-----------------
 
-   bring it back by using the same command with a size > 0.
+* If you want to pause the cluster on GCP:
+
+  .. code-block:: console
+
+   $ gcloud container clusters resize iguazu-cluster --size 0
+
+  bring it back by using the same command with a size > 0.
+
+
+* If you want to resize the cluster to give it more or less resources, use the
+  same command but with a number on ``--size N``.
