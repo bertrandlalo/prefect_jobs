@@ -171,8 +171,7 @@ class ExtractFeatures(prefect.Task):
 class SummarizePopulation(prefect.Task):
     def __init__(self, groups, filename='summary', path='populations', axis_name='sequence', **kwargs):
         super().__init__(**kwargs)
-        # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
-        self.groups = {group.replace('_', '/').replace('//', '_'): groups[group] for group in groups}
+        self.groups = {group.replace('_', '/'): groups[group] for group in groups}
         self.axis_name = axis_name
         self.filename = filename
         self.path = path

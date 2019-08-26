@@ -216,44 +216,6 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
-    baseline_sequences = ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0',
-                          'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1',
-                          'cardiac-coherence_score_0']
-    correct_scr = RemoveBaseline(
-        # Iguazu task constructor arguments
-        features_group="/gsr/features/scr",
-        output_group="/gsr/features/scr_corrected",
-        sequences=baseline_sequences,
-        columns=[
-            'gsr_SCR_peaks_detected_rate',
-            'gsr_SCR_peaks_increase-amplitude_median',
-            'gsr_SCR_peaks_increase-duration_median',
-        ],
-        name='RemoveBaseline__scr',
-        force=force,
-        # Prefect task arguments
-        state_handlers=[garbage_collect_handler, logging_handler],
-        cache_for=datetime.timedelta(days=7),
-        cache_validator=ParametrizedValidator(force=force),
-    )
-    correct_scl = RemoveBaseline(
-        # Iguazu task constructor arguments
-        features_group="/gsr/features/scl",
-        output_group="/gsr/features/scl_corrected",
-        sequences=baseline_sequences,
-        columns=[
-            'gsr_SCL_median',
-            'gsr_SCL_ptp',
-            'gsr_SCL_linregress_slope',
-            'gsr_SCL_auc'
-        ],
-        name='RemoveBaseline__scl',
-        force=force,
-        # Prefect task arguments
-        state_handlers=[garbage_collect_handler, logging_handler],
-        cache_for=datetime.timedelta(days=7),
-        cache_validator=ParametrizedValidator(force=force),
-    )
     merge_subject = MergeFilesFromGroups(
         # Iguazu task constructor arguments
         suffix="_gsr",
@@ -283,17 +245,11 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
         scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
 
-        # Baseline feature correction
-        scr_features_corrected = correct_scr.map(features=scr_features)
-        scl_features_corrected = correct_scl.map(features=scl_features)
-
         # Subject summary
         merged = merge_subject.map(parent=raw_signals,
                                    gsr_timeseries_deconvoluted=cvx,
                                    gsr_features_scr=scr_features,
                                    gsr_features_scl=scl_features,
-                                   gsr_features_scr_corrected=scr_features_corrected,
-                                   gsr_features_scl_corrected=scl_features_corrected,
                                    unity_sequences=sequences_reports)
 
         # Send slack notification

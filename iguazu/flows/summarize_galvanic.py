@@ -73,28 +73,15 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(),
     )
-    merge_population_corrected = SummarizePopulation(
-        # Iguazu task constructor arguments
-        groups={'gsr_features_scr__corrected': None,
-                # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
-                'gsr_features_scl__corrected': None},
-        # Ugly hack to consider group names containing '_' --> put '__' in the key word. .
-        filename='galvanic_summary_corrected',
-        # Prefect task arguments
-        state_handlers=[garbage_collect_handler, logging_handler],
-        cache_for=datetime.timedelta(days=7),
-        cache_validator=ParametrizedValidator(),
-    )
     notify = SlackTask(message='Galvanic feature summarization finished!')
 
     with Flow('galvanic_summary_flow') as flow:
         # Connect/extend this flow with the dataset flow
         flow.update(dataset_flow)
         population_summary = merge_population(features_files)
-        population_summary_corrected = merge_population_corrected(features_files)
 
         # Send slack notification
-        notify(upstream_tasks=[population_summary, population_summary_corrected])
+        notify(upstream_tasks=[population_summary])
 
         # TODO: what's the reference task of this flow?
 
