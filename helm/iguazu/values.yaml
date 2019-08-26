@@ -50,6 +50,7 @@
 #affinity: {}
 
 scheduler:
+  enabled: false
   name: scheduler
   image:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
@@ -81,7 +82,7 @@ dask_scheduler:
     tag: 0.1.0
     pullPolicy: Always
   replicas: 1
-  serviceType: "LoadBalancer"
+  serviceType: ClusterIP  # Change to LoadBalancer if you want to access from outside (this is dangerous!)
   servicePort: 8786
   resources: {}
     # limits:

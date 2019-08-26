@@ -21,7 +21,7 @@ RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 RUN mkdir /tmp/wheels
 WORKDIR /tmp
 ADD requirements.txt .
-RUN pip install --upgrade pip==19.1.1 && \
+RUN pip install --upgrade pip==19.2.3 && \
     pip wheel --wheel-dir /tmp/wheels -r requirements.txt
 
 ################################################################################
@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies from wheels generated in intermediate image
 COPY --from=intermediate /tmp/wheels /tmp/wheels
-RUN pip install --upgrade pip==19.1.1 && \
+RUN pip install --upgrade pip==19.2.3 && \
     pip install /tmp/wheels/*.whl
 
 # Copy and install iguazu
