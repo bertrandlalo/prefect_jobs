@@ -34,7 +34,9 @@ def logging_handler(task, old_state, new_state):
             f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
         ).with_suffix('.log')
         log_filename.parent.mkdir(parents=True, exist_ok=True)
-        formatter = logging.Formatter('%(levelname)s %(asctime)s %(name)s %(message)s')
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)8s - %(name)s.%(funcName)s:%(lineno)s | %(message)s'
+        )
         handler = CustomFileHandler(str(log_filename.resolve()), mode='a')
         handler.setFormatter(formatter)
         handler.setLevel(logging.DEBUG)

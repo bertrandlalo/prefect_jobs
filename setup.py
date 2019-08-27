@@ -7,6 +7,7 @@ dependencies = [
     'APScheduler>=3.6,<4.0',
     'bokeh>=1.3,<2.0',
     'click>=7.0,<8.0',
+    'colorlog>=4.0,<5.0',
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
     'numpy>=1.16,<2.0',
     'pandas>=0.25.0,<0.26.0',
