@@ -11,6 +11,7 @@ dependencies = [
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
     'numpy>=1.16,<2.0',
     'pandas>=0.25.0,<0.26.0',
+    'psutil>=5.6.3,<5.7',
     'prefect @ git+https://github.com/PrefectHQ/prefect@c7c00456',
     'quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@v0.3.0',
     'quetzal-openapi-client @ '

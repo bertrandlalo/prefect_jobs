@@ -8,6 +8,7 @@ graphviz>=0.11.1<0.12.0
 numpy>=1.16,<2.0
 pandas>=0.25.0,<0.26.0
 git+https://github.com/PrefectHQ/prefect@c7c00456#egg=prefect
+psutil>=5.6.3,<5.7
 git+https://github.com/quetz-al/quetzal-client.git@v0.3.0#egg=quetzal-client
 git+https://github.com/quetz-al/quetzal-openapi-client@v0.3.0#egg=quetzal-openapi-client
 scikit-learn>=0.21.2,<0.22.0
