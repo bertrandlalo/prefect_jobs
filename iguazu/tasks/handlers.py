@@ -58,7 +58,7 @@ def logging_handler(task, old_state, new_state):
             hdlr.close()
 
             # Upload to quetzal if the context information has all the necessary information
-            if 'quetzal_client' in context and 'quetzal_logs_workspace_name' is not None:
+            if 'quetzal_client' in context and context.get('quetzal_logs_workspace_name') is not None:
                 try:
                     logger.debug('Uploading logs to quetzal')
                     client = helpers.get_client(**context.quetzal_client)
