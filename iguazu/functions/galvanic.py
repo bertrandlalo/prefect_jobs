@@ -5,6 +5,9 @@ import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
+from dsu.dsp.resample import uniform_sampling
+from dsu.epoch import sliding_window
+from dsu.pandas_helpers import estimate_rate
 from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
@@ -78,17 +81,26 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     data = data[begins:ends]
     data = data.loc[:, [column]]
 
+    # resample uniformly the data
+    logger.debug('Uniform resampling to %d Hz', sampling_rate)
+    data = uniform_sampling(data, sampling_rate)
+
     # lowpass filter signal
+    logger.debug('Lowpass filtering to %s Hz', filter_kwargs.get('frequencies', []))
     data = filtfilt_signal(data, columns=[column],
                            **filter_kwargs, suffix='_filtered')
 
     # add a column "bad" with rejection boolean on Amplifier and HF (glitches) criteria
+    logger.debug('Detecting amplifier saturation and glitches')
     data = quality_gsr(data, column=column + '_filtered', **quality_kwargs)
     # estimate the corrupted ratio
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
         raise IguazuError('Artifact corruption of %s exceeds  %s.', corrupted_ratio, corrupted_maxratio)
+
+    # bad sample interpolation
+    logger.debug('Interpolating %d/%d bad samples', data.bad.sum(), data.shape[0])
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
     # Pandas does not like tz-aware timestamps when interpolating
@@ -99,33 +111,22 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(**interpolation_kwargs)
-                .set_index(data_clean.index)
+            .interpolate(**interpolation_kwargs)
+            .set_index(data_clean.index)
         )
 
-    # Pandas does not like tz-aware timestamps when interpolating
-    if data_clean.index.tzinfo is None:
-        # old way: tz-naive
-        data_clean.interpolate(**interpolation_kwargs, inplace=True)
-    else:
-        # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
-        data_clean = (
-            data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(**interpolation_kwargs)
-                .set_index(data_clean.index)
-        )
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
+    logger.debug('Inverting signals')
     data_clean = inverse_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_inversed')
 
     # scale signal on the all session
+    logger.debug('Rescaling signals')
     data_clean = scale_signal(data_clean, columns=[column + '_filtered_clean_inversed'], suffix='_zscored',
                               **scaling_kwargs)
 
     # return preprocessed data
+    logger.debug('Concatenating clean and filtered signals')
     data = pd.concat([data, data_clean], axis=1)
-
-    # decimate signal
-    data = drop_rows(data, sampling_rate)
 
     return data
 

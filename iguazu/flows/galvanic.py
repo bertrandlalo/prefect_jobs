@@ -104,7 +104,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
             method='standard',
         ),
         corrupted_maxratio=0.3,
-        sampling_rate=256,
+        sampling_rate=512,
         force=force,
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],
