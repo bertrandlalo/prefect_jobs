@@ -12,7 +12,7 @@ dependencies = [
     'numpy>=1.16,<2.0',
     'pandas>=0.25.0,<0.26.0',
     'psutil>=5.6.3,<5.7',
-    'prefect @ git+https://github.com/PrefectHQ/prefect@c7c00456',
+    'prefect>=0.6.1,<0.6.2',
     'quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@v0.3.0',
     'quetzal-openapi-client @ '
     'git+https://github.com/quetz-al/quetzal-openapi-client@v0.3.0',

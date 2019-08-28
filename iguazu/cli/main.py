@@ -27,7 +27,7 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
     # Configure using dictConfig
     config = {
         'version': 1,
-        'disable_existing_loggers': True,
+        'disable_existing_loggers': False,
         'formatters': {
             'default': {
                 'format': '[%(asctime)s] %(levelname)8s - %(name)s | %(message)s',
@@ -79,6 +79,9 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
                 'level': 'NOTSET',
                 'handlers': [],
             },
+            'iguazu.cache_validators': {
+                'level': 'WARNING',
+            }
             # Use this template to silence a particular library
             # 'some_name': {
             #     'level': 'WARNING',
@@ -95,22 +98,11 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
         config['handlers']['console']['level'] = log_level
     dictConfig(config)
 
-    # # Remove existing stream handlers that are not disabled by dictConfig
-    # for log in ('prefect',):
-    #     logger = logging.getLogger(log)
-    #     logger.handlers = [hdlr for hdlr in logger.handlers
-    #                        if not isinstance(hdlr, logging.StreamHandler)]
-    #     logger.setLevel(logging.NOTSET)
-
     # capture warnings on the log
     logging.captureWarnings(True)
 
     root = logging.getLogger()
     root.info('Iguazu logging initialized')
-
-    root.debug('debug')
-    root.info('info')
-    root.warning('warning')
 
 
 cli.add_command(deploy_group)
