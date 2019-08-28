@@ -130,12 +130,22 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     return data
 
 
-def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda_params=None):
-    """ Separate phasic (SCR) and tonic (SCL) galvanic components using a convexe deconvolution.
+def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
+                 cvxeda_params=None, epoch_size=None, epoch_overlap=None):
+    """ Separate galvanic components using a convex deconvolution.
+
+    This function separates the phasic (SCR) and tonic (SCL) galvanic components
+    using the cvxEDA algorithm.
+
+    For large signals, the underlying library (cvx) is particularly heavy on
+    memory usage. Also, since it uses C code, it holds and does not relase the
+    Python global interpreter lock (GIL). This makes everything more difficult,
+    in particular for Iguazu. In order to manage this, one can do the algorithm
+    by epochs using both the `epoch_size` and `epoch_overlap` parameters.
 
     Parameters
     ----------
-    data: pd.ataFrame
+    data: pd.DataFrame
         Dataframe containing the preprocessed GSR in channel given by column_name.
     column: str | None
         Name of column where the data of interest are located.
@@ -146,11 +156,17 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda
         Maximum acceptable amplitude of SCR component.
     cvxeda_params:
         Keywords arguments to apply cvxEDA algorithm.
+    epoch_size: float
+        Size in seconds of the epoch size. When set to ``None``, cvxEDA will
+        be applied only once on the whole signal.
+    epoch_overlap: float
+        Size in seconds of the epoch overlap. When set to ``None``, cvxEDA will
+        be applied only once on the whole signal.
 
     Returns
     -------
     data: pd.DataFrame
-          Dataframe with columns: ['F_clean_inversed_lowpassed_zscored_SCR', 'F_clean_inversed_lowpassed_zscored°SCL', 'bad']
+        Dataframe with columns: `..._SCR`, `..._SCL` and `bad`.
 
     Examples
     --------
@@ -159,26 +175,66 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda
 
     """
     cvxeda_params = cvxeda_params or {}
+
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
-    if 'bad' not in data:
-        raise Exception('Received data without a column named "bad"')
-
-    bad = data.bad
+    if 'bad' in data:
+        bad = data['bad']
+    else:
+        bad = pd.Series(False, name='bad', index=data.index)
 
     # if no column is specified, consider the first one
     column = column or data.columns[0]
 
-    # Deconvolution or the signal
-    data = apply_cvxEDA(data[[column, 'bad']].dropna(), column=column, **cvxeda_params)
+    n = data.shape[0]
+    idx_epochs = np.arange(n)[np.newaxis, :]
+    idx_warmup = slice(0, n)
+
+    if epoch_size is not None and epoch_overlap is not None:
+        fs = estimate_rate(data)
+        n_warmup = int(warmup_duration * fs)
+        n_epoch = int(epoch_size * fs) + n_warmup
+        n_overlap = int(epoch_overlap * fs)
+        logger.debug('Attempting to epoch signal of %d samples into epochs '
+                     'of %d samples and %d overlap', n, n_epoch, n_overlap)
+
+        if n < n_epoch + n_overlap:
+            # Data is not big enough for window
+            logger.debug('Cannot epoch into epochs of %d samples, signal is not '
+                         'large enough. Falling back to complete implementation.',
+                         n_epoch)
+        else:
+            idx_epochs = sliding_window(np.arange(n), size=n_epoch, stepsize=n_overlap)
+            idx_warmup = slice(n_warmup, -n_warmup)
+            logger.debug('cvxEDA epoched implementation with %d epochs', len(idx_epochs))
+
+    else:
+        logger.debug('cvxEDA complete implementation')
+
+    epochs = []
+    for i, idx in enumerate(idx_epochs):
+        logger.debug('Epoch %d / %d', i+1, len(idx_epochs))
+        chunk = (
+            apply_cvxEDA(data.iloc[idx][[column]].dropna(), **cvxeda_params)
+            .iloc[idx_warmup]
+            .rename_axis(index='epoched_index')
+            .reset_index()
+        )
+        epochs.append(chunk)
+
+    data = (
+        pd.concat(epochs, ignore_index=False)
+        .groupby('epoched_index')
+        .mean()
+        .rename_axis(index=data.index.name)
+    )
 
     # add a column "bad" with rejection boolean on amplitude criteria
-    data.loc[:, 'bad'] = bad
+    data['bad'] = bad
     data.loc[data[column + '_SCR'] >= threshold_scr, 'bad'] = True
 
     # set warmup period to "bad"
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
-    # TODO: this does not do what it's supposed to do; it should be a slice!
     data.loc[:data.index[0] + warm_up_timedelta, 'bad'] = True
     data.loc[data.index[-1] - warm_up_timedelta:, 'bad'] = True
 

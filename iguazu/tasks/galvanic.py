@@ -14,7 +14,7 @@ class CleanSignal(prefect.Task):
 
     This task performs the following steps:
 
-        - troncate the signal between the begining and end of the session
+        - truncate the signal between the beginning and end of the session
         - append a 'bad' column to estimate quality as a boolean
         - detect and remove glitches and 0.0 values due to OA saturation
         - inverse the voltage signal to estimate skin conductance
@@ -172,6 +172,8 @@ class ApplyCVX(prefect.Task):
                  signal_column: Optional[str] = None,
                  warmup_duration: int = 15,
                  threshold_scr: float = 4.,
+                 epoch_size: Optional[float] = None,
+                 epoch_overlap: Optional[float] = None,
                  cvxeda_kwargs: Optional[Dict] = None,
                  force: bool = False,
                  **kwargs):
@@ -181,6 +183,8 @@ class ApplyCVX(prefect.Task):
         self.signals_column = signal_column
         self.warmup_duration = warmup_duration
         self.threshold_scr = threshold_scr
+        self.epoch_size = epoch_size
+        self.epoch_overlap = epoch_overlap
         self.cvxeda_kwargs = cvxeda_kwargs or {}
         self.force = force
 
@@ -237,9 +241,11 @@ class ApplyCVX(prefect.Task):
                 assert isinstance(df_signals, pd.DataFrame)
                 df_output = galvanic_cvx(df_signals,
                                          signals_column,
-                                         self.warmup_duration,
-                                         self.threshold_scr,
-                                         self.cvxeda_kwargs)
+                                         warmup_duration=self.warmup_duration,
+                                         threshold_scr=self.threshold_scr,
+                                         epoch_size=self.epoch_size,
+                                         epoch_overlap=self.epoch_overlap,
+                                         cvxeda_params=self.cvxeda_kwargs)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state, bad_ratio=df_output.bad.mean())
                 # Manage output, save to file

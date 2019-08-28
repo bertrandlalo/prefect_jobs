@@ -116,6 +116,8 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         signal_column='F_filtered_clean_inversed_zscored',
         warmup_duration=15,
         threshold_scr=4,
+        epoch_size=300,
+        epoch_overlap=60,
         force=force,
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],
