@@ -321,6 +321,8 @@ class LocalFile(FileProxy):
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
             child._metadata['base']['id'] = child._file_id
             child._metadata['iguazu']['parents'] = base_metadata['id']
+            # unset iguazu state
+            child._metadata['iguazu'].pop('state', None)
 
         return child
 
