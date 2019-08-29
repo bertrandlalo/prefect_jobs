@@ -57,7 +57,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     corrupted_maxratio: float
         Maximum acceptable ratio of corrupted (bad) samples.
     sampling_rate: float
-        Rate of output signal (after decimation)
+        Sampling rate to uniformly resample the input sample at the very
+        beginning of this function
 
     Returns
     -------
@@ -129,6 +130,12 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     data = pd.concat([data, data_clean], axis=1)
 
     return data
+
+
+def downsample(data, sampling_rate):
+    # decimate
+    logger.debug('Decimating signal to %d Hz', sampling_rate)
+    return drop_rows(data, sampling_rate)
 
 
 def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
