@@ -232,7 +232,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         ),
         force=force,
         # Prefect task arguments
-        name='ExtractFeatures__scr',
+        name='ExtractFeatures_scr',
         state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
@@ -272,7 +272,7 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         },
         force=force,
         # Prefect task arguments
-        name='ExtractFeatures__scl',
+        name='ExtractFeatures_scl',
         state_handlers=[garbage_collect_handler, logging_handler],
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),

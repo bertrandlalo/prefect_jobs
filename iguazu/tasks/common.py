@@ -122,6 +122,10 @@ class MergeFilesFromGroups(prefect.Task):
                             data = pd.read_hdf(input_store, groups[0])
                             assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
                             data.to_hdf(output_store, output_group)
+                            # TODO: since we are using both numbers and 'bad' to set the values
+                            #       of the group, this generates a pytables warning:
+                            #       PerformanceWarning: your performance may suffer as PyTables
+                            #       will pickle object types that it cannot map directly to c-types
 
             state = 'SUCCESS'
             meta = get_base_meta(self, state=state)

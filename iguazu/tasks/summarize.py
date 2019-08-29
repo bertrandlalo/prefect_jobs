@@ -81,7 +81,7 @@ class ExtractFeatures(prefect.Task):
                 meta = get_base_meta(self, state='SUCCESS')
 
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail: %s', ex)
+                self.logger.warning('Extract features graceful fail: %s', ex)
                 features = pd.DataFrame()
                 meta = get_base_meta(self, state='FAILURE', exception=str(ex))
 
