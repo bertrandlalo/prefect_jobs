@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import logging
 
 from prefect import Flow
@@ -8,8 +9,9 @@ from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
-from iguazu.tasks.galvanic import CleanSignal, ApplyCVX, DetectSCRPeaks, RemoveBaseline
+from iguazu.tasks.galvanic import ApplyCVX, CleanSignal, DetectSCRPeaks, Downsample
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
+from iguazu.tasks.spectral import BandPowers
 from iguazu.tasks.summarize import ExtractFeatures
 from iguazu.tasks.unity import ExtractSequences
 
@@ -105,6 +107,15 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         ),
         corrupted_maxratio=0.3,
         sampling_rate=512,
+        force=force,
+        # Prefect task arguments
+        state_handlers=[garbage_collect_handler, logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
+    )
+    downsample = Downsample(
+        # Iguazu task constructor arguments
+        sampling_rate=256,
         force=force,
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],
@@ -237,7 +248,8 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         # Galvanic features flow:
         # Signal pre-processing branch: Clean -> CVX -> SCR
         clean_signals = clean.map(signal=raw_signals, events=events)
-        cvx = apply_cvx.map(clean_signals)
+        clean_signals_256 = downsample.map(signal=clean_signals)
+        cvx = apply_cvx.map(clean_signals_256)
         scr = detect_scr_peaks.map(cvx)
 
         # Event handling branch
