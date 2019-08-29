@@ -77,7 +77,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
 
-    # troncate dataframe on session times
+    # truncate dataframe on session times
     data = data[begins:ends]
     data = data.loc[:, [column]]
 

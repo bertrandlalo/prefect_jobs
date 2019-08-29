@@ -26,7 +26,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
               duration of the slice. Default to False.
             - drop_bad_samples (bool): When True, if a column in the data is called "bad",
               then consider only the good samples (ie. where bad is False). Default to False.
-            - empty_policy (str|float|NaN): Value to set when the troncated data is empty
+            - empty_policy (str|float|NaN): Value to set when the truncated data is empty
                (for example, if all samples have been dropped because they were bad).
                 Default to np.NaN.
     sequences: list
@@ -103,25 +103,25 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
         for sequence_occurence in [s for s in sequences_report.columns if sequence in s]:
             begin = sequences_report.loc["begin", sequence_occurence]
             end = sequences_report.loc["end", sequence_occurence]
-            data_troncated = data[begin:end]
+            data_truncated = data[begin:end]
             duration = (end - begin) / np.timedelta64(1, 's')
-            if not data_troncated.empty:
-                data_troncated.index -= data_troncated.index[0]
-                data_troncated.index /= np.timedelta64(1, 's')  # convert datetime index into floats
+            if not data_truncated.empty:
+                data_truncated.index -= data_truncated.index[0]
+                data_truncated.index /= np.timedelta64(1, 's')  # convert datetime index into floats
 
             features_on_sequence = []
 
             for feature_name, feature_definition in feature_definitions.items():
                 empty_policy = feature_definition["empty_policy"]
                 if feature_definition["columns"] in ["all", None]:
-                    columns = data_troncated.columns
+                    columns = data_truncated.columns
                 else:
                     columns = set(feature_definition["columns"])
-                    if not columns.issubset(data_troncated.columns):
+                    if not columns.issubset(data_truncated.columns):
                         raise ValueError("Columns should be a subset of data.columns")
-                tmp = data_troncated.loc[:, list(columns)]  # this makes a copy
-                if feature_definition["drop_bad_samples"] and "bad" in data_troncated:
-                    tmp = tmp[~data_troncated.bad]
+                tmp = data_truncated.loc[:, list(columns)]  # this makes a copy
+                if feature_definition["drop_bad_samples"] and "bad" in data_truncated:
+                    tmp = tmp[~data_truncated.bad]
 
                 if "custom" in feature_definition:
                     custom = feature_definition["custom"]
