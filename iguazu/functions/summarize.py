@@ -88,14 +88,10 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
 
     """
     for feature_definition in feature_definitions.values():
-        if "columns" not in feature_definition:
-            feature_definition["columns"] = None
-        if "divide_by_duration" not in feature_definition:
-            feature_definition["divide_by_duration"] = False
-        if "drop_bad_samples" not in feature_definition:
-            feature_definition["drop_bad_samples"] = False
-        if "empty_policy" not in feature_definition:
-            feature_definition["empty_policy"] = np.NaN
+        feature_definition.setdefault('columns', None)
+        feature_definition.setdefault('divide_by_duration', False)
+        feature_definition.setdefault('drop_bad_samples', False)
+        feature_definition.setdefault('empty_policy', np.NaN)
     sequences = sequences or sequences_report.columns
 
     features = [pd.DataFrame()]
