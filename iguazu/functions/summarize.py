@@ -1,4 +1,4 @@
-from importlib import import_module
+import importlib
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ from sklearn.metrics import auc
 
 
 def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=None):
-    ''' Extract features from a time series defined on a period (slice).
+    """ Extract features from a time series defined on a period (slice).
 
     Parameters
     ----------
@@ -72,7 +72,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 "divide_by_duration": True, "empty_policy": 0.0, "drop_bad_samples": True},
                             "median": {"class": "numpy.nanmedian", "columns": ['SCR_peaks_increase-duration', 'SCR_peaks_increase-amplitude'],
                                 "divide_by_duration": False, "empty_policy": "bad", "drop_bad_samples": True}}
-    >>> features = signal_to_feature(data, sequences_report, feature_definitions=scr_feature_definitions, sequences=None)
+    >>> features = signal_to_feature(data, sequences_report, feature_definitions=feature_definitions, sequences=None)
     >>> features
         name                                               SCR_peaks_detected_tau  ... SCR_peaks_increase-duration_median
         intro_sequence_0                                                        2  ...                            1.87101
@@ -86,7 +86,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
         baseline_eyes-opened_2                                                bad  ...                                bad
         baseline_eyes-opened_3                                                bad  ...                                bad
 
-    '''
+    """
     for feature_definition in feature_definitions.values():
         if "columns" not in feature_definition:
             feature_definition["columns"] = None
@@ -171,12 +171,8 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                             data=[empty_policy] * len(columns))
                     else:
 
-                        split = feature_definition["class"].rsplit('.', 1)
-                        module_name = split[0]
-                        class_name = split[1]
-                        m = import_module(module_name)
-                        _func = getattr(m, class_name)
-                        feat = tmp.astype(float).apply(_func)
+                        func = _fqdn_to_func(feature_definition['class'])
+                        feat = tmp.astype(float).apply(func)
 
                 if feature_definition["divide_by_duration"]:
                     feat /= duration
@@ -205,3 +201,9 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
 
     return features
 
+
+def _fqdn_to_func(fqdn):
+    module_name, name = fqdn.rsplit('.')
+    module = importlib.import_module(module_name)
+    obj = getattr(module, name)
+    return obj
