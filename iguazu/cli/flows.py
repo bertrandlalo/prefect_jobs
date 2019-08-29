@@ -95,7 +95,7 @@ class RunFlowGroup(click.core.Group):
               help='Output CSV report of the execution')
 @click.option('--force', required=False, is_flag=True, default=False,
               help='Whether to force the processing if the path already exists in the output file. ')
-@click.option('--cache/--no-cache', 'cache', is_flag=True, default=True,
+@click.option('--cache/--no-cache', 'cache', is_flag=True, default=True, show_default=True,
               help='Use the prefect cache. ')
 @click.pass_context
 def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report, force, cache):
