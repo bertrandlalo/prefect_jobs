@@ -63,8 +63,7 @@ class BandPowers(prefect.Task):
                 df_signals = pd.read_hdf(signal_store, signal_group)
                 assert isinstance(df_signals, pd.DataFrame)
                 df_output = bandpower(df_signals[[self.signal_column]], self.bands,
-                                      epoch_size=self.epoch_size, epoch_overlap=self.epoch_overlap,
-                                      log=True)
+                                      epoch_size=self.epoch_size, epoch_overlap=self.epoch_overlap)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state)
                 # Manage output, save to file

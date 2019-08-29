@@ -161,6 +161,54 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         cache_for=datetime.timedelta(days=7),
         cache_validator=ParametrizedValidator(force=force),
     )
+    bands = dict(
+        # Classic HRV bands      # Number of bins for 60 seconds @ 512 Hz
+        # ULF=(0.0001, 0.0033),    # 0 bins (empty!!!)
+        VLF=(0.003, 0.04),       # 2 bins
+        LF=(0.04, 0.15),         # 6 bins
+        HF=(0.15, 0.40),         # 15 bins
+        VHF=(0.4, 0.5),          # 6 bins
+        # 5Hz wide division of the rest of the signal
+        VHF1=(1.0, 5.0),         # 240 bins
+        VHF2=(5.0, 10.0),        # 300 bins
+        VHF3=(10.0, 15.0),       # 300 bins
+        VHF4=(15.0, 20.0),       # 300 bins
+        VHF5=(20.0, 25.0),       # 300 bins
+        VHF6=(25.0, 30.0),       # 300 bins
+    )
+    band_powers = BandPowers(
+        # Iguazu task constructor arguments
+        signal_group='/gsr/timeseries/preprocessed',
+        signal_column='F_filtered_clean_inversed',
+        epoch_size=60,     # 60 second epochs
+        epoch_overlap=59,  # one epoch every second
+        bands=bands,
+        # Prefect task arguments
+        state_handlers=[garbage_collect_handler, logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
+    )
+    band_powers_features = ExtractFeatures(
+        # Iguazu task constructor arguments
+        signals_group="/gsr/timeseries/bandpowers",
+        report_group="/unity/sequences_report",
+        output_group="/gsr/features/spectral",
+        feature_definitions=dict(
+            median={
+                "class": "numpy.nanmedian",  # TODO: a geometric mean may be better
+                "columns": ['_'.join(tup) for tup in itertools.product(['F_filtered_clean_inversed'], bands.keys())],   # TODO: some way to say all columns
+                "divide_by_duration": False,
+                "empty_policy": 'bad',
+                "drop_bad_samples": True,
+            },
+        ),
+        force=force,
+        # Prefect task arguments
+        name='ExtractFeatures_bp',
+        state_handlers=[garbage_collect_handler, logging_handler],
+        cache_for=datetime.timedelta(days=7),
+        cache_validator=ParametrizedValidator(force=force),
+    )
     extract_features_scr = ExtractFeatures(
         # Iguazu task constructor arguments
         signals_group="/gsr/timeseries/scrpeaks",
@@ -252,18 +300,23 @@ def galvanic_features_flow(*, force=False, workspace_name=None, query=None, alt_
         cvx = apply_cvx.map(clean_signals_256)
         scr = detect_scr_peaks.map(cvx)
 
+        # band power branch
+        powers = band_powers.map(signal=clean_signals)
+
         # Event handling branch
         sequences_reports = report_sequences.map(events=events)
 
         # Feature extraction (merge of signal pre-processing and event handling)
         scr_features = extract_features_scr.map(signals=scr, report=sequences_reports)
         scl_features = extract_features_scl.map(signals=cvx, report=sequences_reports)
+        bp_features = band_powers_features.map(signals=powers, report=sequences_reports)
 
         # Subject summary
         merged = merge_subject.map(parent=raw_signals,
                                    gsr_timeseries_deconvoluted=cvx,
                                    gsr_features_scr=scr_features,
                                    gsr_features_scl=scl_features,
+                                   bp_features=bp_features,
                                    unity_sequences=sequences_reports)
 
         # Send slack notification

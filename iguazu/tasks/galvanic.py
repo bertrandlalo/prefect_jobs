@@ -3,7 +3,10 @@ from typing import Dict, Optional
 import pandas as pd
 import prefect
 
-from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
+from iguazu.functions.galvanic import (
+    downsample, galvanic_cvx, galvanic_scrpeaks, galvanic_clean,
+    galvanic_baseline_correction
+)
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
@@ -68,7 +71,7 @@ class CleanSignal(prefect.Task):
         self.interpolation_kwargs = interpolation_kwargs or {}
         self.filter_kwargs = filter_kwargs or {}
         self.scaling_kwargs = scaling_kwargs or {}
-        self.sampling_rate = sampling_rate or 256
+        self.sampling_rate = sampling_rate or 512
         self.corrupted_maxratio = corrupted_maxratio or 100
         self.force = force
 
@@ -162,6 +165,66 @@ class CleanSignal(prefect.Task):
         except Exception as ex:
             # Manage output, save to file
             self.logger.warning('CleanSignal failed with an exception', exc_info=True)
+            task_fail(self, ex, output, output_group)
+
+
+class Downsample(prefect.Task):  # TODO: resample?
+
+    def __init__(self,
+                 sampling_rate: float,
+                 input_group: Optional[str] = None,
+                 output_group: Optional[str] = None,
+                 force: bool = False,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.fs = sampling_rate
+        self.input_group = input_group
+        self.output_group = output_group
+        self.force = force
+
+    def run(self, signal: FileProxy) -> FileProxy:
+        output = signal.make_child(suffix=f'_{self.fs}Hz')
+        self.logger.info('Downsampling signal %s to %s GHz -> %s',
+                         signal, self.fs, output)
+
+        # Our current force detection code
+        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
+            self.logger.info('Output already exists, skipping')
+            raise SKIPRESULT('Output already exists', result=output)
+
+        # At that point, we are sure that the previous tasks succeeded and that
+        # the output has not yet been generated ()
+
+        input_group = self.input_group or '/gsr/timeseries/preprocessed'
+        output_group = self.output_group or '/gsr/timeseries/preprocessed'
+
+        signal_file = str(signal.file)
+
+        try:
+            # check if previous task succeeded
+            if signal.metadata.get('iguazu', {}).get('state') == 'FAILURE':
+                # Fail
+                self.logger.info('Previous task failed, propagating failure')
+                raise IguazuError('Previous task failed')
+
+            with pd.option_context('mode.chained_assignment', None), \
+                 pd.HDFStore(signal_file, 'r') as signal_store:
+
+                # TODO discuss: select column before sending it to a column
+                df_signals = pd.read_hdf(signal_store, input_group)
+
+                df_output = downsample(df_signals, self.fs)
+
+                state = 'SUCCESS'
+                meta = get_base_meta(self, state=state)
+                # Manage output, save to file
+                task_upload_result(self, df_output, meta, state, output, output_group)
+                self.logger.info('Downsample finished successfully, final '
+                                 'dataframe has shape %s', df_output.shape)
+                return output
+        except Exception as ex:
+            # Manage output, save to file
+            self.logger.warning('Downsample failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
 
 
