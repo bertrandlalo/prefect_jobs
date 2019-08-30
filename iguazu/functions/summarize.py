@@ -1,9 +1,15 @@
 import importlib
+import itertools
+import logging
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 from scipy.stats import linregress
 from sklearn.metrics import auc
+
+
+logger = logging.getLogger(__name__)
 
 
 def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=None):
@@ -122,23 +128,27 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                 if "custom" in feature_definition:
                     custom = feature_definition["custom"]
                     if custom == "linregress":
+                        # TODO: creating things as transposed is unnatural
+                        index = ['_'.join(tup) for tup in itertools.product([feature_name], ['rlm'],
+                                                                            ['slope', 'r', 'r2', 'p'])]
                         if tmp.empty:
-                            feat = pd.DataFrame(columns=columns,
-                                                index=[feature_name + "_slope", feature_name + "_rvalue"],
-                                                data=np.array([[empty_policy] * len(columns)] * 2)).T
+                            feat = pd.DataFrame(index=index,
+                                                columns=columns,
+                                                data=np.array([[empty_policy] * len(columns)] * 4)).T
                         else:
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
                                 if tmp_col.empty:
-                                    slope, rvalue = empty_policy, empty_policy
+                                    slope, intercept, r, r2, pvalue = [empty_policy] * 5
                                 else:
                                     x = tmp_col.values.astype(float)
                                     y = tmp_col.index
-                                    slope, intercept, rvalue, pvalue, stderr = linregress(x, y)
+                                    slope, intercept, r, r2, pvalue = linear_regression(y, x)
 
-                                feat.append(pd.DataFrame(index=[feature_name + "_slope", feature_name + "_rvalue"],
-                                                         data=[slope, rvalue], columns=[column]))
+                                feat.append(pd.DataFrame(index=index,
+                                                         data=[slope, r, r2, pvalue],
+                                                         columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
                     elif custom == "auc":
                         if tmp.empty:
@@ -196,6 +206,23 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
     features = pd.concat(features, sort=False)
 
     return features
+
+
+def linear_regression(y, x):
+    y = np.asarray(y)
+    x = np.asarray(x)
+
+    rlm = sm.RLM(x, sm.tools.add_constant(y), M=sm.robust.norms.HuberT())
+    results = rlm.fit(conv='coefs', tol=1e-3)
+    logger.debug('Linear regression results:\n%s', results.summary())
+
+    intercept, slope = results.params
+    _, pvalue = results.pvalues  # p-value Wald test of intercept and slope
+    r = np.corrcoef(x, y)[0, 1]
+    ss_res = np.sum(results.sresid ** 2)
+    ss_tot = np.sum((y - y.mean()) ** 2)
+    r2 = 1 - ss_res / ss_tot
+    return slope, intercept, r, r2, pvalue
 
 
 def _fqdn_to_func(fqdn):

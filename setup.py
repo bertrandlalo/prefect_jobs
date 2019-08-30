@@ -19,6 +19,7 @@ dependencies = [
     'scikit-learn>=0.21.2,<0.22.0',
     'scipy>=1.3,<2.0',
     'simplegeneric>=0.8.1,<0.9.0',
+    'statsmodels>=0.10.1,<0.11',
     'tables>=3.5,<4.0',
     'tzlocal>=2.0,<3.0'
 ]
