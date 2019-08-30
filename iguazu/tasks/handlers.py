@@ -114,6 +114,11 @@ def garbage_collect_handler(task, old_state, new_state):
             if mem_usage_gb > 2 or mem_percent >= 75:  # usage over 75%
                 logger.info('Calling gc, usage was over the limit')
                 gc.collect()
+
+                mem_percent = process.memory_percent()
+                mem_usage_gb = process.memory_info().rss / (1 << 30)
+                logger.info('Memory usage after gc collect: %.2f Gb (%.2f %%)',
+                            mem_usage_gb, mem_percent)
         except:
             logger.debug('Failed to garbage collect', exc_info=True)
 
