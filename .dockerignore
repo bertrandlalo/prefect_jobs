@@ -5,3 +5,4 @@ dask-worker-space
 debug.log
 docs
 tests
+output
