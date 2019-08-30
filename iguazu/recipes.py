@@ -138,7 +138,7 @@ def execute_flow(func, func_kwargs, executor, context_args): #, flow_kwargs=None
     context_args.setdefault('caches', {})
     try:
         logger.info('Trying to restore previous cache from %s', cache_filename)
-        previous_cache = load_pickle(cache_filename, None)
+        previous_cache = load_pickle(cache_filename, None) or {}
         logger.info('Restored cached had %d elements', len(previous_cache))
         context_args['caches'] = previous_cache
         # flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename, default={}),
