@@ -10,11 +10,11 @@ from scipy.signal.spectral import _spectral_helper
 logger = logging.getLogger(__name__)
 
 
-def bandpower(data, bands, epoch_size, epoch_overlap, relative=False): #, log=False):
+def bandpower(data, bands, epoch_size, epoch_overlap, relative=False):
 
     fs = int(estimate_rate(data))
-    logger.debug('Calculating spectra with fs=%dHz on data shaped as %s',
-                 fs, data.shape)
+    logger.debug('Calculating %s spectra with fs=%dHz on data shaped as %s',
+                 'relative' if relative else 'absolute', fs, data.shape)
 
     x = data.values.T
     nperseg = epoch_size * fs
@@ -33,6 +33,7 @@ def bandpower(data, bands, epoch_size, epoch_overlap, relative=False): #, log=Fa
     n = index.shape[0]
 
     powers = []
+    rel_suffix = '_rel' if relative else '_abs'
     for name, (f_start, f_stop) in bands.items():
         f_start = f_start or 0
         f_stop = f_stop or fs / 2
@@ -58,6 +59,6 @@ def bandpower(data, bands, epoch_size, epoch_overlap, relative=False): #, log=Fa
                                   columns=data.columns,
                                   index=index)
 
-        powers.append(result.add_suffix(f'_{name}'))
+        powers.append(result.add_suffix(f'_{name}{rel_suffix}'))
 
     return pd.concat(powers, axis='columns')

@@ -4,9 +4,7 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 import prefect
 
-# from iguazu.functions.galvanic import galvanic_cvx, galvanic_scrpeaks, galvanic_clean, galvanic_baseline_correction
 from iguazu.helpers.files import FileProxy
-from iguazu.helpers.tasks import IguazuError
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
 from iguazu.functions.spectral import bandpower
@@ -18,6 +16,7 @@ class BandPowers(prefect.Task):
                  epoch_size: int,
                  epoch_overlap: int,
                  bands: Dict[str, Tuple[float, float]],
+                 relative: bool = False,
                  signal_group: Optional[str] = None,
                  signal_column: Optional[str] = None,
                  output_group: Optional[str] = None,
@@ -27,6 +26,7 @@ class BandPowers(prefect.Task):
         self.epoch_size = epoch_size
         self.epoch_overlap = epoch_overlap
         self.bands = copy.deepcopy(bands)
+        self.relative = relative
         self.signal_group = signal_group
         self.signal_column = signal_column
         self.output_group = output_group
@@ -34,7 +34,7 @@ class BandPowers(prefect.Task):
 
     def run(self, signal: FileProxy) -> FileProxy:
 
-        output = signal.make_child(suffix='_bp')
+        output = signal.make_child(suffix='_bp' + ('_rel' if self.relative else '_abs'))
         self.logger.info('Band power extraction for signal=%s -> %s', signal, output)
 
         # Our current force detection code
@@ -63,7 +63,8 @@ class BandPowers(prefect.Task):
                 df_signals = pd.read_hdf(signal_store, signal_group)
                 assert isinstance(df_signals, pd.DataFrame)
                 df_output = bandpower(df_signals[[self.signal_column]], self.bands,
-                                      epoch_size=self.epoch_size, epoch_overlap=self.epoch_overlap)
+                                      epoch_size=self.epoch_size, epoch_overlap=self.epoch_overlap,
+                                      relative=self.relative)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state)
                 # Manage output, save to file
@@ -73,6 +74,5 @@ class BandPowers(prefect.Task):
             # Manage output, save to file
             self.logger.warning('BandPowers failed with an exception', exc_info=True)
             task_fail(self, ex, output, output_group)
-
 
         return output

@@ -65,8 +65,10 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     # instantiate tasks
     merge_population = SummarizePopulation(
         # Iguazu task constructor arguments
-        groups={'gsr_features_scr': None,
-                'gsr_features_scl': None},
+        groups={'gsr_features_scr': None,  # TODO: I dont understand why use _ instead of / since we are talking about groups
+                'gsr_features_scl': None,
+                'bp_relative_features': None,
+                'bp_absolute_features': None,},
         filename='galvanic_summary',
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],
