@@ -56,7 +56,6 @@ scheduler:
     repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
     tag: 0.1.1
     pullPolicy: Always
-  replicas: 1
   resources: {}
     # limits:
     #   cpu: 1.8
@@ -84,6 +83,7 @@ dask_scheduler:
   replicas: 1
   serviceType: ClusterIP  # Change to LoadBalancer if you want to access from outside (this is dangerous!)
   servicePort: 8786
+  env: []
   resources: {}
     # limits:
     #   cpu: 1.8

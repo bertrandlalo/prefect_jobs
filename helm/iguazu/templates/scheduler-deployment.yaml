@@ -10,7 +10,7 @@ metadata:
     chart: {{ template "iguazu.chart" . }}
     component: scheduler
 spec:
-  replicas: {{ .Values.scheduler.replicas }}
+  replicas: 1
   selector:
     matchLabels:
       app: {{ template "iguazu.name" . }}
