@@ -1,0 +1,12 @@
+# This file is copied in the Docker image and will only be used in a cluster scenario
+distributed:
+  worker:
+    memory:
+      # Do not pause worker when memory is high
+      pause: false
+
+#logging:
+#  iguazu: debug
+
+admin:
+  log-format: '[%(asctime)s] %(levelname)8s - %(name)s | %(message)s'

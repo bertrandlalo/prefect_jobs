@@ -30,7 +30,6 @@ spec:
           imagePullPolicy: {{ .Values.dask_worker.image.pullPolicy }}
           args:
             - dask-worker
-            - dask-scheduler:8786
           {{- if .Values.dask_worker.resources.limits }}
             - --nthreads
             - {{ .Values.dask_worker.resources.limits.cpu | default .Values.dask_worker.default_resources.cpu | quote }}
@@ -38,11 +37,12 @@ spec:
             - {{ .Values.dask_worker.resources.limits.memory | default .Values.dask_worker.default_resources.memory | quote }}
           {{- end }}
             - --no-dashboard
-            - --preload
-            - quetzal.client   # Added to solve issue #40
             - --no-nanny       # Also needed for issue #40
+            - --preload
+            - iguazu.cli.dask  # Added to solve issue #40 and #37
+            - dask-scheduler:8786
           ports:
-            - containerPort: 8789
+            - containerPort: 8789  # TODO: is this really needed?
           resources:
 {{ toYaml .Values.dask_worker.resources | indent 12 }}
           env:

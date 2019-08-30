@@ -24,6 +24,10 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
         ctx.obj = ctx.obj or {}
         ctx.obj['quetzal_logs'] = quetzal_logs
 
+    init_logging(log_level, colored_logs)
+
+
+def init_logging(log_level, colored_logs):
     # Configure using dictConfig
     config = {
         'version': 1,
@@ -81,7 +85,7 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
             },
             'iguazu.cache_validators': {
                 'level': 'WARNING',
-            }
+            },
             # Use this template to silence a particular library
             # 'some_name': {
             #     'level': 'WARNING',
@@ -103,6 +107,13 @@ def cli(ctx, log_level, colored_logs, quetzal_logs):
 
     root = logging.getLogger()
     root.info('Iguazu logging initialized')
+
+
+@cli.command()
+def version():
+    """Print version and exit"""
+    from iguazu import __version__
+    click.echo(f'Iguazu version {__version__}.')
 
 
 cli.add_command(deploy_group)

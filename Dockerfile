@@ -42,6 +42,9 @@ RUN mkdir /code
 WORKDIR /code
 COPY setup.cfg setup.py ./
 COPY iguazu ./iguazu
-#RUN mkdir /root/.dask
-#COPY config.yaml /root/.dask/config.yaml
 RUN pip install .
+
+RUN useradd --create-home iguazu && chown -R iguazu /code
+USER iguazu
+RUN mkdir -p ${HOME}/.config/dask
+COPY dask-config.yaml ${HOME}/.config/dask/config.yaml
