@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: {{ template "iguazu.fullname" . }}-dask-worker
-          image: "{{ .Values.dask_worker.image.repository }}:{{ .Values.dask_worker.image.tag }}"
+          image: "{{ default .Values.iguazu.repository .Values.dask_worker.image.repository }}:{{ default .Values.iguazu.tag .Values.dask_worker.image.tag }}"
           imagePullPolicy: {{ .Values.dask_worker.image.pullPolicy }}
           args:
             - dask-worker

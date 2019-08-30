@@ -1,25 +1,37 @@
+==============================================================================
 Thank you for installing {{ .Chart.Name | upper }}, released at name: {{ .Release.Name }}.
+==============================================================================
 
 To learn more about the release, try:
 
   $ helm status {{ .Release.Name }}  # information about running pods and this message
   $ helm get {{ .Release.Name }}     # get full Kubernetes specification
 
-This release includes a Dask scheduler, an Iguazu scheduler and {{ .Values.dask_worker.replicas }} Dask workers.
+This release includes:
 
-The scheduler expose external services to which you can connect directly to the Dask
-cluster. You can get these addresses by running the following:
+ * One dask scheduler,
+ * A minimum of {{ .Values.dask_worker.replicas }} and at most {{ .Values.dask_worker.maxReplicas}} dask workers.
+   The exact number is dynamic and depends on a horizontal pod scaler.
+ * A total of {{ len .Values.jobs }} cron jobs to automatically run some of the
+   iguazu pipelines.
 
-  export DASK_SCHEDULER=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-dask-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  export DASK_SCHEDULER_UI_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ template "iguazu.fullname" . }}-dask-scheduler -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  echo http://$DASK_SCHEDULER_UI_IP:{{ .Values.dask_scheduler_ui.servicePort }}  -- Dask dashboard
-  echo http://$DASK_SCHEDULER:{{ .Values.dask_scheduler.servicePort }}    -- Dask Client connection
+The scheduler expose external services to which you can connect directly to the
+Dask cluster. However, **WE HAVE NOT TESTED THIS THROUGHLY**. It is not
+straightforward because you need to create a proxy to connect directly to the
+dask-scheduler service.
+In other words, this port is not open to outside the cluster for security purposes.
 
+The dask UI is available to outside the cluster. You can connect by visiting
+the webpage on the IP address shown on the ingress service:
 
-  NOTE: It may take a few minutes for the LoadBalancer IP to be available, until that the commands below will not work.
-  In the case of minikube, you need to use the kubernetes proxy to get an IP:
+  $ kubectl get services
 
-  $ minikube tunnel --cleanup  # if you already had done this before or you got conflicting routes
-  $ minikube tunnel
+or with
 
-  You can watch the status by running 'kubectl get svc --namespace {{ .Release.Namespace }} -w {{ template "iguazu.fullname" . }}-scheduler'
+  $ echo $(kubectl get services -l 'app=nginx-ingress,component=controller' -o jsonpath='{.items[0].spec.clusterIP}')
+
+Note: it may take a minute for the IP to become available.
+
+You can watch the status of the most important objects of this chart with:
+
+  $ kubectl get pods,services,hpa,cronjobs -l app=iguazu
