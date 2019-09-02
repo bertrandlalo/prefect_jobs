@@ -103,7 +103,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
-        raise IguazuError(f'Artifact corruption of {corrupted_ratio:.2f} exceeds {corrupted_maxratio:.2f}')
+        raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
+                          f'exceeds {corrupted_maxratio * 100:.0f}%')
 
     # bad sample interpolation
     logger.debug('Interpolating %d/%d bad samples', data.bad.sum(), data.shape[0])
