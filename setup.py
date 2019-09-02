@@ -24,7 +24,10 @@ dependencies = [
     'tzlocal>=2.0,<3.0'
 ]
 build_dependencies = dependencies + ['pytest-runner']
-test_dependencies = ['pytest']
+test_dependencies = [
+    'pytest>=5.0.1,<6.0',
+    'pytest-mock>=1.10.4,<2.0',
+]
 authors = [
     ('Raphaëlle Bretrand-Lalo', 'raphaelle@omind.me'),
     ('David Ojeda', 'david@omind.me'),
