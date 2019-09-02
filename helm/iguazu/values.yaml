@@ -40,6 +40,9 @@ defaultJob:
     requests:
       cpu: 50m
       memory: 256Mi
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
 
 jobs:
   # Define one entry per cron job.
@@ -93,7 +96,7 @@ jobs:
     # imageTag: ...             # Use to override the default on iguazu.tag
     # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
     schedule: "0 13 * * *"      # In human: every day at exactly 1 pm
-    suspend: false              # Put this on true to suspend this task
+    # suspend: false            # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
            "--log-level", "DEBUG",
@@ -115,7 +118,7 @@ jobs:
     # imageTag: ...             # Use to override the default on iguazu.tag
     # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
     schedule: "0 2 * * *"       # In human: every day at exactly 2 am
-    suspend: false              # Put this on true to suspend this task
+    # suspend: false            # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
            "--log-level", "DEBUG",
@@ -138,7 +141,7 @@ jobs:
     # imageTag: ...             # Use to override the default on iguazu.tag
     # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
     schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
-    suspend: false              # Put this on true to suspend this task
+    # suspend: false            # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
            "--log-level", "DEBUG",
@@ -185,8 +188,9 @@ dask_worker:
     pullPolicy: Always
   replicas: 2         # Number of MINIMUM dask-workers
   maxReplicas: 12     # Number of MAXIMUM dask-workers
-  targetCPU: 10
-  aptPackages: >-
+  targetCPU: 50       # How much the Horizontal scaler will target as CPU usage.
+                      # When the average CPU is over this value, new workers will be creatd.
+                      # Set to a low value (10) to use as much resources as possible.
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1
     memory: "2GiB"

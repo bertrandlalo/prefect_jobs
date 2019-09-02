@@ -1,7 +1,8 @@
 {{- $chart_name := .Chart.Name }}
 {{- $chart_version := .Chart.Version | replace "+" "_" }}
 {{- $release_name := .Release.Name }}
-{{- $app_name := include "iguazu.fullname" . -}}
+{{- $app_name := include "iguazu.name" . -}}
+{{- $full_name := include "iguazu.fullname" . -}}
 {{- $default_job := .Values.defaultJob }}
 {{- $iguazu_conf := .Values.iguazu}}
 
@@ -10,7 +11,7 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: "{{ $app_name }}-job-{{ $job.name }}"
+  name: "{{ $full_name }}-job-{{ $job.name }}"
   labels:
     app: {{ $app_name }}
     release: {{ $release_name }}
@@ -40,11 +41,11 @@ spec:
             {{- with $job.env | default $default_job.env }}
 {{ toYaml . | indent 12 }}
             {{- end }}
-            {{- range $secret_env := $job.envFromSecret }}
+            {{- range $secret_env := $job.envFromSecret | default $default_job.envFromSecret }}
             - name: {{ $secret_env.name }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $app_name }}-secrets
+                  name: {{ $full_name }}-secrets
                   key: {{ $secret_env.key }}
             {{- end }}
             {{- if $job.command }}
