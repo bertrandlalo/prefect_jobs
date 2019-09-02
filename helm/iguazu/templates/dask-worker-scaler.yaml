@@ -15,4 +15,4 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ template "iguazu.fullname" . }}-dask-worker
-  targetCPUUtilizationPercentage: 25
+  targetCPUUtilizationPercentage: {{ default 50 .Values.dask_worker.targetCPU }}

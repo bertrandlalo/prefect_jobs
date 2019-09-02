@@ -34,7 +34,7 @@ jobs:
     startingDeadlineSeconds: 15
     restartPolicy: Never
     concurrencyPolicy: Forbid   # Only once at a time!
-    schedule: "*/1 * * * *"     # In human: every minute
+    schedule: "0 18 * * *"      # In human: every day at exactly 18h
     suspend: false              # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
@@ -49,8 +49,60 @@ jobs:
            # Flow options
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
-           "--limit", "100",
-           "--shuffle",
+           #"--limit", "100", "--shuffle",
+           ]
+
+    env:
+      - name: PYTHONUNBUFFERED
+        value: "1"
+      - name: QUETZAL_URL
+        value: "https://quetzal.omind.me/api/v1"
+      - name: QUETZAL_INSECURE
+        value: "0"
+      - name: IGUAZU_WORKSPACE
+        value: "iguazu-features-v011"
+    envFromSecret:
+      - name: QUETZAL_USER
+        key: username
+      - name: QUETZAL_PASSWORD
+        key: password
+      - name: SLACK_WEBHOOK_URL
+        key: slack_url
+    resources:
+      limits:
+        cpu: 50m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 256Mi
+  ##############################################################################
+  # Behavioral features
+  - name: behavior-features
+    image:
+      # repository: ... # use to override the default on iguazu.repository
+      # tag: ...        # use to override the default on iguazu.tag
+      pullPolicy: Always
+    failedJobsHistoryLimit: 1
+    successfulJobsHistoryLimit: 3
+    startingDeadlineSeconds: 15
+    restartPolicy: Never
+    concurrencyPolicy: Forbid   # Only once at a time!
+    schedule: "0 16 * * *"      # In human: every day at exactly 16h
+    suspend: false              # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           # Flow name
+           "behavior_features",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           #"--limit", "100", "--shuffle",
            ]
 
     env:
@@ -109,6 +161,7 @@ dask_worker:
     pullPolicy: Always
   replicas: 2         # Number of MINIMUM dask-workers
   maxReplicas: 12     # Number of MAXIMUM dask-workers
+  targetCPU: 10
   aptPackages: >-
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1
