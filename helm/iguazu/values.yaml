@@ -69,7 +69,7 @@ jobs:
     # imageRepository: ...      # Use to override the default on iguazu.repository
     # imageTag: ...             # Use to override the default on iguazu.tag
     # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
-    schedule: "0 18 * * *"      # In human: every day at exactly 18h
+    schedule: "0 1 * * *"       # In human: every day at exactly 1 am
     # suspend: false            # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
@@ -86,14 +86,35 @@ jobs:
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
            #"--limit", "100", "--shuffle",
            ]
-
+  ##############################################################################
+  # Galvanic summary
+  - name: galvanic-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 13 * * *"      # In human: every day at exactly 1 pm
+    suspend: false              # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           # Flow name
+           "summarize_galvanic",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           ]
   ##############################################################################
   # Behavioral features
   - name: behavior-features
     # imageRepository: ...      # Use to override the default on iguazu.repository
     # imageTag: ...             # Use to override the default on iguazu.tag
     # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
-    schedule: "0 16 * * *"      # In human: every day at exactly 16h
+    schedule: "0 2 * * *"       # In human: every day at exactly 2 am
     suspend: false              # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
@@ -109,6 +130,28 @@ jobs:
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
            #"--limit", "100", "--shuffle",
+           ]
+  ##############################################################################
+  # Behavioral summary
+  - name: behavior-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
+    suspend: false              # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           # Flow name
+           "behavior_summary",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
            ]
 
 dask_scheduler:
