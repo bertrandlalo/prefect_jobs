@@ -6,10 +6,51 @@ iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
   tag: 0.1.1
+  pullPolicy: Always
+
+
+defaultJob:
+  # All of these entries can be overriden by a particular job
+  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 3
+  startingDeadlineSeconds: 15
+  restartPolicy: Never
+  concurrencyPolicy: Forbid   # Only once at a time!
+  suspend: false              # Put this on true to suspend tasks
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: QUETZAL_URL
+      value: "https://quetzal.omind.me/api/v1"
+    - name: QUETZAL_INSECURE
+      value: "0"
+    - name: IGUAZU_WORKSPACE
+      value: "iguazu-features-v011"
+  envFromSecret:
+    - name: QUETZAL_USER
+      key: username
+    - name: QUETZAL_PASSWORD
+      key: password
+    - name: SLACK_WEBHOOK_URL
+      key: slack_url
+  resources:
+    limits:
+      cpu: 50m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 256Mi
 
 jobs:
   # Define one entry per cron job.
-  # Note that schedule is defined in cron format. Here is a cheatsheet:
+  # required entries are:
+  # name:     identifier for the job
+  # args:     the command line that defines the job
+  # schedule: when to run the job
+  #
+  # All other entries are optional and default to the defaultJob configuration
+  #
+  # The schedule is defined in cron format. Here is a cheatsheet:
   #  ┌───────────────────── minute (0 - 59)
   #  │ ┌─────────────────── hour (0 - 23)
   #  │ │ ┌───────────────── day of the month (1 - 31)
@@ -25,17 +66,11 @@ jobs:
   ##############################################################################
   # Galvanic features
   - name: galvanic-features
-    image:
-      # repository: ... # use to override the default on iguazu.repository
-      # tag: ...        # use to override the default on iguazu.tag
-      pullPolicy: Always
-    failedJobsHistoryLimit: 1
-    successfulJobsHistoryLimit: 3
-    startingDeadlineSeconds: 15
-    restartPolicy: Never
-    concurrencyPolicy: Forbid   # Only once at a time!
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
     schedule: "0 18 * * *"      # In human: every day at exactly 18h
-    suspend: false              # Put this on true to suspend this task
+    # suspend: false            # Put this on true to suspend this task
     args: ["iguazu",
            # General iguazu options
            "--log-level", "DEBUG",
@@ -52,41 +87,12 @@ jobs:
            #"--limit", "100", "--shuffle",
            ]
 
-    env:
-      - name: PYTHONUNBUFFERED
-        value: "1"
-      - name: QUETZAL_URL
-        value: "https://quetzal.omind.me/api/v1"
-      - name: QUETZAL_INSECURE
-        value: "0"
-      - name: IGUAZU_WORKSPACE
-        value: "iguazu-features-v011"
-    envFromSecret:
-      - name: QUETZAL_USER
-        key: username
-      - name: QUETZAL_PASSWORD
-        key: password
-      - name: SLACK_WEBHOOK_URL
-        key: slack_url
-    resources:
-      limits:
-        cpu: 50m
-        memory: 256Mi
-      requests:
-        cpu: 50m
-        memory: 256Mi
   ##############################################################################
   # Behavioral features
   - name: behavior-features
-    image:
-      # repository: ... # use to override the default on iguazu.repository
-      # tag: ...        # use to override the default on iguazu.tag
-      pullPolicy: Always
-    failedJobsHistoryLimit: 1
-    successfulJobsHistoryLimit: 3
-    startingDeadlineSeconds: 15
-    restartPolicy: Never
-    concurrencyPolicy: Forbid   # Only once at a time!
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
     schedule: "0 16 * * *"      # In human: every day at exactly 16h
     suspend: false              # Put this on true to suspend this task
     args: ["iguazu",
@@ -104,31 +110,6 @@ jobs:
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
            #"--limit", "100", "--shuffle",
            ]
-
-    env:
-      - name: PYTHONUNBUFFERED
-        value: "1"
-      - name: QUETZAL_URL
-        value: "https://quetzal.omind.me/api/v1"
-      - name: QUETZAL_INSECURE
-        value: "0"
-      - name: IGUAZU_WORKSPACE
-        value: "iguazu-features-v011"
-    envFromSecret:
-      - name: QUETZAL_USER
-        key: username
-      - name: QUETZAL_PASSWORD
-        key: password
-      - name: SLACK_WEBHOOK_URL
-        key: slack_url
-    resources:
-      limits:
-        cpu: 50m
-        memory: 256Mi
-      requests:
-        cpu: 50m
-        memory: 256Mi
-
 
 dask_scheduler:
   name: dask-scheduler

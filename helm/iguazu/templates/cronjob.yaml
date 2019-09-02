@@ -2,6 +2,8 @@
 {{- $chart_version := .Chart.Version | replace "+" "_" }}
 {{- $release_name := .Release.Name }}
 {{- $app_name := include "iguazu.fullname" . -}}
+{{- $default_job := .Values.defaultJob }}
+{{- $iguazu_conf := .Values.iguazu}}
 
 {{- range $job := .Values.jobs }}
 ---
@@ -15,9 +17,12 @@ metadata:
     chart: "{{ $chart_name }}-{{ $chart_version }}"
     component: cronjobs
 spec:
-  concurrencyPolicy: {{ $job.concurrencyPolicy }}
-  failedJobsHistoryLimit: {{ $job.failedJobsHistoryLimit }}
-  startingDeadlineSeconds: {{ $job.startingDeadlineSeconds }}
+  concurrencyPolicy: {{ $job.concurrencyPolicy | default $default_job.concurrencyPolicy }}
+  failedJobsHistoryLimit: {{ $job.failedJobsHistoryLimit | default $default_job.failedJobsHistoryLimit }}
+  startingDeadlineSeconds: {{ $job.startingDeadlineSeconds | default $default_job.startingDeadlineSeconds }}
+  schedule: {{ $job.schedule | quote }}
+  successfulJobsHistoryLimit: {{ $job.successfulJobsHistoryLimit | default $default_job.successfulJobsHistoryLimit }}
+  suspend: {{ $job.suspend | default $default_job.suspend }}
   jobTemplate:
     spec:
       template:
@@ -28,11 +33,11 @@ spec:
             component: cronjobs
         spec:
           containers:
-          - image: "{{ default $.Values.iguazu.repository $job.image.repository }}:{{ default $.Values.iguazu.tag $job.image.tag }}"
-            imagePullPolicy: {{ $job.image.pullPolicy }}
+          - image: "{{ $job.repository | default $iguazu_conf.repository }}:{{ $job.tag | default $iguazu_conf.tag}}"
+            imagePullPolicy: {{ $job.pullPolicy | default $iguazu_conf.pullPolicy }}
             name: "job-{{ $job.name }}"
-            {{- with $job.env }}
             env:
+            {{- with $job.env | default $default_job.env }}
 {{ toYaml . | indent 12 }}
             {{- end }}
             {{- range $secret_env := $job.envFromSecret }}
@@ -49,32 +54,29 @@ spec:
             args:
 {{ toYaml . | indent 12 }}
               {{- end }}
-            {{- with $job.resources }}
+            {{- with $job.resources | default $default_job.env }}
             resources:
 {{ toYaml . | indent 14 }}
             {{- end }}
-            {{- with $job.volumeMounts }}
+            {{- with $job.volumeMounts | default $default_job.volumeMounts }}
             volumeMounts:
 {{ toYaml . | indent 12 }}
             {{- end }}
-          {{- with $job.nodeSelector }}
+          {{- with $job.nodeSelector | default $default_job.nodeSelector}}
           nodeSelector:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          {{- with $job.affinity }}
+          {{- with $job.affinity | default $default_job.affinity }}
           affinity:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          {{- with $job.tolerations }}
+          {{- with $job.tolerations | default $default_job.tolerations }}
           tolerations:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          restartPolicy: {{ $job.restartPolicy }}
-          {{- with $job.volumes }}
+          restartPolicy: {{ $job.restartPolicy | default $default_job.tolerations }}
+          {{- with $job.volumes | default $default_job.volumes }}
           volumes:
 {{ toYaml . | indent 12 }}
           {{- end }}
-  schedule: {{ $job.schedule | quote }}
-  successfulJobsHistoryLimit: {{ $job.successfulJobsHistoryLimit }}
-  suspend: {{ $job.suspend }}
 {{- end }}
