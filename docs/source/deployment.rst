@@ -120,14 +120,19 @@ Setup
 
       $ gcloud container clusters create iguazu --num-nodes=1 --machine-type=n1-standard-4
 
-   On either case, make sure that you have ``kubectl`` installed and that you are
+   Optionally, we can add cluster auto scaling to create nodes as the cluster
+   needs it, with the options
+   ``--enable-autoscaling --min-nodes=1 --max-nodes=N``, where ``N`` is the
+   maximum number of nodes.
+
+   Make sure that you have ``kubectl`` installed and that you are
    using the cluster you just created:
 
    .. code-block:: console
 
-      $ kubectl config get-context
-      CURRENT   NAME                                       CLUSTER                                    AUTHINFO                                   NAMESPACE
-      *         gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu
+    $ kubectl config get-context
+    CURRENT   NAME                                       CLUSTER                                    AUTHINFO                                   NAMESPACE
+    *         gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu
 
 4. Install `Helm <https://helm.sh/>`_ on your local computer.  In general,
    follow the `installing helm guide <https://helm.sh/docs/using_helm/#installing-helm>`_.
@@ -173,14 +178,18 @@ Deployment
 
    .. code-block:: console
 
-      $ helm install --name somename \
+      $ helm install --name NAME \
           --set-string quetzal.username=USERNAME \
           --set-string quetzal.password=PASSWORD \
           ./helm/iguazu
 
-   where ``somename`` is an optional name to keep track of helm applications,
+   where ``NAME`` is an optional name to keep track of helm applications,
    ``USERNAME`` and ``PASSWORD`` are the Quetzal user and password that will
    be used by Iguazu to run its scheduled flows.
+
+   Since we like *Iguazu* as the name of this project, I suggest we use a theme
+   here like `names of rivers in alphabetic order <https://en.wikipedia.org/wiki/List_of_rivers_by_length>`_
+   (amazon for our first deployment, bluenile when we decide to make a second one, etc.)
 
 2. Get the scheduler service external IP if you want to see the UI. It will be
    listed on the ``EXTERNAL-IP`` of the ``nginx-ingress-controller`` service.
@@ -211,3 +220,53 @@ Post-installation
 
 * If you want to resize the cluster to give it more or less resources, use the
   same command but with a number on ``--size N``.
+
+Updates
+-------
+
+If you decide to change something on Iguazu's helm chart (i.e. any file inside
+the ``helm/iguazu`` directory, you can update the cluster with:
+
+.. code-block:: console
+
+ $ helm upgrade NAME ./helm/iguazu
+
+where ``NAME`` is the name used when Iguazu was deployed the first time
+(see the Deployment_ section, or check with ``helm list``).
+
+
+Triggering a job
+----------------
+
+If may be useful to trigger a job manually. To do this, first check the list of
+existing jobs:
+
+.. code-block:: console
+
+ $ kubectl get cronjobs -l app=iguazu
+   NAME                               SCHEDULE     SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+   foo-iguazu-job-behavior-features   0 2 * * *    True      0        <none>          6m23s
+   foo-iguazu-job-behavior-summary    0 14 * * *   True      0        <none>          6m23s
+   foo-iguazu-job-galvanic-features   0 1 * * *    True      0        <none>          6m23s
+   foo-iguazu-job-galvanic-summary    0 13 * * *   True      0        <none>          6m23s
+
+Then, create the job that you want with:
+
+.. code-block:: console
+
+ $ kubectl create job --from=cronjob/NAME MANUAL_NAME
+
+where ``NAME`` is the name on the list above and ``MANUAL_NAME`` is some
+identifier that you choose to keep track of you job.
+
+
+Kubernetes logs
+---------------
+
+While using ``kubectl logs POD_NAME`` is a quick way to get the logs of a pod,
+you can also install `kubetail <https://github.com/johanhaleby/kubetail>`_ and
+get live, updated logs with:
+
+.. code-block:: console
+
+ $ kubetail iguazu

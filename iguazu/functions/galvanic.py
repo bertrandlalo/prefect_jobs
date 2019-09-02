@@ -82,6 +82,11 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     data = data[begins:ends]
     data = data.loc[:, [column]]
 
+    # Estimate the sampling frequency: weird signals that have a heavy jitter
+    # will fail here early and raise a ValueError. See issue #44
+    fs = estimate_rate(data)
+    logger.debug('Signal sampling frequency before uniform resampling is %.3f Hz', fs)
+
     # resample uniformly the data
     logger.debug('Uniform resampling to %d Hz', sampling_rate)
     data = uniform_sampling(data, sampling_rate)
