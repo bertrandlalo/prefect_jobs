@@ -102,6 +102,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
 
     features = [pd.DataFrame()]
     for sequence in sequences:
+        logger.debug('Processing sequence %s', sequence)
         for sequence_occurence in [s for s in sequences_report.columns if sequence in s]:
             begin = sequences_report.loc["begin", sequence_occurence]
             end = sequences_report.loc["end", sequence_occurence]
@@ -142,8 +143,8 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 if tmp_col.empty:
                                     slope, intercept, r, r2, pvalue = [empty_policy] * 5
                                 else:
-                                    x = tmp_col.values.astype(float)
-                                    y = tmp_col.index
+                                    x = tmp_col.index
+                                    y = tmp_col.values.astype(float)
                                     slope, intercept, r, r2, pvalue = linear_regression(y, x)
 
                                 feat.append(pd.DataFrame(index=index,
@@ -162,8 +163,8 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 if len(tmp_col) <= 1:  # At least 2 points are needed to compute area under curve
                                     auc_value = empty_policy
                                 else:
-                                    y = tmp_col.values.astype(float)
                                     x = tmp_col.index
+                                    y = tmp_col.values.astype(float)
                                     auc_value = auc(y=y, x=x)
                                 feat.append(pd.DataFrame(index=[feature_name],
                                                          data=[auc_value], columns=[column]))
@@ -212,14 +213,14 @@ def linear_regression(y, x):
     y = np.asarray(y)
     x = np.asarray(x)
 
-    rlm = sm.RLM(x, sm.tools.add_constant(y), M=sm.robust.norms.HuberT())
+    rlm = sm.RLM(y, sm.tools.add_constant(x), M=sm.robust.norms.HuberT())
     results = rlm.fit(conv='coefs', tol=1e-3)
     logger.debug('Linear regression results:\n%s', results.summary())
 
     intercept, slope = results.params
     _, pvalue = results.pvalues  # p-value Wald test of intercept and slope
     r = np.corrcoef(x, y)[0, 1]
-    ss_res = np.sum(results.sresid ** 2)
+    ss_res = np.sum(results.resid ** 2)
     ss_tot = np.sum((y - y.mean()) ** 2)
     r2 = 1 - ss_res / ss_tot
     return slope, intercept, r, r2, pvalue
