@@ -151,7 +151,7 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            # Flow name
-           "behavior_summary",
+           "summarize_behavior",
            # Flow options
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",

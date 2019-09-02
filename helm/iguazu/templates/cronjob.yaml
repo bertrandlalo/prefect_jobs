@@ -55,7 +55,7 @@ spec:
             args:
 {{ toYaml . | indent 12 }}
               {{- end }}
-            {{- with $job.resources | default $default_job.env }}
+            {{- with $job.resources | default $default_job.resources }}
             resources:
 {{ toYaml . | indent 14 }}
             {{- end }}
@@ -75,7 +75,7 @@ spec:
           tolerations:
 {{ toYaml . | indent 12 }}
           {{- end }}
-          restartPolicy: {{ $job.restartPolicy | default $default_job.tolerations }}
+          restartPolicy: {{ $job.restartPolicy | default $default_job.restartPolicy }}
           {{- with $job.volumes | default $default_job.volumes }}
           volumes:
 {{ toYaml . | indent 12 }}
