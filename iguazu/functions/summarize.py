@@ -131,11 +131,11 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                     if custom == "linregress":
                         # TODO: creating things as transposed is unnatural
                         index = ['_'.join(tup) for tup in itertools.product([feature_name], ['rlm'],
-                                                                            ['slope', 'r', 'r2', 'p'])]
+                                                                            ['slope', 'intercept', 'r', 'r2', 'p'])]
                         if tmp.empty:
                             feat = pd.DataFrame(index=index,
                                                 columns=columns,
-                                                data=np.array([[empty_policy] * len(columns)] * 4)).T
+                                                data=np.array([[empty_policy] * len(columns)] * 5)).T
                         else:
                             feat = [pd.DataFrame()]
                             for column in columns:
@@ -148,7 +148,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                     slope, intercept, r, r2, pvalue = linear_regression(y, x)
 
                                 feat.append(pd.DataFrame(index=index,
-                                                         data=[slope, r, r2, pvalue],
+                                                         data=[slope, intercept, r, r2, pvalue],
                                                          columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
                     elif custom == "auc":
