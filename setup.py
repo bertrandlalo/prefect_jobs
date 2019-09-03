@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 
 
 dependencies = [
-    'APScheduler>=3.6,<4.0',
     'bokeh>=1.3,<2.0',
     'click>=7.0,<8.0',
     'colorlog>=4.0,<5.0',

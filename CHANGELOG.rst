@@ -26,10 +26,10 @@ Iguazu version numbers follow
   missing dependencies to dask by updating to prefect 0.6.1.
 * Refactored resampling in galvanic features. Kept 256Hz for the cvxEDA branch
   but uses 512Hz for the spectral branch.
-* (In progress: only galvanic features) rewrite of Iguazu scheduler as
-  kubernetes CronJobs. This seems like a more standard solution, but does not
-  profit as well from the cache. However, since fixing the cvxEDA problems we
-  are having less problems and need of the cache.
+* Rewrite of Iguazu scheduler as kubernetes CronJobs. This seems like a more
+  standard solution, but does not profit as well from the cache.
+  However, since fixing the cvxEDA problems we are having less problems and
+  less need of the cache.
 
 0.1.0 (25-07-2019)
 ------------------

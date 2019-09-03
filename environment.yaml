@@ -21,7 +21,6 @@ dependencies:
   - tzlocal>=2.0,<3.0
   - pip
   - pip:
-    - APScheduler>=3.6,<4.0
     - graphviz>=0.11.1<0.12.0
     - prefect>=0.6.1,<0.6.2
     - git+https://github.com/quetz-al/quetzal-client@v0.3.0#egg=quetzal-client
