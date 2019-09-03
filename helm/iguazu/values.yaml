@@ -82,6 +82,7 @@ jobs:
            # Action options
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
            # Flow name
            "galvanic_features",
            # Flow options
@@ -105,6 +106,7 @@ jobs:
            # Action options
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
            # Flow name
            "summarize_galvanic",
            # Flow options
@@ -127,6 +129,7 @@ jobs:
            # Action options
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
            # Flow name
            "behavior_features",
            # Flow options
@@ -150,6 +153,7 @@ jobs:
            # Action options
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
            # Flow name
            "summarize_behavior",
            # Flow options
