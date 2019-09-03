@@ -213,13 +213,31 @@ Post-installation
 
   .. code-block:: console
 
-   $ gcloud container clusters resize iguazu-cluster --size 0
+   $ gcloud container clusters resize iguazu-cluster --num-nodes 0
 
-  bring it back by using the same command with a size > 0.
-
+  bring it back by using the same command with a ``num-nodes`` > 0.
 
 * If you want to resize the cluster to give it more or less resources, use the
-  same command but with a number on ``--size N``.
+  same command but with a number on ``--num-nodes N``. However, if you have
+  autoscaling enabled, it will be easier to change the ``dask_worker.replicas``
+  entry in the ``helm/iguazu/values.yaml``, followed by an update of the
+  deployed chart. To update a chart, see the Updates_ section
+
+* Optionally, you can install the kubernetes dashboard with:
+
+  .. code-block:: console
+
+   $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta1/aio/deploy/recommended.yaml
+
+  then, connect to the cluster via a proxy with:
+
+  .. code-block:: console
+
+   $ kubectl proxy
+
+  and explore the dashboard at http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+  The first time you do this, you may need to login by choosing the kube config
+  file that is on ``~/.kube/config``.
 
 Updates
 -------

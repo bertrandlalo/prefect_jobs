@@ -139,8 +139,9 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
 
 
 def downsample(data, sampling_rate):
-    # decimate
-    logger.debug('Decimating signal to %d Hz', sampling_rate)
+    # downsample by dropping rows
+    # TODO consider if should we decimate? That is, lowpass filter first?
+    logger.debug('Downsampling signal to %d Hz', sampling_rate)
     return drop_rows(data, sampling_rate)
 
 
