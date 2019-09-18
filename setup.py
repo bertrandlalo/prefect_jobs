@@ -12,9 +12,7 @@ dependencies = [
     'pandas>=0.25.0,<0.26.0',
     'psutil>=5.6.3,<5.7',
     'prefect>=0.6.1,<0.6.2',
-    'quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@v0.3.0',
-    'quetzal-openapi-client @ '
-    'git+https://github.com/quetz-al/quetzal-openapi-client@v0.3.0',
+    'quetzal-client>=0.3.1,<0.4',
     'scikit-learn>=0.21.2,<0.22.0',
     'scipy>=1.3,<2.0',
     'simplegeneric>=0.8.1,<0.9.0',
