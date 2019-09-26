@@ -5,6 +5,9 @@ import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
+from dsu.dsp.resample import uniform_sampling
+from dsu.epoch import sliding_window
+from dsu.pandas_helpers import estimate_rate
 from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
@@ -54,7 +57,8 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     corrupted_maxratio: float
         Maximum acceptable ratio of corrupted (bad) samples.
     sampling_rate: float
-        Rate of output signal (after decimation)
+        Sampling rate to uniformly resample the input sample at the very
+        beginning of this function
 
     Returns
     -------
@@ -74,21 +78,36 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
     begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
 
-    # troncate dataframe on session times
+    # truncate dataframe on session times
     data = data[begins:ends]
     data = data.loc[:, [column]]
 
+    # Estimate the sampling frequency: weird signals that have a heavy jitter
+    # will fail here early and raise a ValueError. See issue #44
+    fs = estimate_rate(data)
+    logger.debug('Signal sampling frequency before uniform resampling is %.3f Hz', fs)
+
+    # resample uniformly the data
+    logger.debug('Uniform resampling to %d Hz', sampling_rate)
+    data = uniform_sampling(data, sampling_rate)
+
     # lowpass filter signal
+    logger.debug('Lowpass filtering to %s Hz', filter_kwargs.get('frequencies', []))
     data = filtfilt_signal(data, columns=[column],
                            **filter_kwargs, suffix='_filtered')
 
     # add a column "bad" with rejection boolean on Amplifier and HF (glitches) criteria
+    logger.debug('Detecting amplifier saturation and glitches')
     data = quality_gsr(data, column=column + '_filtered', **quality_kwargs)
     # estimate the corrupted ratio
     # if too many samples were dropped, raise an error
     corrupted_ratio = data.bad.mean()
     if corrupted_ratio > corrupted_maxratio:
-        raise IguazuError('Artifact corruption of %s exceeds  %s.', corrupted_ratio, corrupted_maxratio)
+        raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
+                          f'exceeds {corrupted_maxratio * 100:.0f}%')
+
+    # bad sample interpolation
+    logger.debug('Interpolating %d/%d bad samples', data.bad.sum(), data.shape[0])
     # make a copy of the signal with suffix "_clean", mask bad samples
     data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
     # Pandas does not like tz-aware timestamps when interpolating
@@ -99,43 +118,49 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(**interpolation_kwargs)
-                .set_index(data_clean.index)
+            .interpolate(**interpolation_kwargs)
+            .set_index(data_clean.index)
         )
 
-    # Pandas does not like tz-aware timestamps when interpolating
-    if data_clean.index.tzinfo is None:
-        # old way: tz-naive
-        data_clean.interpolate(**interpolation_kwargs, inplace=True)
-    else:
-        # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
-        data_clean = (
-            data_clean.set_index(data_clean.index.tz_convert(None))
-                .interpolate(**interpolation_kwargs)
-                .set_index(data_clean.index)
-        )
     # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
+    logger.debug('Inverting signals')
     data_clean = inverse_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_inversed')
 
     # scale signal on the all session
+    logger.debug('Rescaling signals')
     data_clean = scale_signal(data_clean, columns=[column + '_filtered_clean_inversed'], suffix='_zscored',
                               **scaling_kwargs)
 
     # return preprocessed data
+    logger.debug('Concatenating clean and filtered signals')
     data = pd.concat([data, data_clean], axis=1)
-
-    # decimate signal
-    data = drop_rows(data, sampling_rate)
 
     return data
 
 
-def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda_params=None):
-    """ Separate phasic (SCR) and tonic (SCL) galvanic components using a convexe deconvolution.
+def downsample(data, sampling_rate):
+    # downsample by dropping rows
+    # TODO consider if should we decimate? That is, lowpass filter first?
+    logger.debug('Downsampling signal to %d Hz', sampling_rate)
+    return drop_rows(data, sampling_rate)
+
+
+def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
+                 cvxeda_params=None, epoch_size=None, epoch_overlap=None):
+    """ Separate galvanic components using a convex deconvolution.
+
+    This function separates the phasic (SCR) and tonic (SCL) galvanic components
+    using the cvxEDA algorithm.
+
+    For large signals, the underlying library (cvx) is particularly heavy on
+    memory usage. Also, since it uses C code, it holds and does not relase the
+    Python global interpreter lock (GIL). This makes everything more difficult,
+    in particular for Iguazu. In order to manage this, one can do the algorithm
+    by epochs using both the `epoch_size` and `epoch_overlap` parameters.
 
     Parameters
     ----------
-    data: pd.ataFrame
+    data: pd.DataFrame
         Dataframe containing the preprocessed GSR in channel given by column_name.
     column: str | None
         Name of column where the data of interest are located.
@@ -146,11 +171,17 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda
         Maximum acceptable amplitude of SCR component.
     cvxeda_params:
         Keywords arguments to apply cvxEDA algorithm.
+    epoch_size: float
+        Size in seconds of the epoch size. When set to ``None``, cvxEDA will
+        be applied only once on the whole signal.
+    epoch_overlap: float
+        Size in seconds of the epoch overlap. When set to ``None``, cvxEDA will
+        be applied only once on the whole signal.
 
     Returns
     -------
     data: pd.DataFrame
-          Dataframe with columns: ['F_clean_inversed_lowpassed_zscored_SCR', 'F_clean_inversed_lowpassed_zscored°SCL', 'bad']
+        Dataframe with columns: `..._SCR`, `..._SCL` and `bad`.
 
     Examples
     --------
@@ -159,26 +190,66 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4., cvxeda
 
     """
     cvxeda_params = cvxeda_params or {}
+
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
-    if 'bad' not in data:
-        raise Exception('Received data without a column named "bad"')
-
-    bad = data.bad
+    if 'bad' in data:
+        bad = data['bad']
+    else:
+        bad = pd.Series(False, name='bad', index=data.index)
 
     # if no column is specified, consider the first one
     column = column or data.columns[0]
 
-    # Deconvolution or the signal
-    data = apply_cvxEDA(data[[column, 'bad']].dropna(), column=column, **cvxeda_params)
+    n = data.shape[0]
+    idx_epochs = np.arange(n)[np.newaxis, :]
+    idx_warmup = slice(0, n)
+
+    if epoch_size is not None and epoch_overlap is not None:
+        fs = estimate_rate(data)
+        n_warmup = int(warmup_duration * fs)
+        n_epoch = int(epoch_size * fs) + n_warmup
+        n_overlap = int(epoch_overlap * fs)
+        logger.debug('Attempting to epoch signal of %d samples into epochs '
+                     'of %d samples and %d overlap', n, n_epoch, n_overlap)
+
+        if n < n_epoch + n_overlap:
+            # Data is not big enough for window
+            logger.debug('Cannot epoch into epochs of %d samples, signal is not '
+                         'large enough. Falling back to complete implementation.',
+                         n_epoch)
+        else:
+            idx_epochs = sliding_window(np.arange(n), size=n_epoch, stepsize=n_overlap)
+            idx_warmup = slice(n_warmup, -n_warmup)
+            logger.debug('cvxEDA epoched implementation with %d epochs', len(idx_epochs))
+
+    else:
+        logger.debug('cvxEDA complete implementation')
+
+    epochs = []
+    for i, idx in enumerate(idx_epochs):
+        logger.debug('Epoch %d / %d', i+1, len(idx_epochs))
+        chunk = (
+            apply_cvxEDA(data.iloc[idx][[column]].dropna(), **cvxeda_params)
+            .iloc[idx_warmup]
+            .rename_axis(index='epoched_index')
+            .reset_index()
+        )
+        epochs.append(chunk)
+
+    data = (
+        pd.concat(epochs, ignore_index=False)
+        .groupby('epoched_index')
+        .mean()
+        .rename_axis(index=data.index.name)
+    )
 
     # add a column "bad" with rejection boolean on amplitude criteria
-    data.loc[:, 'bad'] = bad
+    data['bad'] = bad
     data.loc[data[column + '_SCR'] >= threshold_scr, 'bad'] = True
 
     # set warmup period to "bad"
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
-    # TODO: this does not do what it's supposed to do; it should be a slice!
     data.loc[:data.index[0] + warm_up_timedelta, 'bad'] = True
     data.loc[data.index[-1] - warm_up_timedelta:, 'bad'] = True
 

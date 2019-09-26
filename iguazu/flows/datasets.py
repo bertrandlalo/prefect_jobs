@@ -2,12 +2,12 @@ import logging
 
 import click
 
-from prefect import Flow, Parameter, Task
+from prefect import Flow, Parameter
 from prefect.engine.cache_validators import never_use
 from prefect.tasks.control_flow import switch
 from prefect.tasks.control_flow.conditional import Merge
 
-from iguazu.tasks.common import AlwaysFail, AlwaysSucceed, Log, ListFiles
+from iguazu.tasks.common import AlwaysSucceed, Log, ListFiles
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, Query, ScanWorkspace
 from iguazu.recipes import inherit_params, register_flow

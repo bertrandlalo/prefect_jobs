@@ -34,7 +34,9 @@ def logging_handler(task, old_state, new_state):
             f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
         ).with_suffix('.log')
         log_filename.parent.mkdir(parents=True, exist_ok=True)
-        formatter = logging.Formatter('%(levelname)s %(asctime)s %(name)s %(message)s')
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)8s - %(name)s.%(funcName)s:%(lineno)s | %(message)s'
+        )
         handler = CustomFileHandler(str(log_filename.resolve()), mode='a')
         handler.setFormatter(formatter)
         handler.setLevel(logging.DEBUG)
@@ -56,7 +58,7 @@ def logging_handler(task, old_state, new_state):
             hdlr.close()
 
             # Upload to quetzal if the context information has all the necessary information
-            if 'quetzal_client' in context and 'quetzal_logs_workspace_name' is not None:
+            if 'quetzal_client' in context and context.get('quetzal_logs_workspace_name') is not None:
                 try:
                     logger.debug('Uploading logs to quetzal')
                     client = helpers.get_client(**context.quetzal_client)
@@ -112,6 +114,11 @@ def garbage_collect_handler(task, old_state, new_state):
             if mem_usage_gb > 2 or mem_percent >= 75:  # usage over 75%
                 logger.info('Calling gc, usage was over the limit')
                 gc.collect()
+
+                mem_percent = process.memory_percent()
+                mem_usage_gb = process.memory_info().rss / (1 << 30)
+                logger.info('Memory usage after gc collect: %.2f Gb (%.2f %%)',
+                            mem_usage_gb, mem_percent)
         except:
             logger.debug('Failed to garbage collect', exc_info=True)
 

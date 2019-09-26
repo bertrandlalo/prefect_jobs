@@ -12,8 +12,7 @@ class IguazuError(Exception):
 def get_base_meta(task, state=None, **kwargs):
     meta = {
         'source': 'iguazu',
-        'task_name': task.__class__.__name__,
-        'task_module': task.__class__.__module__,
+        'task': task.__class__.__module__ + '.' + task.__class__.__name__,
         'state': state,
         'version': iguazu_version,
     }

@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: {{ template "iguazu.fullname" . }}-dask-scheduler
-          image: "{{ .Values.dask_scheduler.image.repository }}:{{ .Values.dask_scheduler.image.tag }}"
+          image: "{{ default .Values.iguazu.repository .Values.dask_scheduler.image.repository }}:{{ default .Values.iguazu.tag .Values.dask_scheduler.image.tag }}"
           imagePullPolicy: "{{ .Values.dask_scheduler.image.pullPolicy }}"
           args:
             - dask-scheduler

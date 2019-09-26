@@ -1,15 +1,14 @@
 import datetime
 import logging
-
 from prefect import Flow
 
+from iguazu import __version__
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.flows.datasets import generic_dataset_flow
 from iguazu.recipes import inherit_params, register_flow
 from iguazu.tasks.common import SlackTask
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +40,7 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     default_query = """\
         SELECT
             id,
-            filename,
-            iguazu.gsr::json->>'status' AS status,
-            iguazu.state
+            filename
         FROM base
         LEFT JOIN iguazu USING (id)
         LEFT JOIN omi using (id)
@@ -51,11 +48,10 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
             base.state = 'READY' AND                    -- no temporary files
             base.filename LIKE '%_gsr.hdf5' AND         -- only HDF5 files
             base.filename NOT LIKE '%_gsr_gsr.hdf5' AND -- remove incorrect cases where we processed twice
-            COALESCE(iguazu."MergeFilesFromGroups", '{}')::json->>'state' = 'SUCCESS' -- Only files whose mergefilefromgroups was successful
-            -- AND iguazu.state = 'SUCCESS'
-            --iguazu.gsr::json->>'status' = 'SUCCESS'     -- files not fully processed by iguazu on this flow
+            COALESCE(iguazu."MergeFilesFromGroups", '{{}}')::json->>'state' = 'SUCCESS' AND -- Only files whose mergefilefromgroups was successful
+            COALESCE(iguazu."MergeFilesFromGroups", '{{}}')::json->>'version' = '{version}'     -- On this particular iguazu version
         ORDER BY base.id                                -- always in the same order
-    """
+    """.format(version=__version__)  # Note the {{}} to avoid formatting the coalesce terms
     # There is no secondary query because this flow only makes sense *after*
     # the galvanic extract features flow has run
     default_alt_query = None
@@ -69,8 +65,10 @@ def galvanic_summary_flow(*, workspace_name=None, query=None, alt_query=None,
     # instantiate tasks
     merge_population = SummarizePopulation(
         # Iguazu task constructor arguments
-        groups={'gsr_features_scr': None,
-                'gsr_features_scl': None},
+        groups={'gsr_features_scr': None,  # TODO: I dont understand why use _ instead of / since we are talking about groups
+                'gsr_features_scl': None,
+                'bp_relative_features': None,
+                'bp_absolute_features': None,},
         filename='galvanic_summary',
         # Prefect task arguments
         state_handlers=[garbage_collect_handler, logging_handler],

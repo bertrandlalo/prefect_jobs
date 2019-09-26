@@ -1,7 +1,6 @@
-from typing import List, Optional
-
 import pandas as pd
 import prefect
+from typing import List, Optional
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
@@ -82,7 +81,7 @@ class ExtractFeatures(prefect.Task):
                 meta = get_base_meta(self, state='SUCCESS')
 
             except Exception as ex:
-                self.logger.warning('Report VR sequences graceful fail: %s', ex)
+                self.logger.warning('Extract features graceful fail: %s', ex)
                 features = pd.DataFrame()
                 meta = get_base_meta(self, state='FAILURE', exception=str(ex))
 
@@ -189,7 +188,11 @@ class SummarizePopulation(prefect.Task):
         parent = files[0]
         output = parent.make_child(filename=self.filename, path=self.path, suffix=None,
                                    extension=".csv", temporary=False)
-        output._metadata.clear()
+        # TODO: reconsider this hack, this is not good: using _metadata is private!
+        for family in output._metadata:
+            if family != 'base':
+                output._metadata[family].clear()
+        #output._metadata.clear()
 
         data_list_population = []
         for i, file in enumerate(files, 1):
@@ -213,9 +216,9 @@ class SummarizePopulation(prefect.Task):
                     data_summary_file.loc[:, 'file_id'] = parent_id
                     data_list_population.append(data_summary_file)
 
-        data_output = pd.concat(data_list_population, axis=0)
+        data_output = pd.concat(data_list_population, axis=0, sort=False)
         data_output = data_output.rename_axis(self.axis_name).reset_index()
-        data_output.to_csv(output.file)  # TODO: put index=False an re-generate
+        data_output.to_csv(output.file, index=False)
 
         output.upload()
 

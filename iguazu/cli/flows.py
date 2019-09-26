@@ -95,10 +95,14 @@ class RunFlowGroup(click.core.Group):
               help='Output CSV report of the execution')
 @click.option('--force', required=False, is_flag=True, default=False,
               help='Whether to force the processing if the path already exists in the output file. ')
-@click.option('--cache/--no-cache', 'cache', is_flag=True, default=True,
+@click.option('--cache/--no-cache', 'cache', is_flag=True, default=True, show_default=True,
               help='Use the prefect cache. ')
+@click.option('--allow-flow-failure', is_flag=True, default=False,
+              help='When this flag is set, a flow exeuction that is not successful will '
+                   'not make the program exit with a non-zero exit code. By default, '
+                   'flows that are not successful have an exit code of -1.')
 @click.pass_context
-def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report, force, cache):
+def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report, force, cache, allow_flow_failure):
     """Run the flow registered as FLOW_NAME
 
     Use command `iguazu flows run --help` to get a list of all available flows.
@@ -111,7 +115,8 @@ def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report
         'executor_address': executor_address,
         'csv_report': report,
         'force': force,
-        'cache': cache
+        'cache': cache,
+        'allow_flow_failure': allow_flow_failure,
     }
     ctx.obj.update(opts)
 
@@ -203,7 +208,8 @@ def run_flow_command(func):
                 click.secho(row["task name"], fg='yellow')
                 click.secho(row.exception)
             click.secho(f'Flow execution encountered {len(errors)} errors.', fg='red')
-            ctx.exit(-1)
+            if not context_args.get('allow_flow_failure', False):
+                ctx.exit(-1)
 
     return decorator
 

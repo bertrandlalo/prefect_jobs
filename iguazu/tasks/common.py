@@ -5,6 +5,7 @@ import pathlib
 import pandas as pd
 import prefect
 
+from iguazu import __version__
 from iguazu.helpers.files import FileProxy, LocalFile
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
@@ -113,14 +114,23 @@ class MergeFilesFromGroups(prefect.Task):
                             # append it to the output group.
                             common = os.path.commonprefix(input_store.keys())
                             for group in groups:
-                                rel = os.path.relpath(group, common)
+                                rel = os.path.relpath(group, common)  # TODO: all of these os.path are unix dependent! it would not work on windows
                                 data = pd.read_hdf(input_store, group)
                                 assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
-                                data.to_hdf(output_store, os.path.join(output_group, rel))
+                                g = '/'.join([output_group, rel])
+                                self.logger.debug('Saving dataframe of size %s into group %s',
+                                                  data.shape, g)
+                                data.to_hdf(output_store, g)
                         else:
                             data = pd.read_hdf(input_store, groups[0])
                             assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
+                            self.logger.debug('Saving dataframe of size %s into group %s',
+                                              data.shape, output_group)
                             data.to_hdf(output_store, output_group)
+                            # TODO: since we are using both numbers and 'bad' to set the values
+                            #       of the group, this generates a pytables warning:
+                            #       PerformanceWarning: your performance may suffer as PyTables
+                            #       will pickle object types that it cannot map directly to c-types
 
             state = 'SUCCESS'
             meta = get_base_meta(self, state=state)
@@ -137,6 +147,7 @@ class MergeFilesFromGroups(prefect.Task):
         parent.metadata['iguazu'][self.status_key] = {
             'status': state,
             'date': str(prefect.context.scheduled_start_time),
+            'version': __version__,
         }
         parent.upload()
 
