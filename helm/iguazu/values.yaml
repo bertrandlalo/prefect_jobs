@@ -2,87 +2,177 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-#replicaCount: 1
-#
-#image:
-#  repository: nginx
-#  tag: stable
-#  pullPolicy: IfNotPresent
-#
-#imagePullSecrets: []
-#nameOverride: ""
-#fullnameOverride: ""
-#
-#service:
-#  type: ClusterIP
-#  port: 80
-#
-#ingress:
-#  enabled: false
-#  annotations: {}
-#    # kubernetes.io/ingress.class: nginx
-#    # kubernetes.io/tls-acme: "true"
-#  hosts:
-#    - host: chart-example.local
-#      paths: []
-#
-#  tls: []
-#  #  - secretName: chart-example-tls
-#  #    hosts:
-#  #      - chart-example.local
-#
-#resources: {}
-#  # We usually recommend not to specify default resources and to leave this as a conscious
-#  # choice for the user. This also increases chances charts run on environments with little
-#  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-#  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-#  # limits:
-#  #   cpu: 100m
-#  #   memory: 128Mi
-#  # requests:
-#  #   cpu: 100m
-#  #   memory: 128Mi
-#
-#nodeSelector: {}
-#
-#tolerations: []
-#
-#affinity: {}
+iguazu:
+  # Use these as the default repository and tag
+  repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
+  tag: 0.1.2
+  pullPolicy: Always
 
-scheduler:
-  name: scheduler
-  image:
-    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
-    pullPolicy: Always
-  replicas: 1
-  resources: {}
-    # limits:
-    #   cpu: 1.8
-    #   memory: 6G
-    # requests:
-    #   cpu: 1.8
-    #   memory: 6G
-  tolerations: []
-  nodeSelector: {}
-  affinity: {}
+
+defaultJob:
+  # All of these entries can be overriden by a particular job
+  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 3
+  startingDeadlineSeconds: 15
+  restartPolicy: Never
+  concurrencyPolicy: Forbid   # Only once at a time!
+  suspend: false              # Put this on true to suspend tasks
   env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
     - name: QUETZAL_URL
       value: "https://quetzal.omind.me/api/v1"
     - name: QUETZAL_INSECURE
       value: "0"
     - name: IGUAZU_WORKSPACE
-      value: "iguazu-workspace-v2"
+      value: "iguazu-features-v012"
+  envFromSecret:
+    - name: QUETZAL_USER
+      key: username
+    - name: QUETZAL_PASSWORD
+      key: password
+    - name: SLACK_WEBHOOK_URL
+      key: slack_url
+  resources:
+    limits:
+      cpu: 50m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 256Mi
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+
+jobs:
+  # Define one entry per cron job.
+  # required entries are:
+  # name:     identifier for the job
+  # args:     the command line that defines the job
+  # schedule: when to run the job
+  #
+  # All other entries are optional and default to the defaultJob configuration
+  #
+  # The schedule is defined in cron format. Here is a cheatsheet:
+  #  ┌───────────────────── minute (0 - 59)
+  #  │ ┌─────────────────── hour (0 - 23)
+  #  │ │ ┌───────────────── day of the month (1 - 31)
+  #  │ │ │ ┌─────────────── month (1 - 12)
+  #  │ │ │ │ ┌───────────── day of the week (0 - 6) (Sunday to Saturday;
+  #  │ │ │ │ │                                   7 is also Sunday on some systems)
+  # "* * * * *"
+  #
+  # Example: "1 0 * * *" is every day at one minute past midnight
+  #          "*/5 * * * *" is every five minutes
+  #          "45 23 * * 6" is every saturday at 23:45
+  #
+  ##############################################################################
+  # Galvanic features
+  - name: galvanic-features
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 1 * * *"       # In human: every day at exactly 1 am
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "galvanic_features",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           #"--limit", "100", "--shuffle",
+           ]
+  ##############################################################################
+  # Galvanic summary
+  - name: galvanic-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 13 * * *"      # In human: every day at exactly 1 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "summarize_galvanic",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           ]
+  ##############################################################################
+  # Behavioral features
+  - name: behavior-features
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 2 * * *"       # In human: every day at exactly 2 am
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "behavior_features",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           #"--limit", "100", "--shuffle",
+           ]
+  ##############################################################################
+  # Behavioral summary
+  - name: behavior-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "summarize_behavior",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           ]
 
 dask_scheduler:
   name: dask-scheduler
   image:
-    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
+    # repository: ... # use to override the default on iguazu.repository
+    # tag: ...        # use to override the default on iguazu.tag
     pullPolicy: Always
   replicas: 1
-  serviceType: "LoadBalancer"
+  serviceType: ClusterIP  # Change to LoadBalancer if you want to access from outside (this is dangerous!)
   servicePort: 8786
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
   resources: {}
     # limits:
     #   cpu: 1.8
@@ -94,29 +184,23 @@ dask_scheduler:
   nodeSelector: {}
   affinity: {}
 
-dask_scheduler_ui:
-  name: webui
-  servicePort: 80
-
 dask_worker:
   name: dask-worker
   image:
-    repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-    tag: 0.1.0
+    # repository: ... # use to override the default on iguazu.repository
+    # tag: ...        # use to override the default on iguazu.tag
     pullPolicy: Always
-  replicas: 2         # Number of MINIMUM dask-workers
-  maxReplicas: 16     # Number of MAXIMUM dkas-workers
-  aptPackages: >-
+  replicas: 1         # Number of MINIMUM dask-workers
+  maxReplicas: 16     # Number of MAXIMUM dask-workers
+  targetCPU: 10       # How much the Horizontal scaler will target as CPU usage.
+                      # When the average CPU is over this value, new workers will be creatd.
+                      # Set to a low value (10) to use as much resources as possible.
   default_resources:  # overwritten by resource limits if they exist
     cpu: 1
     memory: "2GiB"
   env:
     - name: PYTHONUNBUFFERED
       value: "1"
-    # - name: EXTRA_CONDA_PACKAGES
-    #   value: numba xarray -c conda-forge
-    # - name: EXTRA_PIP_PACKAGES
-    #   value: s3fs dask-ml --upgrade
   resources:
      limits:
        cpu: 1     # note: use integer (round values) here

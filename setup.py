@@ -1,27 +1,35 @@
 # -*- coding: utf-8 -*-
 
+import re
 from setuptools import setup, find_packages
 
 
+with open('iguazu/__init__.py') as f:
+    VERSION = re.search(r'^__version__\s*=\s*\'(.*)\'', f.read(), re.M).group(1)
+
+
 dependencies = [
-    'APScheduler>=3.6,<4.0',
     'bokeh>=1.3,<2.0',
     'click>=7.0,<8.0',
+    'colorlog>=4.0,<5.0',
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
     'numpy>=1.16,<2.0',
     'pandas>=0.25.0,<0.26.0',
-    'prefect @ git+https://github.com/PrefectHQ/prefect@c7c00456',
-    'quetzal-client @ git+https://github.com/quetz-al/quetzal-client.git@v0.3.0',
-    'quetzal-openapi-client @ '
-    'git+https://github.com/quetz-al/quetzal-openapi-client@v0.3.0',
+    'psutil>=5.6.3,<5.7',
+    'prefect>=0.6.1,<0.6.2',
+    'quetzal-client>=0.3.1,<0.4',
     'scikit-learn>=0.21.2,<0.22.0',
     'scipy>=1.3,<2.0',
     'simplegeneric>=0.8.1,<0.9.0',
+    'statsmodels>=0.10.1,<0.11',
     'tables>=3.5,<4.0',
     'tzlocal>=2.0,<3.0'
 ]
 build_dependencies = dependencies + ['pytest-runner']
-test_dependencies = ['pytest']
+test_dependencies = [
+    'pytest>=5.0.1,<6.0',
+    'pytest-mock>=1.10.4,<2.0',
+]
 authors = [
     ('Raphaëlle Bretrand-Lalo', 'raphaelle@omind.me'),
     ('David Ojeda', 'david@omind.me'),
@@ -46,7 +54,7 @@ setup_args = dict(
             'iguazu = iguazu.cli.main:cli',
         ],
     },
-    version='0.1.0',  # TODO: use versioneer
+    version=VERSION,
 )
 
 setup(**setup_args)

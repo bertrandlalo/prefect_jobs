@@ -166,8 +166,9 @@ class QuetzalFile(FileProxy):
         logger.info('File by name and path gave %d candidates', len(candidates))
         for file_detail in sorted(candidates, key=lambda d: d.date, reverse=True):
             meta = helpers.file.metadata(self.client, file_detail.id, wid=self._wid)
+            state = meta['base'].get('state', None)
             parent = meta.get('iguazu', {}).get('parents', None)
-            if parent == parent_id:
+            if parent == parent_id and state != 'DELETED':
                 logger.info('Found a match with same parent %s', meta['base'])
                 return meta
         logger.info('No candidate matches')
@@ -321,6 +322,8 @@ class LocalFile(FileProxy):
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
             child._metadata['base']['id'] = child._file_id
             child._metadata['iguazu']['parents'] = base_metadata['id']
+            # unset iguazu state
+            child._metadata['iguazu'].pop('state', None)
 
         return child
 

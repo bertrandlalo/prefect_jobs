@@ -21,7 +21,7 @@ RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 RUN mkdir /tmp/wheels
 WORKDIR /tmp
 ADD requirements.txt .
-RUN pip install --upgrade pip==19.1.1 && \
+RUN pip install --upgrade pip==19.2.3 && \
     pip wheel --wheel-dir /tmp/wheels -r requirements.txt
 
 ################################################################################
@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies from wheels generated in intermediate image
 COPY --from=intermediate /tmp/wheels /tmp/wheels
-RUN pip install --upgrade pip==19.1.1 && \
+RUN pip install --upgrade pip==19.2.3 && \
     pip install /tmp/wheels/*.whl
 
 # Copy and install iguazu
@@ -42,6 +42,9 @@ RUN mkdir /code
 WORKDIR /code
 COPY setup.cfg setup.py ./
 COPY iguazu ./iguazu
-#RUN mkdir /root/.dask
-#COPY config.yaml /root/.dask/config.yaml
 RUN pip install .
+
+RUN useradd --create-home iguazu && chown -R iguazu /code
+USER iguazu
+RUN mkdir -p ${HOME}/.config/dask
+COPY dask-config.yaml ${HOME}/.config/dask/config.yaml

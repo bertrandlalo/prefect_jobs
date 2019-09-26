@@ -26,11 +26,10 @@ spec:
     spec:
       containers:
         - name: {{ template "iguazu.fullname" . }}-dask-worker
-          image: "{{ .Values.dask_worker.image.repository }}:{{ .Values.dask_worker.image.tag }}"
+          image: "{{ default .Values.iguazu.repository .Values.dask_worker.image.repository }}:{{ default .Values.iguazu.tag .Values.dask_worker.image.tag }}"
           imagePullPolicy: {{ .Values.dask_worker.image.pullPolicy }}
           args:
             - dask-worker
-            - {{ template "iguazu.fullname" . }}-dask-scheduler:{{ .Values.dask_scheduler.servicePort }}
           {{- if .Values.dask_worker.resources.limits }}
             - --nthreads
             - {{ .Values.dask_worker.resources.limits.cpu | default .Values.dask_worker.default_resources.cpu | quote }}
@@ -38,9 +37,12 @@ spec:
             - {{ .Values.dask_worker.resources.limits.memory | default .Values.dask_worker.default_resources.memory | quote }}
           {{- end }}
             - --no-dashboard
-            - --no-nanny
+            - --no-nanny       # Also needed for issue #40
+            - --preload
+            - iguazu.cli.dask  # Added to solve issue #40 and #37
+            - dask-scheduler:8786
           ports:
-            - containerPort: 8789
+            - containerPort: 8789  # TODO: is this really needed?
           resources:
 {{ toYaml .Values.dask_worker.resources | indent 12 }}
           env:
