@@ -7,8 +7,10 @@ This document lists all important changes to iguazu.
 Iguazu version numbers follow
 `semantic versioning <http://semver.org>`_.
 
-0.1.1 (unreleased)
+0.1.2 (26-09-2019)
 ------------------
+
+GSR pipelines
 
 * Remove baseline correction from GSR pipeline. This is something that should
   be done on a analysis-specific post-processing code, probably in a notebook.

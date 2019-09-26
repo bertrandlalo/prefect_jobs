@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
+import re
 from setuptools import setup, find_packages
+
+
+with open('iguazu/__init__.py') as f:
+    VERSION = re.search(r'^__version__\s*=\s*\'(.*)\'', f.read(), re.M).group(1)
 
 
 dependencies = [
@@ -49,7 +54,7 @@ setup_args = dict(
             'iguazu = iguazu.cli.main:cli',
         ],
     },
-    version='0.1.2',  # TODO: use versioneer
+    version=VERSION,
 )
 
 setup(**setup_args)

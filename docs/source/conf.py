@@ -13,6 +13,7 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
+import re
 
 
 # -- Project information -----------------------------------------------------
@@ -22,7 +23,12 @@ copyright = '2019, Raphaëlle Bertrand-Lalo & David Ojeda'
 author = 'Raphaëlle Bertrand-Lalo & David Ojeda'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+try:
+    with open('../../iguazu/__init__.py') as f:
+        release = re.search(r'^__version__\s*=\s*\'(.*)\'', f.read(), re.M).group(1)
+    print('GOT VERSION', release)
+except:
+    release = '0.0'
 
 
 # -- General configuration ---------------------------------------------------
