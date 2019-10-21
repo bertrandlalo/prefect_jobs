@@ -44,6 +44,7 @@ falls was the Spanish Conquistador Álvar Núñez Cabeza de Vaca in 1541.
 =======
    guidelines
    hdf5
+   developing_tasks
    developing_flows
 >>>>>>> b5cf599... Update docs with guidelines
 

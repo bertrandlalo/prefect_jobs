@@ -49,6 +49,19 @@ dataframe-like data is HDF5. Refer to the :ref:`hdf5` page for more details.
 There are exceptions, where dataframes are not the intended result. For example,
 when generating a HTML report. For these cases, there are no guidelines yet.
 
+Base tasks and flows
+====================
+
+When creating new tasks, prefer extending the :py:class:`iguazu.Task` class.
+It helps you adhere to these guidelines and helps you avoid repeating
+a lot of boilerplate code that is common to all tasks. There are more details
+on :ref:`Creating new tasks`.
+
+When creating new flows, prefer extending the :py:class:`iguazu.Flow` class.
+It will automatically register the flow so that it can be used on the
+command-line and it helps other users to compose their flows. There are more
+details on :ref:`Creating new flows`.
+
 Empty results
 =============
 
@@ -84,7 +97,8 @@ Name            Description                                          Examples
 ``problem``      | An object with details on the error that occurred  | See below
                  | during the execution of the task that generated
                  | this file. This object follows a JSON `RFC-7807`_
-                 | structure. When a file has been generated without
+                 | structure, in particular, `section 3.1`_.
+                 | When a file has been generated without
                  | any error, this field can be ``null``.
 =============== ==================================================== =================================
 
@@ -101,6 +115,7 @@ An example metadata entry for a file with id
       "size": 1024
     },
     "iguazu": {
+      "id": "00000000-0000-4000-8000-000000000000",
       "created_by": "iguazu",
       "task": "iguazu.tasks.preprocess.Remove50Hz",
       "version": "0.1.0",
@@ -123,10 +138,10 @@ encounters a known problem that should can still generate a result. For example,
 a filtering task that receives an empty signal could soft fail in this case,
 and generate an empty signal as a result.
 
-Soft failures can generate results. They may be `Empty results`_, but could
-be a file with some other default contents.
+Soft failures can generate results. They may be `Empty results`_, or a file
+with some other default contents.
 
-Hard failures, refer to situations that were unexpected for the task. They
+Hard failures refer to situations that were unexpected for the task. They
 should be reported (automatically) and the any task that depends on the results
 of the failed task should not be executed. For example, when a task fails to
 download the file that it needs to process (because Quetzal is down or the
@@ -148,17 +163,20 @@ to verify that the input signal does not have holes in the data (this should
 probably be handled beforehand). Depending on the case, this could be a hard
 or soft fail.
 
-Postcondition
-=============
+Postconditions
+==============
 
 Like preconditions, tasks should verify any postcondition prior to finishing
-up their work. When a postcondition is not met, it can choose to hard or soft
-fail, but it makes more sense to hard fail. Use postconditions as safeguards
-on your task code.
+up their work. When a postcondition is not met, it *must* hard fail: if your
+task does meet a postcondition, it is certainly because something went wrong!
+Use postconditions as safeguards on your task code. Postconditions can also
+help other users: they can be considered as indirect preconditions to other
+tasks.
 
-For example, a task that converts a file from a format to another could verify
-that the target format is respected. If the format is not valid, it is better
-to fail early than to debug a failure on the downstream tasks.
+For example, let us say that a task receives a file and generates a report on
+JSON format. One post-condition could be that the output conforms to the JSON
+standard format. If the format is not valid, it is better to fail early than to
+debug a failure on the downstream tasks.
 
 Task caching
 ============
@@ -184,3 +202,4 @@ What is changeable by command-line?
 
 .. _SemVer: https://semver.org
 .. _`RFC-7807`: https://tools.ietf.org/html/rfc7807
+.. _`section 3.1`: https://tools.ietf.org/html/rfc7807#section-3.1
