@@ -107,3 +107,26 @@ napoleon_use_param = True
 napoleon_use_rtype = True
 # napoleon_include_init_with_doc = True  # enable this when implemented in Napoleon, instead of autoclass_content = 'both'
 
+<<<<<<< HEAD
+=======
+
+# intersphinx mappings
+intersphinx_mapping = {
+    'python': (
+        'https://docs.python.org/3',
+        None
+    ),
+    'quetzal-client': (
+        'https://quetzal-client.readthedocs.io/en/latest',
+        None
+    ),
+    'numpy': (
+        'http://docs.scipy.org/doc/numpy/objects.inv',
+        None
+    ),
+    'pandas': (
+        'http://pandas.pydata.org/pandas-docs/stable',
+        None,
+    ),
+}
+>>>>>>> 318c4b8... Add specifications to standardized events

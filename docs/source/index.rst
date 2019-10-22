@@ -50,7 +50,18 @@ falls was the Spanish Conquistador Álvar Núñez Cabeza de Vaca in 1541.
 
 .. toctree::
    :maxdepth: 1
+<<<<<<< HEAD
    :caption: Deployment:
+=======
+   :caption: Specifications
+
+   specs/features
+   specs/events
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Deployment
+>>>>>>> 318c4b8... Add specifications to standardized events
 
    deployment
 
