@@ -128,7 +128,7 @@ An example metadata entry for a file with id
       "task": "iguazu.tasks.preprocess.Remove50Hz",
       "version": "0.1.0",
       "parents": ["006747ea-43a9-4578-9843-63964204b072"],
-      "status", "FAILED",
+      "status": "FAILED",
       "problem": {
         "title": "Sampling rate must be > 100 Hz",
         "type": "iguazu.core.exceptions.SoftPreconditionFailed",
