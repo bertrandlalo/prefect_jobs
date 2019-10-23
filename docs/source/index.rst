@@ -38,8 +38,9 @@ hence the name:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Key concepts:
+   :caption: General documentation
 
+   key_concepts
    guidelines
    hdf5
    developing_tasks

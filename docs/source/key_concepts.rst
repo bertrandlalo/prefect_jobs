@@ -1,8 +1,8 @@
-Flows
-======
+.. _`Key concepts`:
 
-Tasks
-======
+============
+Key concepts
+============
 
 .. figure:: _static/concepts.png
    :alt: alternative text
@@ -14,8 +14,6 @@ Tasks
 Functions
 =========
 
-<<<<<<< HEAD
-=======
 **Functions** are regular Python functions that do one specific operation (they
 could be classes, but in most cases they should be functions).
 
@@ -75,4 +73,3 @@ Create flows following the :ref:`Creating new flows` guide and put them on the
 :py:mod:`iguazu.flows` module.
 Currently, we are organizing it as sub-modules according to the data
 modality.
->>>>>>> f832e07... Clean up event specification before starting feature specification
