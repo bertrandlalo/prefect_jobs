@@ -121,7 +121,7 @@ intersphinx_mapping = {
         None
     ),
     'numpy': (
-        'http://docs.scipy.org/doc/numpy/objects.inv',
+        'http://docs.scipy.org/doc/numpy',
         None
     ),
     'pandas': (
