@@ -26,7 +26,6 @@ author = 'Raphaëlle Bertrand-Lalo & David Ojeda'
 try:
     with open('../../iguazu/__init__.py') as f:
         release = re.search(r'^__version__\s*=\s*\'(.*)\'', f.read(), re.M).group(1)
-    print('GOT VERSION', release)
 except:
     release = '0.0'
 
@@ -107,3 +106,22 @@ napoleon_use_param = True
 napoleon_use_rtype = True
 # napoleon_include_init_with_doc = True  # enable this when implemented in Napoleon, instead of autoclass_content = 'both'
 
+# intersphinx mappings
+intersphinx_mapping = {
+    'python': (
+        'https://docs.python.org/3',
+        None
+    ),
+    'quetzal-client': (
+        'https://quetzal-client.readthedocs.io/en/latest',
+        None
+    ),
+    'numpy': (
+        'http://docs.scipy.org/doc/numpy',
+        None
+    ),
+    'pandas': (
+        'http://pandas.pydata.org/pandas-docs/stable',
+        None,
+    ),
+}
