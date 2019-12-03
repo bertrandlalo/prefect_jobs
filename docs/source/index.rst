@@ -52,6 +52,7 @@ hence the name:
 
    specs/features
    specs/events
+   specs/signals
 
 .. toctree::
    :maxdepth: 1
@@ -61,7 +62,7 @@ hence the name:
 
 .. toctree::
    :maxdepth: 6
-   :caption: Contents:
+   :caption: API
 
    modules
 

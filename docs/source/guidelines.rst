@@ -159,6 +159,7 @@ not generate a false result just because it could not read the input correctly
 due to an external problem.
 
 Hard failures do not generate results. Not even `Empty results`_.
+Moreover, hard failures should delete any existing results.
 
 Preconditions
 =============
@@ -208,7 +209,16 @@ What goes in the constructor, on the run method, or on the prefect context?
 
 What is changeable by command-line?
 
+Prefect task best practices
+===========================
+
+Follow the `prefect task best practices`_. In particular:
+
+* Task attributes must be serializable
+* Avoid statefulness: do not rely on changes of member variables in your run method.
+
 
 .. _SemVer: https://semver.org
 .. _`RFC-7807`: https://tools.ietf.org/html/rfc7807
 .. _`section 3.1`: https://tools.ietf.org/html/rfc7807#section-3.1
+.. _`prefect task best practices`: https://docs.prefect.io/core/tutorials/task-guide.html#avoid-statefulness

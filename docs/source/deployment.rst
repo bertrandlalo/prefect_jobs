@@ -38,7 +38,7 @@ Preparations
    key pair, respectively.
 
 2. Add the public key pair contents in ``conf/github.pub`` to your
-    `Github SSH keys <https://github.com/settings/ssh/new>`_ settings.
+   `Github SSH keys <https://github.com/settings/ssh/new>`_ settings.
 
 Docker-compose
 ==============

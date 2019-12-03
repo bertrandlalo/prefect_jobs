@@ -42,6 +42,8 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'sphinx_autodoc_typehints',  # note: this has to go after napoleon
+    'sphinx.ext.intersphinx',
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -69,11 +71,6 @@ exclude_patterns = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
-
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -118,6 +115,10 @@ intersphinx_mapping = {
     ),
     'numpy': (
         'http://docs.scipy.org/doc/numpy',
+        None
+    ),
+    'scipy': (
+        'https://docs.scipy.org/doc/scipy/reference',
         None
     ),
     'pandas': (

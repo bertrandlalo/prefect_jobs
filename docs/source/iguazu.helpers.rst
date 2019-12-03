@@ -25,3 +25,19 @@ iguazu.helpers.files module
    :undoc-members:
    :show-inheritance:
 
+iguazu.helpers.states module
+----------------------------
+
+.. automodule:: iguazu.helpers.states
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+iguazu.helpers.tasks module
+---------------------------
+
+.. automodule:: iguazu.helpers.tasks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

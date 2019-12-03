@@ -14,6 +14,7 @@ dependencies = [
     'colorlog>=4.0,<5.0',
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
     'numpy>=1.16,<2.0',
+    'mne>=0.19.2,>0.20',
     'pandas>=0.25.0,<0.26.0',
     'psutil>=5.6.3,<5.7',
     'prefect>=0.6.1,<0.6.2',
