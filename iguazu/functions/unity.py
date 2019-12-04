@@ -5,7 +5,7 @@ import pandas as pd
 from datascience_utils.unity import fix_unity_events
 from dsu.unity import extract_marker_version, extract_complete_sequences, \
     extract_complete_sequence_times
-
+from iguazu.functions.specs import empty_events, sort_standard_events
 
 logger = logging.getLogger(__name__)
 
@@ -122,8 +122,8 @@ def extract_sequences(events: pd.DataFrame, sequences: List[str] = None) -> pd.D
     # intersection between sequences found in events and sequences specified in the parameters
     available_sequences = [sequence for sequence in sequences_report if sequence in sequences]
     if set(available_sequences) != set(sequences):
-        logger.warning('Could not find {missing} in the sequences.'.format(
-            missing=','.join([str(a) for a in sequences if a not in available_sequences])))
+        logger.warning('Could not find %s in the sequences.',
+                       ', '.join([str(a) for a in sequences if a not in available_sequences]))
 
     sequence_times = {}
     for sequence_name in available_sequences:
@@ -135,3 +135,100 @@ def extract_sequences(events: pd.DataFrame, sequences: List[str] = None) -> pd.D
     sequence_times = {k: v for (k, v) in sequence_times.items() if k in VALID_SEQUENCE_KEYS}
     report = pd.DataFrame.from_dict(sequence_times)
     return report
+
+
+def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selection: List[str] = None) -> pd.DataFrame:
+    """ Extract sequences that follow the standard specification
+
+    This function is a wrapper of :py:func:`extract_sequences` that reorders
+    the results to meet the
+    :ref:`standard event specifications <event_specs>`.
+
+    Parameters
+    ----------
+    events
+        Dataframe with a column "label" containing 'begins|ends'.
+        See the documentation of :py:func:`extract_sequences` for more info.
+
+    selection
+        List of strings of sequence names to retain.
+        See the documentation of :py:func:`extract_sequences` for more info.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with the sequences according to the
+        :ref:`standard event specifications <event_specs>`. That is, with
+        a timestamp index and id, name, begin, end and data colunns.
+
+    See Also
+    --------
+    :ref:`standard event specifications <event_specs>`.
+    :py:func:`extract_sequences`.
+
+    """
+
+    if extract_marker_version(events) == 'legacy':
+        # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
+        logger.warning('Sequences report for legacy events not implemented yet')
+        return empty_events()
+
+    # pyxdf adds a xdf_timestamps in case we one wants to do manual time
+    # corrections. We don't need this for the events
+    events.drop(columns='xdf_timestamps', inplace=True, errors='ignore')
+
+    # correct unity events # TODO: put this in the conversion xdf to hdf
+    events = fix_unity_events(events)
+    complete_sequences = extract_complete_sequences(events)
+    # selection = selection or complete_sequences
+    # intersection between sequences found in events and sequences specified in the parameters
+    # TODO: rewrite this part; it's very confusing
+    # available_sequences = [seq for seq in complete_sequences if seq in selection]
+    # if set(available_sequences) != set(selection):
+    #     logger.warning('Could not find %s in the sequences.',
+    #                    ', '.join([str(a) for a in selection if a not in available_sequences]))
+
+    records = []
+    for sequence_name in complete_sequences:
+        times = extract_complete_sequence_times(events, sequence_name, pedantic='warn')
+        for k, (begin, end) in enumerate(times):
+            sequence_id = f'{sequence_name}_{k}'
+            if sequence_id not in VALID_SEQUENCE_KEYS:
+                # This is a protection against corrupted events, that is, we
+                # keep only the sequences keys that are specified in the
+                # VALID_SEQUENCE_KEYS list
+                logger.debug('Ignoring sequence %s since it is not on the '
+                             'valid sequence keys', sequence_id)
+                continue
+            records.append({
+                'timestamp': begin,
+                'id': sequence_id,
+                'name': sequence_name,
+                'begin': begin,
+                'end': end,
+                'data': None,
+            })
+
+    standard_sequences = (
+        pd.DataFrame.from_records(records)
+        .set_index('timestamp')
+        .rename_axis(index='index')
+        .sort_index()
+    )
+    #import ipdb; ipdb.set_trace(context=21)
+
+    # Convert the existing events to standard form
+    standard_events = events.copy()
+    standard_events['id'] = (
+        standard_events.groupby('label')
+        ['label']
+        .transform(lambda x: pd.Series([f'{x.name}_{i}' for i in range(x.shape[0])]))
+    )
+    standard_events['begin'] = standard_events.index
+    standard_events['end'] = pd.NaT
+    standard_events['end'] = standard_events['end'].astype(standard_events['begin'].dtype)
+    standard_events.rename(columns={'label': 'name'}, inplace=True)
+    standard_events = standard_events[['id', 'name', 'begin', 'end', 'data']]
+
+    merged = pd.concat((standard_events, standard_sequences), axis='index', sort=False)
+    return sort_standard_events(merged)
