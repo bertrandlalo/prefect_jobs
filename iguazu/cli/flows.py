@@ -4,13 +4,26 @@ import os
 import pathlib
 import tempfile
 import traceback
-from typing import Optional
 
 import click
+import pandas as pd
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor, DaskExecutor
-from prefect.engine.state import State
 
-from iguazu.recipes import registry
+from iguazu.core.flows import execute_flow, REGISTRY
+from iguazu.core.tasks import Task
+from iguazu.utils import str2bool
+
+
+class TaskNameListType(click.ParamType):
+    name = 'text1[,text2...]'
+
+    def convert(self, value, param, ctx):
+        parts = value.split(',')
+        definitions = []
+        for p in parts:
+            tup = click.types.StringParamType.convert(self, p, param, ctx)
+            definitions.append(tup)
+        return definitions
 
 
 @click.group('flows')
@@ -19,23 +32,44 @@ def flows_group():
     pass
 
 
+@flows_group.command(name='list')
+def list_():
+    """List all available flows"""
+    records = []
+    for name, klass in REGISTRY.items():
+        doc = getattr(klass, '__doc__', None) or f'Not documented! Please add a docstring to {klass.__name__}'
+        doc = doc.split('\n', 1)[0].strip()
+        records.append({'NAME': name, 'DESCRIPTION': doc})
+    df = pd.DataFrame.from_records(records).set_index('NAME').sort_index()
+
+    click.secho('List of registered flows', fg='blue')
+    with pd.option_context('display.width', 120, 'display.max_rows', None, 'display.max_colwidth', 120):
+        click.echo(df.to_string())
+
+
 @flows_group.command()
-@click.argument('flow_name', type=click.Choice(registry),
+@click.argument('flow_name', type=click.Choice(REGISTRY.keys()),
                 metavar='FLOW_NAME')
 @click.option('-o', '--output', type=click.Path(dir_okay=False),
               required=False,
               help='Output PDF file where the rendered plan DAG will be saved.')
-@click.option('--show/--no-show', is_flag=True, default=True,
+@click.option('--show/--no-show', is_flag=True, default=True, show_default=True,
               help='Opens the rendered graph.')
 def info(flow_name, output, show):
-    """Show information of a flow"""
-    if flow_name not in registry:  # TODO: can this be managed by click?
-        raise click.ClickException(f'Unknown flow recipe {flow_name}')
+    """Show information concerning the flow FLOW_NAME"""
+    if flow_name not in REGISTRY:
+        # Should not happen if used from click, but just in case
+        click.secho(f'There is no registered flow with name "{flow_name}"', fg='yellow')
+        raise click.ClickException(f'Unknown prepared flow')
 
-    make_flow_func = registry[flow_name]
+    flow_class = REGISTRY[flow_name]
+    click.secho(f'Creating flow from {flow_class.__name__}...', fg='blue')
+    flow = flow_class()
 
-    click.secho(f'Creating flow from {make_flow_func.__name__}...', fg='blue')
-    flow = make_flow_func()
+    # Print task names
+    click.secho(f'Flow {flow.name} defines the following tasks:', fg='green')
+    tr = task_report(flow)
+    click.secho(tr.to_string(index=False))
 
     if output:
         # Handle output, prefect requires it to be without the .pdf extension
@@ -93,8 +127,9 @@ class RunFlowGroup(click.core.Group):
 @click.option('--report', type=click.Path(dir_okay=False),
               required=False,
               help='Output CSV report of the execution')
-@click.option('--force', required=False, is_flag=True, default=False,
-              help='Whether to force the processing if the path already exists in the output file. ')
+@click.option('--force', required=False, type=TaskNameListType(),
+              help='Comma-separated list of tasks whose execution should be forced. '
+                   'Use "--force all" to force all tasks')
 @click.option('--cache/--no-cache', 'cache', is_flag=True, default=True, show_default=True,
               help='Use the prefect cache. ')
 @click.option('--allow-flow-failure', is_flag=True, default=False,
@@ -121,115 +156,103 @@ def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report
     ctx.obj.update(opts)
 
 
-def run_flow_command(func):
-    @functools.wraps(func)
-    def decorator(**kwargs):
-        from iguazu.recipes import execute_flow, state_report
-        ###
-        # Preparations before running the flow
-        ###
+def run_flow(flow_class, **kwargs):
+    # Preparations before running the flow
 
-        # Prepare executor
-        ctx = click.get_current_context()
-        ctx.obj = ctx.obj or {}
-        executor_type = ctx.obj.get('executor_type', None)
-        executor_address = ctx.obj.get('executor_address', None)
-        if executor_type == 'dask':
-            if executor_address:
-                executor = DaskExecutor(executor_address)
-            else:
-                executor = DaskExecutor(local_processes=True)
-        elif executor_type == 'synchronous':
-            executor = SynchronousExecutor()
-        elif executor_type == 'local':
-            executor = LocalExecutor()
+    # Prepare executor
+    ctx = click.get_current_context()
+    ctx.obj = ctx.obj or {}
+    executor_type = ctx.obj.get('executor_type', None)
+    executor_address = ctx.obj.get('executor_address', None)
+    executor = prepare_executor(executor_type, executor_address)
+
+    # Prepare context arguments
+    context_args = dict(
+        temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
+        output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
+        quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
+                                                kwargs.get('workspace_name', None)),
+    )
+
+    # Handle --force
+    forced_tasks = ctx.obj.get('force', [])
+    if forced_tasks:
+        if 'all' in forced_tasks:
+            context_args['forced_tasks'] = 'all'
         else:
-            # Should not happen if click parameters are done correctly, but
-            # kept for completeness
-            raise ValueError(f'Unknown executor type "{executor_type}".')
-        # Handle --force , but note that TODO: I don't think we should be doing this here
-        if ctx.obj.get('force', False):
-            kwargs['force'] = True
+            context_args['forced_tasks'] = forced_tasks
 
-        # Prepare context arguments
-        context_args = dict(
-            temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
-            output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
-            quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
-                                                    kwargs.get('workspace_name', None)),
+    # TODO: this could be set in a context secret
+    if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
+        # At least one of these keys exist in the environment
+        quetzal_kws = dict(
+            url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
+            username=os.getenv('QUETZAL_USER', 'admin'),
+            password=os.getenv('QUETZAL_PASSWORD', 'password'),
+            insecure=str2bool(os.getenv('QUETZAL_INSECURE', 0))
         )
-        # TODO: this could be set in a context secret
-        if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
-            # At least one of these keys exist in the environment
-            quetzal_kws = dict(
-                url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-                username=os.getenv('QUETZAL_USER', 'admin'),
-                password=os.getenv('QUETZAL_PASSWORD', 'password'),
-                insecure=str2bool(os.getenv('QUETZAL_INSECURE', 0))
-            )
-            context_args['quetzal_client'] = quetzal_kws
+        context_args['quetzal_client'] = quetzal_kws
 
-        context_args.setdefault('secrets', {})
-        if 'SLACK_WEBHOOK_URL' in os.environ:
-            context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+    context_args.setdefault('secrets', {})
+    if 'SLACK_WEBHOOK_URL' in os.environ:
+        context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
 
-        ###
-        # Flow execution
-        ###
-        flow, flow_state = execute_flow(func, kwargs, executor, context_args)
+    ###
+    # Flow execution
+    ###
+    flow, flow_state = execute_flow(flow_class, kwargs, executor, context_args)
 
-        ###
-        # Flow post-processing: reports et al.
-        ###
-        if isinstance(flow_state.result, Exception):
-            click.secho(f'Flow state was an exception: {flow_state.result}', fg='red')
-            ctx.fail(f'Flow run failed: {flow_state.result}.')
+    ###
+    # Flow post-processing: reports et al.
+    ###
+    if isinstance(flow_state.result, Exception):
+        click.secho(f'Flow state was an exception: {flow_state.result}', fg='red')
+        ctx.fail(f'Flow run failed: {flow_state.result}.')
 
-        # Create dataframe report and save to CSV
-        df = state_report(flow_state, flow)
-        report = ctx.obj.get('csv_report', None)
-        if report is None:
-            tmpfile = tempfile.NamedTemporaryFile(prefix='iguazu_report_', suffix='.csv', delete=False)
-            tmpfile.close()
-            report = tmpfile.name
-        if not df.empty:
-            df = df[['status', 'task class', 'task name', 'message', 'exception']]
-            df_upper = df.drop(columns='exception')
-            df_upper.columns = [col.upper() for col in df_upper.columns]
-            click.secho(df_upper.to_string())
-            df.to_csv(report, index=False)
-            click.secho(f'Saved CSV report on {report}', fg='blue')
+    # Create dataframe report and save to CSV
+    df = state_report(flow_state, flow)
+    report = ctx.obj.get('csv_report', None)
+    if report is None:
+        tmpfile = tempfile.NamedTemporaryFile(prefix='iguazu_report_', suffix='.csv', delete=False)
+        tmpfile.close()
+        report = tmpfile.name
+    if not df.empty:
+        df = df[['status', 'task class', 'task name', 'message', 'exception']]
+        df_upper = df.drop(columns='exception')
+        df_upper.columns = [col.upper() for col in df_upper.columns]
+        click.secho(df_upper.to_string())
+        df.to_csv(report, index=False)
+        click.secho(f'Saved CSV report on {report}', fg='blue')
 
-        # Show a final error message if the flow failed
-        errors = df.loc[~df.exception.isnull()].query('status != "TriggerFailed"')
-        if not errors.empty:
-            click.secho('Flow encountered the following exceptions:', fg='red')
-            for idx, row in errors.iterrows():
-                click.secho(row["task name"], fg='yellow')
-                click.secho(row.exception)
-            click.secho(f'Flow execution encountered {len(errors)} errors.', fg='red')
-            if not context_args.get('allow_flow_failure', False):
-                ctx.exit(-1)
-
-    return decorator
+    # Show a final error message if the flow failed
+    errors = df.loc[~df.exception.isnull()].query('status != "TriggerFailed"')
+    if not errors.empty:
+        click.secho('Flow encountered the following exceptions:', fg='red')
+        for idx, row in errors.iterrows():
+            click.secho(row["task name"], fg='yellow')
+            click.secho(row.exception)
+        click.secho(f'Flow execution encountered {len(errors)} errors.', fg='red')
+        if not context_args.get('allow_flow_failure', False):
+            ctx.exit(-1)
 
 
 # add all flows to the run_group
 def _init_run_group():
-    for flow_name, wrapper in registry.items():
-        cmd = click.command(flow_name)(run_flow_command(wrapper))
-        run_group.add_command(cmd)
-
-
-def extract_state_exception(state: State) -> Optional[str]:
-    """Get the formatted traceback string of a prefect state exception"""
-    if not state.is_failed():
-        return None
-    tb = traceback.TracebackException.from_exception(state.result)
-    return ''.join(tb.format())
+    # for flow_name, wrapper in registry.items():
+    #     cmd = click.command(flow_name)(run_flow_command(wrapper))
+    #     run_group.add_command(cmd)
+    for name, klass in REGISTRY.items():
+        # partially bind run_flow to the class constructor, but also
+        # do a wraps so that the docstring is propagated
+        cmd = functools.wraps(klass)(functools.partial(run_flow, klass))
+        for decorator in klass.click_options():
+            cmd = decorator(cmd)
+        run_cmd = click.command(name)(cmd)
+        run_group.add_command(run_cmd)
 
 
 def prepare_executor(executor_type, executor_address=None):
+    """Instantiate a prefect executor"""
     if executor_type == 'dask':
         if executor_address is not None:
             executor = DaskExecutor(executor_address)
@@ -237,12 +260,67 @@ def prepare_executor(executor_type, executor_address=None):
             executor = DaskExecutor(local_processes=True)
     elif executor_type == "synchronous":
         executor = SynchronousExecutor()
-    else:  # default
+    elif executor_type == 'local':
         executor = LocalExecutor()
+    else:
+        # Should not happen if click parameters are done correctly, but
+        # kept for completeness
+        raise ValueError(f'Unknown executor type "{executor_type}".')
 
     return executor
 
 
-def str2bool(value):
-    # TODO: move to a utils package?
-    return str(value).lower() in ("yes", "true", "t", "1")
+def state_report(flow_state, flow=None):
+    rows = []
+    sorted_tasks = flow.sorted_tasks() if flow else []
+    for task in flow_state.result:
+        state = flow_state.result[task]
+        rows.append({
+            'task class': type(task).__name__,
+            'task name': task.name,
+            'status': type(state).__name__,
+            'message': state.message,
+            'exception': extract_state_exception(state),
+            'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, task.name, -1),
+        })
+        if state.is_mapped():
+            for i, mapped_state in enumerate(state.map_states):
+                rows.append({
+                    'task class': type(task).__name__,
+                    'task name': f'{task.name}[{i}]',
+                    'status': type(mapped_state).__name__,
+                    'message': mapped_state.message,
+                    'exception': extract_state_exception(mapped_state),
+                    'order': (sorted_tasks.index(task) if task in sorted_tasks else sys.maxsize, task.name, i),
+                })
+
+    df = (
+        pd.DataFrame.from_records(rows)
+        # Show tasks by their topological order, then reset the index
+        .sort_values(by='order')
+        .reset_index(drop=True)
+    )
+    return df
+
+
+def task_report(flow):
+    rows = []
+    for task in flow:
+        rows.append({
+            'Name': task.name,
+            'Class': task.__class__.__name__,
+            'Iguazu task?': 'Yes' if issubclass(task.__class__, Task) else 'No',
+        })
+
+    return pd.DataFrame.from_records(rows)
+
+
+def extract_state_exception(state):
+    """Get the formatted traceback string of a prefect state exception"""
+    if not state.is_failed():
+        return None
+    tb = traceback.TracebackException.from_exception(state.result)
+    return ''.join(tb.format())
+
+
+_init_run_group()

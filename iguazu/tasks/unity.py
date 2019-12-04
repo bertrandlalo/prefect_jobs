@@ -6,7 +6,7 @@ import prefect
 from iguazu.functions.unity import extract_sequences
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
-from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
+from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 
 
 class ExtractSequences(prefect.Task):
@@ -25,7 +25,6 @@ class ExtractSequences(prefect.Task):
 
     def run(self,
             events: FileProxy) -> FileProxy:
-
         output = events.make_child(suffix='_sequences')
         self.logger.info('Reporting sequences for events=%s -> %s',
                          events, output)
@@ -76,4 +75,5 @@ class ExtractSequences(prefect.Task):
         except Exception as ex:
             # Manage output, save to file
             task_fail(self, ex, output, output_group)
+
 

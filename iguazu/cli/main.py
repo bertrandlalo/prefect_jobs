@@ -3,6 +3,7 @@ from logging.config import dictConfig
 
 import click
 
+from iguazu import __version__
 from iguazu.cli.deploy import deploy_group
 from iguazu.cli.flows import flows_group
 
@@ -85,6 +86,12 @@ def init_logging(log_level, colored_logs):
             'iguazu.cache_validators': {
                 'level': 'WARNING',
             },
+            'matplotlib': {
+                'level': 'WARNING',
+            },
+            'parso': {
+                'level': 'WARNING',
+            },
             # Use this template to silence a particular library
             # 'some_name': {
             #     'level': 'WARNING',
@@ -105,13 +112,12 @@ def init_logging(log_level, colored_logs):
     logging.captureWarnings(True)
 
     root = logging.getLogger()
-    root.info('Iguazu logging initialized')
+    root.info(f'Iguazu {__version__} logging initialized')
 
 
 @cli.command()
 def version():
     """Print version and exit"""
-    from iguazu import __version__
     click.echo(f'Iguazu version {__version__}.')
 
 

@@ -8,7 +8,7 @@ from dsu.space_stress import categorize_failure
 from dsu.unity import extract_complete_sequences, extract_complete_sequence_times, extract_marker_version
 from scipy.spatial import distance
 
-from iguazu.helpers.tasks import IguazuError
+from iguazu.core.exceptions import IguazuError
 
 
 def estimate_trajectory_length(data, columns):
