@@ -3,7 +3,6 @@
 import re
 from setuptools import setup, find_packages
 
-
 with open('iguazu/__init__.py') as f:
     VERSION = re.search(r'^__version__\s*=\s*\'(.*)\'', f.read(), re.M).group(1)
 
@@ -14,17 +13,24 @@ dependencies = [
     'colorlog>=4.0,<5.0',
     'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
     'numpy>=1.16,<1.17',
+    'nolds>=0.5.2,<0.6',
     'mne>=0.19.2,<0.20',
     'pandas>=0.25.0,<0.26.0',
+    'pendulum>=2.0.5,<2.1',
+    'pyentrp>=0.5.0,<0.6',
     'psutil>=5.6.3,<5.7',
     'prefect>=0.6.1,<0.6.2',
-    'quetzal-client>=0.3.1,<0.4',
+    'quetzal-client>=0.5.0,<0.6',
     'scikit-learn>=0.21.2,<0.22.0',
     'scipy>=1.3,<2.0',
     'simplegeneric>=0.8.1,<0.9.0',
     'statsmodels>=0.10.1,<0.11',
     'tables>=3.5,<4.0',
-    'tzlocal>=2.0,<3.0'
+    'tzlocal>=2.0,<3.0',
+    # Requirements for plot-related tasks
+    'Jinja2>=2.10.1,<2.11',
+    'plotly>=4.1.1,<4.2',
+    'matplotlib>=3.1.1,<3.2',
 ]
 build_dependencies = dependencies + ['pytest-runner']
 test_dependencies = [
@@ -40,8 +46,6 @@ author_emails = ', '.join(tup[1] for tup in authors)
 
 setup_args = dict(
     name='iguazu',
-    # version=versioneer.get_version(),
-    # cmdclass=versioneer.get_cmdclass(),
     description='Offline data analysis jobs platform.',
     packages=find_packages(exclude=['docs', 'tests']),
     url='https://github.com/OpenMindInnovation/iguazu',
@@ -56,6 +60,7 @@ setup_args = dict(
         ],
     },
     version=VERSION,
+    include_package_data=True,
 )
 
 setup(**setup_args)

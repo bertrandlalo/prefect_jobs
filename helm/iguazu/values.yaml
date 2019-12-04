@@ -5,7 +5,7 @@
 iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-  tag: 0.1.2
+  tag: 0.2.0-dev4
   pullPolicy: Always
 
 
@@ -16,7 +16,7 @@ defaultJob:
   startingDeadlineSeconds: 15
   restartPolicy: Never
   concurrencyPolicy: Forbid   # Only once at a time!
-  suspend: false              # Put this on true to suspend tasks
+  suspend: true              # Put this on true to suspend tasks
   env:
     - name: PYTHONUNBUFFERED
       value: "1"
@@ -109,6 +109,53 @@ jobs:
            "--allow-flow-failure",
            # Flow name
            "summarize_galvanic",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           ]
+  ##############################################################################
+  # Cardiac features
+  - name: cardiac-features
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 2 * * *"       # In human: every day at exactly 2 am
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "features_cardiac",
+           # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+           #"--limit", "100", "--shuffle",
+           ]
+  ##############################################################################
+  # Cardiac summary
+  - name: cardiac-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+           # General iguazu options
+           "--log-level", "DEBUG",
+           # Action
+           "flows", "run",
+           # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           # Flow name
+           "summarize_cardiac",
            # Flow options
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",

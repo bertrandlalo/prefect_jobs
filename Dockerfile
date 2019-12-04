@@ -40,7 +40,7 @@ RUN pip install --upgrade pip==19.2.3 && \
 # Copy and install iguazu
 RUN mkdir /code
 WORKDIR /code
-COPY setup.cfg setup.py ./
+COPY setup.cfg setup.py MANIFEST.in ./
 COPY iguazu ./iguazu
 RUN pip install .
 
