@@ -1,7 +1,5 @@
-name: unit-tests
-
+name: Automatic unit tests
 on: [push]
-
 jobs:
   build:
 
@@ -17,6 +15,10 @@ jobs:
         python-version: 3.7
 
     - name: Configure access token
+      # This step needs to add a secret named "ACCESS_TOKEN" on
+      # https://github.com/OpenMindInnovation/iguazu/settings/secrets
+      # With the value from a token generated at
+      # https://github.com/settings/tokens/new
       run: |
         git config --global --add url."https://${{ secrets.ACCESS_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
         git config --global --add url."https://${{ secrets.ACCESS_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
