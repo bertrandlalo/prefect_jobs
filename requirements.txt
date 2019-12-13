@@ -3,7 +3,7 @@ colorlog>=4.0,<5.0
 click>=7.0,<8.0
 docker>=4.0,<5.0
 # TODO: remember to update to new version v0.3.1
-git+ssh://git@github.com/OpenMindInnovation/datascience_utils.git@9d9ce7a#egg=dsu
+git+https://github.com/OpenMindInnovation/datascience_utils.git@9d9ce7a#egg=dsu
 graphviz>=0.11.1<0.12.0
 numpy>=1.16,<1.17
 mne>=0.19.2,<0.20
