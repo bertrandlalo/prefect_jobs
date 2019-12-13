@@ -2,6 +2,8 @@
 Iguazu
 ======
 
+|test-status|
+
 Open Mind Innovation Python jobs platform.
 Using `Prefect <https://www.prefect.io/>`_ to handle the definition, composition
 and execution of tasks as data processing pipelines, or more simply, *flows*.
@@ -57,3 +59,8 @@ Contribute
 
 - Issue Tracker https://github.com/OpenMindInnovation/iguazu/issues
 - Source Code: https://github.com/OpenMindInnovation/iguazu
+
+.. |test-status| image:: https://github.com/OpenMindInnovation/iguazu/workflows/unit-tests/badge.svg
+    :alt: Automatic unit tests status
+    :scale: 100%
+    :target: https://github.com/OpenMindInnovation/iguazu/actions

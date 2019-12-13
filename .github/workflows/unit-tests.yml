@@ -1,4 +1,4 @@
-name: Automatic unit tests
+name: unit-tests
 on: [push]
 jobs:
   build:
