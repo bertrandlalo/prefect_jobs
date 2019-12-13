@@ -60,7 +60,7 @@ Contribute
 - Issue Tracker https://github.com/OpenMindInnovation/iguazu/issues
 - Source Code: https://github.com/OpenMindInnovation/iguazu
 
-.. |test-status| image:: https://github.com/OpenMindInnovation/iguazu/workflows/unit-tests/badge.svg
-    :alt: Automatic unit tests status
+.. |test-status| image:: https://github.com/OpenMindInnovation/iguazu/workflows/unit%20tests/badge.svg?branch=master
+    :alt: Automatic unit tests status (on master)
     :scale: 100%
     :target: https://github.com/OpenMindInnovation/iguazu/actions
