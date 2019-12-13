@@ -5,7 +5,7 @@ Signal specification
 ====================
 
 ========= ==========
-Status    PROPOSAL
+Status    ACCEPTED
 --------- ----------
 Authors   David
 --------- ----------

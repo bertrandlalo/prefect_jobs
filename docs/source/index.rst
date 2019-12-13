@@ -50,9 +50,9 @@ hence the name:
    :maxdepth: 1
    :caption: Specifications
 
-   specs/features
-   specs/events
    specs/signals
+   specs/events
+   specs/features
 
 .. toctree::
    :maxdepth: 1
