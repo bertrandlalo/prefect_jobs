@@ -5,15 +5,15 @@ Signal specification
 ====================
 
 ========= ==========
-Status    PROPOSAL
+Status    ACCEPTED
 --------- ----------
 Authors   David
 --------- ----------
-Reviewers
+Reviewers Raphaëlle
 --------- ----------
-Version   0
+Version   1
 --------- ----------
-Date      2019-10-24
+Date      2019-12-13
 ========= ==========
 
 This specification aims to standardize how *signals* are represented so that
@@ -116,10 +116,11 @@ Following the :ref:`Guidelines` concerning :ref:`rule_file_format`,
 the preferred format to save standardized Iguazu signals is a
 :py:class:`pandas.DataFrame` embedded in a HDF5 file under a key as defined
 in the :ref:`hdf5`. The preferred HDF5 key for  is
-``/iguazu/signal/modality/prepared``, where ``modality`` is the source
+``/iguazu/signal/modality/standard``, where ``modality`` is the source
 of the data (e.g. *gsr*, *ppg*, *ecg*, *eeg*, etc.).
 See the :ref:`signal_names` table for the appropriate group name particle by
-modality.
+modality. However the name ``standard`` can be replaced with any other, more
+descriptive name, such as ``clean`` for the case of fully preprocessed signals.
 
 The contents of the dataframe depend on the modality.
 However, there are some common elements as described next.
@@ -150,14 +151,49 @@ Time support
   Any processing algorithm can assume that the signal samples are equally
   spaced.
 
+* The index timestamp SHOULD include the timezone information. An index without
+  timezone information will be assumed to be in UTC. It is not a specification
+  error to omit the timezone information, but it is recommended to keep the
+  timezone information ot at least to be consistent with the usage of timezone.
 
 Device-dependent remarks
 ------------------------
 
 * A signal sample with a known problem specific to the device that measured the
   signal MUST be set to ``NaN``. This includes glitches, saturations, etc.
+  See the next section on how to represent the details of this information.
 
-* For each signal, an accompanying category column with the same name of the
+
+Annotations
+-----------
+
+The signal dataframe MAY have a *companion* annotation dataframe that
+provides details on ``NaN`` samples. This companion dataframe has the
+following specifications:
+
+* It MUST have the same index, so that joining with the original signal
+  dataframe is trivial.
+
+* It MUST have the same columns or a subset of the columns of the signal
+  dataframe, with the same name. It MUST NOT have other columns.
+
+* It MAY ot have all rows present on the signal dataframe. For storage purposes,
+  it SHOULD only contain rows where there is an annotation. For this reason,
+  not all rows of the signal dataframe may be present on the annotations
+  dataframe.
+
+* The contents of a cell in the annotation dataframe MUST be strings.
+
+* When a signal sample has a ``NaN`` value, the annotation dataframe MUST have
+  a string with a non-empty, short identifier of the problem. For example,
+  ``'saturated'``, ``'disconnected'``, ``'electrode pop'``, etc. If the problem
+  is unknown, the annotation value MAY be ``'unknown'``.
+
+* When a signal sample does not have an annotation, its value MUST be ``''``
+  (an empty string). It MUST NOT be ``NaN`` or ``None`` in order to keep a
+  homogeneous type.
+
+.. For each signal, an accompanying category column with the same name of the
   signal column and a suffix ``_annotations`` SHOULD be used to mark the kind
   of problem encountered for the ``NaN`` sample. These columns MUST be of object
   type and its contents are either string or ``NaN``.
@@ -169,25 +205,28 @@ Signal names and units by modality
 ----------------------------------
 
 * The names of the signals, that is, the dataframe columns, MUST adhere to the
-  following names, depending on the data modality:
+  names shown in the table below (on the **Column names**), depending on the
+  data modality. Take care to follow the suggested HDF5 group name particle to
+  adhere to the :ref:`hdf5` guidelines (the particle name refers to the ``...``
+  part in ``/iguazu/signal/.../standard``).
 
-  ====================== ================================= ================================================ =====
-  Modality               HDF5 group name particle          Column names                                     Units
-  ====================== ================================= ================================================ =====
-  Photoplethysmogram     ``ppg``                           No standard naming yet. Use ``ppg``.             mmHg?
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Electrocardiogram      ``ecg``                           At least one of the leads in `ECG leads`_.       mV
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Galvanic skin response ``gsr``                           No standard naming yet. Use ``gsr``.             μS
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Electroencephalogram   ``eeg``                           At least one on the channels in `EEG channels`_. μV
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Respiration            ``respi``                         No standard naming yet. Use ``respi``.           a.u.?
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Eyetracker             ?                                 ?                                                ?
-  ---------------------- --------------------------------- ------------------------------------------------ -----
-  Electrogastrogram      ``egg``                           No standard naming yet.                          μV
-  ====================== ================================= ================================================ =====
+  ====================== ================================================ ===== ========================
+  Modality               Column names                                     Units HDF5 group name particle
+  ====================== ================================================ ===== ========================
+  Photoplethysmogram     No standard naming yet. Use ``PPG``.             mmHg? ``ppg``
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Electrocardiogram      At least one of the leads in `ECG leads`_.       mV    ``ecg``
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Galvanic skin response No standard naming yet. Use ``GSR``.             μS    ``gsr``
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Electroencephalogram   At least one on the channels in `EEG channels`_. μV    ``eeg``
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Respiration            No standard naming yet. Use ``PZT``.             a.u.? ``pzt``
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Eyetracker             ?                                                ?     ?
+  ---------------------- ------------------------------------------------ ----- ------------------------
+  Electrogastrogram      No standard naming yet.                          μV    ``egg``
+  ====================== ================================================ ===== ========================
 
 * The value for each signal SHOULD have a value on a particular unit depending
   on the data modality as shown on the table above.
@@ -196,23 +235,54 @@ Signal names and units by modality
 Examples
 ========
 
-The following dataframe conforms to this specification:
+The following dataframes comply with this specification:
 
 .. code-block:: pycon
 
    >>> print(signals)
-                                        Fp1       Fpz       Fp2     respi       gsr       ppg         I Fp1_annotations respi_annotations gsr_annotations
-    2019-11-25 18:17:53.559697000       NaN  0.176707  0.134151  0.079310  0.862250  0.064041  0.974728   electrode pop               NaN       saturated
-    2019-11-25 18:17:53.561650125  0.270147  0.170591  0.113841  0.140351  0.671598  0.728501  0.345092             NaN               NaN       saturated
-    2019-11-25 18:17:53.563603250       NaN  0.137015  0.611275  0.899663  0.078138  0.464530  0.599594   electrode pop               NaN       saturated
-    2019-11-25 18:17:53.565556375  0.719263  0.664449  0.583317  0.451203  0.819860  0.900557  0.501669             NaN               NaN       saturated
-    2019-11-25 18:17:53.567509500  0.789224  0.741264  0.177518  0.366314  0.734846  0.428777  0.214244             NaN               NaN       saturated
-    ...                                 ...       ...       ...       ...       ...       ...       ...             ...               ...             ...
-    2019-11-25 18:18:03.549931375  0.594742  0.974215  0.769306  0.882719  0.421463  0.363691  0.349184             NaN      disconnected             NaN
-    2019-11-25 18:18:03.551884500  0.282889  0.267101  0.111317  0.087229  0.963758  0.318535  0.226392             NaN      disconnected             NaN
-    2019-11-25 18:18:03.553837625       NaN  0.754553  0.762995  0.463562  0.160009  0.717667  0.992356   electrode pop      disconnected             NaN
-    2019-11-25 18:18:03.555790750  0.239632  0.487637  0.329782  0.983357  0.032569  0.631128  0.156964             NaN      disconnected             NaN
-    2019-11-25 18:18:03.557743875  0.269476  0.935528  0.832609  0.366474  0.292679  0.531649  0.680871             NaN      disconnected             NaN
+                                        Fp1       Fpz       Fp2         I        II       III       PPG       GSR       PZT
+    2019-12-13 15:08:10.593720000  0.548814  0.715189  0.602763  0.044612  0.799796  0.076956  0.959433  0.645570  0.035362
+    2019-12-13 15:08:10.595673125       NaN       NaN       NaN  0.365100  0.190567  0.019123  0.222864  0.080532  0.085311
+    2019-12-13 15:08:10.597626250       NaN       NaN  0.265040  0.853246  0.475325  0.969206  0.256114       NaN  0.232773
+    2019-12-13 15:08:10.599579375  0.310629  0.791227  0.715143  0.765070  0.313591  0.365539  0.912151       NaN  0.025190
+    2019-12-13 15:08:10.601532500  0.898638  0.537170       NaN  0.384273  0.703407  0.353075  0.958532  0.207513  0.788468
+    ...                                 ...       ...       ...       ...       ...       ...       ...       ...       ...
+    2019-12-13 15:08:20.583954375  0.109172  0.690440  0.936051  0.620465  0.306744  0.708886  0.353458  0.099618  0.071292
+    2019-12-13 15:08:20.585907500  0.789744  0.823636  0.044040  0.087227  0.796727  0.272207  0.421408  0.471078  0.646950
+    2019-12-13 15:08:20.587860625  0.083314  0.830159  0.497194       NaN       NaN       NaN  0.582671  0.502512  0.117097
+    2019-12-13 15:08:20.589813750  0.651601  0.182138       NaN       NaN       NaN       NaN  0.283973  0.924912  0.537692
+    2019-12-13 15:08:20.591766875  0.256217  0.209902       NaN       NaN       NaN       NaN  0.654544  0.135956  0.092303
+
+Note that the annotations dataframe is sparse; it only has the rows that had
+a ``NaN`` sample:
+
+.. code-block:: pycon
+
+   >>> print(annotations)
+                                             Fp1            Fpz        Fp2             I            II           III PPG        GSR PZT
+    2019-12-13 15:08:10.595673125  electrode pop  electrode pop  saturated
+    2019-12-13 15:08:10.597626250  electrode pop  electrode pop                                                           saturated
+    2019-12-13 15:08:10.599579375                                                                                         saturated
+    2019-12-13 15:08:10.601532500                                saturated
+    2019-12-13 15:08:20.208954375                                                                            unknown
+    2019-12-13 15:08:20.587860625                                           disconnected  disconnected  disconnected
+    2019-12-13 15:08:20.589813750                                saturated  disconnected  disconnected  disconnected
+    2019-12-13 15:08:20.591766875                                saturated  disconnected  disconnected  disconnected
+
+
+Pending
+=======
+
+The following items are *pending*, that is, undecided at the time of the
+creation of this specification:
+
+* No standard naming of columns in photoplethysmogram, galvanic skin response,
+  respiration, eyetracker and electrogastrogram.
+* Not enough information / experience on eyetracking data to propose any
+  guideline on this data.
+* Not enough information / experience on several devices to propose a guideline
+  on the units of the respiration and ppg units.
+
 
 Appendix
 ========

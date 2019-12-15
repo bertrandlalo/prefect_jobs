@@ -114,7 +114,7 @@ intersphinx_mapping = {
         None
     ),
     'numpy': (
-        'http://docs.scipy.org/doc/numpy',
+        'https://docs.scipy.org/doc/numpy',
         None
     ),
     'scipy': (
