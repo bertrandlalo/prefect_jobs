@@ -5,15 +5,15 @@ Event and sequences specification
 =================================
 
 ========= ==========
-Status    PROPOSAL
+Status    ACCEPTED
 --------- ----------
 Authors   David
 --------- ----------
-Reviewers
+Reviewers Raphaëlle
 --------- ----------
-Version   0.1
+Version   1
 --------- ----------
-Date      2019-10-22
+Date      2019-12-13
 ========= ==========
 
 This specification aims to standardize how *events* and *sequences* are
