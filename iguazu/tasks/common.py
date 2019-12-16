@@ -207,7 +207,7 @@ class MergeHDF5(iguazu.Task):
                         output_node = output_store.get_node(g)
                         for meta_name in self.meta_keys:
                             if meta_name not in input_node._v_attrs:
-                                logger.info('HDF5 metadata %s not present on %s', meta_name, name)
+                                logger.info('HDF5 metadata %s not present on %s', meta_name, g)
                                 continue
                             output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
 

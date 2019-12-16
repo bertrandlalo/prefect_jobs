@@ -4,7 +4,10 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import LocalDatasetFlow
 from iguazu.tasks.common import MergeHDF5, AddSourceMetadata
 from iguazu.tasks.standards import Report
-from iguazu.tasks.vr import ExtractStandardEvents, ExtractNexusSignal
+from iguazu.tasks.vr import (
+    ExtractNexusGSRSignal, ExtractNexusSignal,
+    ExtractStandardEvents,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,28 +30,25 @@ class StandardizeVRFlow(PreparedFlow):
         )
         # filter_vr = FilterVRSequences()
         standardize_ppg_signals = ExtractNexusSignal(
-            name='ExtractStandardPPG',
+            name='Nexus2StandardPPG',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
-            output_hdf5_key='/iguazu/signal/ppg/prepared',
-            signals_columns={
-                'G': 'ppg',
-            }
+            output_hdf5_key='/iguazu/signal/ppg/standard',
+            source_column='G',
+            target_column='PPG',
         )
-        standardize_gsr_signals = ExtractNexusSignal(
-            name='ExtractStandardGSR',
+        standardize_gsr_signals = ExtractNexusGSRSignal(
+            name='Nexus2StandardGSR',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
-            output_hdf5_key='/iguazu/signal/gsr/prepared',
-            signals_columns={
-                'F': 'gsr',
-            }
+            output_hdf5_key='/iguazu/signal/gsr/standard',
+            source_column='F',
+            target_column='GSR',
         )
-        standardize_respi_signals = ExtractNexusSignal(
-            name='ExtractStandardRespiration',
+        standardize_pzt_signals = ExtractNexusSignal(
+            name='Nexus2StandardPZT',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
-            output_hdf5_key='/iguazu/signal/respi/prepared',
-            signals_columns={
-                'H': 'respi',
-            }
+            output_hdf5_key='/iguazu/signal/pzt/standard',
+            source_column='H',
+            target_column='PZT',
         )
         merge = MergeHDF5(
             suffix='_standard',
@@ -79,13 +79,13 @@ class StandardizeVRFlow(PreparedFlow):
             # vr_sequences = filter_vr.map(events=standard_events)
             standard_ppg = standardize_ppg_signals.map(signals=raw_files)
             standard_gsr = standardize_gsr_signals.map(signals=raw_files)
-            standard_respi = standardize_respi_signals.map(signals=raw_files)
+            standard_pzt = standardize_pzt_signals.map(signals=raw_files)
             merged = merge.map(
                 parent=raw_files,
                 events=standard_events,
                 PPG=standard_ppg,
                 GSR=standard_gsr,
-                respi=standard_respi,
+                PZT=standard_pzt,
             )
             update_noresult = update_meta.map(target=merged, source=raw_files)
             report(files=merged, upstream_tasks=[update_noresult])
