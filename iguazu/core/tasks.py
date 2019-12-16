@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class ManagedTask(prefect.Task):
+    # This class is not meant to be used directly, use iguazu.Task
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

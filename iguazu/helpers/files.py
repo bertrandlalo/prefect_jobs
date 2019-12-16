@@ -215,6 +215,7 @@ class QuetzalFile(FileProxy):
     def delete(self):
         raise NotImplementedError
 
+    @property
     def empty(self):
         raise NotImplementedError
 
@@ -356,6 +357,7 @@ class LocalFile(FileProxy):
         if self._meta_file.exists():
             self._meta_file.unlink()
 
+    @property
     def empty(self):
         return self.file.stat().st_size == 0
 
