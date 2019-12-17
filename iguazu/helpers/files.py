@@ -361,11 +361,24 @@ class QuetzalFile(FileProxy):
         self._metadata.clear()
 
     def delete(self):
-        raise NotImplementedError
+        logger.info('Deleting file %s from Quetzal', self)
+        if self._local_path is not None and self._local_path.exists():
+            logger.debug('Underlying data file exists at %s. Deleting it', self._local_path)
+            self._local_path.unlink()
+        if self._file_id is not None:
+            logger.debug('Sending request delete %s at workspace %s', self._file_id, self._wid)
+            self.client.workspace_file_delete(self._wid, self._file_id)
+            self._file_id = None
+        self._metadata.clear()
 
     @property
     def empty(self):
-        raise NotImplementedError
+        if self._local_path is None:
+            base_metadata = self.metadata.get('base', {})
+            size = base_metadata.get('size', 0)
+        else:
+            size = self.file.stat().st_size
+        return size == 0
 
     def __getstate__(self):
         state = self.__dict__.copy()
