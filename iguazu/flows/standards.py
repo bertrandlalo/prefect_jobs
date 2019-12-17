@@ -1,7 +1,7 @@
 import logging
 
 from iguazu.core.flows import PreparedFlow
-from iguazu.flows.datasets import LocalDatasetFlow
+from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import MergeHDF5, AddSourceMetadata
 from iguazu.tasks.standards import Report
 from iguazu.tasks.vr import (
@@ -17,9 +17,37 @@ class StandardizeVRFlow(PreparedFlow):
 
     REGISTRY_NAME = 'standardize_vr'
 
+    DEFAULT_QUERY = """\
+SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+       base->>'filename' AS filename,  -- this is just to help the human debugging this
+       omi->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
+FROM   metadata
+WHERE  base->>'state' = 'READY'                -- No temporary files
+AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
+-- TODO: add a filter by protocol? Certainly needed for the VR protocol!
+ORDER BY id                                    -- always in the same order
+"""
+
     def _build(self, **kwargs):
+        required_families = dict(
+            iguazu=None,
+            omi=None,
+            standard=None,
+        )
+        families = kwargs.get('families', {}) or {}  # Could be None by default args
+        for name in required_families:
+            families.setdefault(name, required_families[name])
+        kwargs['families'] = families
+
+        # When the query is set by kwargs, leave the query and dialect as they
+        # come. Otherwise, set to the default defined just above
+        if not kwargs.get('query', None):
+            kwargs['query'] = self.DEFAULT_QUERY
+            kwargs['dialect'] = 'postgresql_json'
+
         # First part of this flow: obtain a dataset of files
-        dataset_flow = LocalDatasetFlow(**kwargs)
+        dataset_flow = GenericDatasetFlow(**kwargs)
 
         raw_files = dataset_flow.terminal_tasks().pop()
         self.update(dataset_flow)
@@ -57,12 +85,6 @@ class StandardizeVRFlow(PreparedFlow):
             verify_status=True,
             hdf5_family='standard',
             meta_keys=['standard'],
-            # extra_metadata={
-            #     'iguazu': {
-            #         'standardized': True,
-            #     }
-            # }
-
         )
         update_meta = AddSourceMetadata(
             new_meta={
@@ -70,7 +92,6 @@ class StandardizeVRFlow(PreparedFlow):
                     'standardized': True,
                 }
             },
-            #source_family='standard',
         )
         report = Report()
 
@@ -95,4 +116,4 @@ class StandardizeVRFlow(PreparedFlow):
 
     @staticmethod
     def click_options():
-        return LocalDatasetFlow.click_options()
+        return GenericDatasetFlow.click_options()

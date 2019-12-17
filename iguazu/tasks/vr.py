@@ -6,8 +6,9 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 import prefect
-from dsu.pandas_helpers import estimate_rate
+from dsu.exceptions import DSUException
 from dsu.dsp.resample import uniform_sampling
+from dsu.pandas_helpers import estimate_rate
 
 import iguazu
 from iguazu.core.exceptions import (
@@ -291,6 +292,10 @@ class ExtractNexusSignal(iguazu.Task):
         self.auto_manage_input_dataframe('signals', signals_hfd5_key)
 
     def run(self, signals: pd.DataFrame) -> FileProxy:
+        logger.info('Extracting Nexus signal %s -> %s on file %s',
+                    self.source_column, self.target_column,
+                    prefect.context.run_kwargs['signals'])
+
         raw = (
             signals[[self.source_column]]
             .rename(columns={self.source_column: self.target_column})
@@ -298,7 +303,11 @@ class ExtractNexusSignal(iguazu.Task):
 
         # Estimate the sampling frequency: weird signals that have a heavy jitter
         # will fail here early and raise a ValueError. See issue #44
-        fs = estimate_rate(raw)
+        try:
+            fs = estimate_rate(raw)
+        except DSUException as ex:
+            logger.warning('Failed to estimate rate: %s, raising a precondition fail', ex)
+            raise SoftPreconditionFailed(str(ex)) from ex
 
         logger.debug('Uniform resampling from %.3f Hz to %d Hz', fs, self.sampling_rate)
         # Uniform sampling, with linear interpolation.
@@ -389,6 +398,8 @@ class ExtractNexusGSRSignal(ExtractNexusSignal):
     def run(self, signals: pd.DataFrame) -> FileProxy:
         # Call the regular extraction, then annotate known Nexus GSR problems.
         parent_output_file = super().run(signals=signals)
+
+        logger.info('Running GSR-specific processing of Nexus signals')
 
         # We need to re-read the dataframe
         with pd.HDFStore(str(parent_output_file.file.resolve()), 'r') as store:
