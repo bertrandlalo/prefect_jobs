@@ -25,26 +25,27 @@ class StandardizeVRFlow(PreparedFlow):
         self.update(dataset_flow)
 
         standardize_events = ExtractStandardEvents(
+            name='UnityToStandardEvents',
             events_hdf5_key='/unity/events/unity_events',
             output_hdf5_key='/iguazu/events/standard',
         )
         # filter_vr = FilterVRSequences()
         standardize_ppg_signals = ExtractNexusSignal(
-            name='Nexus2StandardPPG',
+            name='NexusToStandardPPG',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
             output_hdf5_key='/iguazu/signal/ppg/standard',
             source_column='G',
             target_column='PPG',
         )
         standardize_gsr_signals = ExtractNexusGSRSignal(
-            name='Nexus2StandardGSR',
+            name='NexusToStandardGSR',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
             output_hdf5_key='/iguazu/signal/gsr/standard',
             source_column='F',
             target_column='GSR',
         )
         standardize_pzt_signals = ExtractNexusSignal(
-            name='Nexus2StandardPZT',
+            name='NexusToStandardPZT',
             signals_hfd5_key='/nexus/signal/nexus_signal_raw',
             output_hdf5_key='/iguazu/signal/pzt/standard',
             source_column='H',
