@@ -113,6 +113,10 @@ intersphinx_mapping = {
         'https://quetzal-client.readthedocs.io/en/latest',
         None
     ),
+    'quetzal-api': (
+        'https://quetzal-api.readthedocs.io/en/latest',
+        None
+    ),
     'numpy': (
         'https://docs.scipy.org/doc/numpy',
         None

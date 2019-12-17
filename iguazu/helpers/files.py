@@ -14,38 +14,186 @@ logger = logging.getLogger(__name__)
 
 
 class FileProxy(abc.ABC):
+    """Abstract class for accessing files
+
+    This class provides a key abstraction of Iguazu to simplify file
+    operations, regardless of what storage support is used to store the files.
+    Such storage support is referred in this documentation as the *underlying
+    data backend*.
+
+    By providing an abstract file and defining its operations, Iguazu
+    programmers can develop their tasks and flows can *program to an interface*.
+    This helps scaling from local to remote execution easily.
+
+    At the moment, there are two kind of files in Iguazu: local files,
+    represented by :py:class:`LocalFile` and stored in a local disk, and remote
+    files stored on Quetzal, represented by :py:class:`QuetzalFile` and stored
+    somewhere in the cloud.
+
+    Each file has an associated metadata dictionary that provides additional,
+    modifiable information about said file. These metadata entries can be used
+    before, during or after a Iguazu flow to query or filter a dataset, define
+    dynamically which tasks will be executed, or simply to keep track of how a
+    file was generated.
+
+    """
 
     @property
     @abc.abstractmethod
     def file(self) -> pathlib.Path:
+        """Reference to the underlying data file as a :py:class:`pathlib.Path`
+
+        Use this property to obtain a :py:class:`pathlib.Path` object that
+        points to the file represented by this object, which can be opened,
+        read or written as needed.
+
+        Using this property has a side-effect on the instance: if the file
+        contents are not available locally and the file exists on its
+        underlying data backend, they will be downloaded. However, it is
+        possible that no download is performed because the file is already
+        cached somewhere locally. This only applies to implementations that use
+        a data backend, such as :py:class:`QuetzalFile`.
+
+        Using this property to write the contents of the
+        :py:class:`pathlib.Path` does not guarantee that the file is saved on
+        its associated backend. This is only guaranteed after calling the
+        :py:func:`~FileProxy.upload` method.
+
+        """
         pass
+
+    @property
+    def filename(self) -> str:
+        """String representation of the :py:attr:`~FileProxy.file` property
+
+        This string representation is the absolute path of the
+        :py:class:`pathlib.Path` returned by :py:attr:`~FileProxy.file`
+        property. Consequently, using this property has the same side-effects as
+        using the :py:attr:`~FileProxy.file` property.
+
+        Use this property when a string is required, such as the pesky
+        :py:class:`pandas.HDFStore`, which requires a string.
+
+        """
+        return str(self.file.resolve())
 
     @property
     @abc.abstractmethod
     def metadata(self) -> Dict[str, Dict[str, Any]]:
+        """Reference to the underlying metadata of this file
+
+        Use this property to read or set the metadata of a file. Metadata is a
+        dictionary that has at least two levels of depth. The first level is
+        the family; the second level is are regular key-value pairs. See
+        Quetzal's :std:doc:`design` documentation for an example of such
+        organization.
+
+        Using this property has a side-effect on the instance: if the file
+        metadata is not available and the file exists on its underlying
+        backend, then the metadata will be downloaded.
+
+        Using this property to set or change the contents of the metadata does
+        not guarantee that the file metadata is saved. This is only guaranteed
+        after calling the :py:func:`~FileProxy.upload` method.
+
+        """
         pass
 
     @property
     @abc.abstractmethod
     def id(self) -> Optional[str]:
-        pass
+        """Unique string identifier of a file
 
-    @abc.abstractmethod
-    def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'FileProxy':
-        # TODO: change extension
-        pass
+        This property provides a unique string identifier for this file
+        instance. When the file does not exist in its underlying backend, then
+        the identifier will be ``None``. Conversely, when the identifier is not
+        ``None``, it means that this file exists on its underlying backend.
 
-    @abc.abstractmethod
-    def upload(self):
-        pass
+        Since the identifier of a file is unique, two different instances with
+        the same id are the same file. However, this does not account for any
+        change on the data or metadata contents done by the user.
 
-    @abc.abstractmethod
-    def delete(self):
+        """
         pass
 
     @property
     @abc.abstractmethod
     def empty(self):
+        """Evaluates if the file is empty
+
+        This property will be ``True`` when the underlying data file has zero
+        bytes. To determine this, it is not necessary to download the file.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def make_child(self, *,
+                   filename: Optional[str] = None,
+                   path: Optional[str] = None,
+                   suffix: Optional[str] = None,
+                   extension: Optional[str] = None,
+                   temporary: bool = True) -> 'FileProxy':
+        """Create a new :py:class:`FileProxy` instance based on this instance
+
+        This method provides a single implementation to create new files from
+        existing ones. It will create or retrieve a :py:class:`FileProxy`
+        instance that inherits the same filename, path and extension as its
+        parent (i.e. this instance), except where the parameters of this
+        functions are set.
+
+        Parameters
+        ==========
+        filename
+            Overrides the filename of the new file.
+        path
+            Overrides the path of the new file.
+        suffix
+            Extra string added after the filename stem but before its
+            extension. Using this parameter overrides the filename of the new
+            file. It can be used with the `filename` parameter, but it usually
+            makes more sense to use the `suffix` but leaving the `filename`
+            untouched.
+        extension
+            Overrides the file extension of the new file.
+        temporary
+            When this parameter is set to ``True``, the new file will be marked
+            as a temporary file. Temporary files can be erased by the underlying
+            backend. When this parameter is set to  ``False``, the file will be
+            carefully tracked by the underlying backend.
+
+        Returns
+        =======
+        FileProxy
+            A file instance, either completely new because it did not exist on
+            the underlying backend, or an instance associated to the existing
+            file.
+
+        """
+        # TODO: change extension
+        pass
+
+    @abc.abstractmethod
+    def upload(self):
+        """Save the file data and metadata on the underlying backend
+
+        This method saves the contents of this file on its underlying backend.
+        Metadata is saved as well. When the underlying backend already has the
+        contents of the file stored, then no change is applied.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def delete(self):
+        """Delete the file data and metadata from the underlying backend
+
+        Use this method sparingly. This method deletes the contents of a file
+        and its metadata from its underlying backend. This is particularly
+        useful to adhere to Iguazu's :ref:`guidelines` concerning hard
+        failures, which should delete any existing results.
+
+        """
         pass
 
 
@@ -243,6 +391,18 @@ class QuetzalFile(FileProxy):
 
 
 class LocalFile(FileProxy):
+    """File proxy implementation that uses local files
+
+    This class is provided for local development of Iguazu tasks and flows.
+    Local files use a :py:class:`pathlib.Path` as its underlying data backend,
+    with a directory that may be different for temporary and non-temporary
+    files.
+
+    To track metadata, local files use a JSON file with the same name as its
+    associated data file. For example a file named ``dir/data_20090302.hdf5``
+    will have its associated metadata at ``dir/data_20090302.hdf5.json``.
+
+    """
 
     def __init__(self, file, base_dir):
         super().__init__()
@@ -259,6 +419,19 @@ class LocalFile(FileProxy):
 
     @property
     def file(self) -> pathlib.Path:
+        """ Reference to the local file as a :py:class:`pathlib.Path`
+
+        Read the parent :py:attr:`~LocalFile.file` property documentation for
+        more details on the general behavior for this property.
+
+        Since underlying storage of a :py:class:`LocalFile` is a regular file,
+        using this property does not incur in any download operation.
+        However, it will create the directory structure of the file if it
+        does not exist before. This is done to simplify any write operation on
+        the file, which would otherwise require the user to add a lot of
+        boilerplate code to verify and create the directory structure.
+
+        """
         self._file.parent.mkdir(parents=True, exist_ok=True)
         return self._file
 
@@ -369,7 +542,7 @@ class LocalFile(FileProxy):
 
 def _deep_update(dest, src):
     for k, v in src.items():
-        if isinstance(v, collections.Mapping):
+        if isinstance(v, collections.abc.Mapping):
             dest[k] = _deep_update(dest.get(k, {}), v)
         else:
             dest[k] = v
