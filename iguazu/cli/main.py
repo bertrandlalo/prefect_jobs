@@ -92,6 +92,9 @@ def init_logging(log_level, colored_logs):
             'parso': {
                 'level': 'WARNING',
             },
+            'backoff': {
+                'level': 'WARNING',
+            },
             # Use this template to silence a particular library
             # 'some_name': {
             #     'level': 'WARNING',

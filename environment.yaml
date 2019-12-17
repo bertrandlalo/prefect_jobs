@@ -22,7 +22,7 @@ dependencies:
   - tzlocal>=2.0,<3.0
   - pip
   - pip:
-    - graphviz>=0.11.1<0.12.0
+    - graphviz>=0.11.1,<0.12.0
     - prefect>=0.6.1,<0.6.2
     - quetzal-client>=0.3.1,<0.4
     - git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0#egg=dsu
