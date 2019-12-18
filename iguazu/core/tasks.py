@@ -388,15 +388,10 @@ class Task(ManagedTask):
             status = 'SUCCESS'
             problem = None
         elif isinstance(exception, PreviousResultsExist):
-            # When a previous results exceptions is thrown, it is not considered
-            # a failure. But let us keep the exception on the problem metadata
-            # to know when this happens.
-            status = 'SUCCESS'
-            # TODO: auto-convert iguazu exception to problem JSON RFC-7807
-            problem = {
-                'type': fullname(exception),
-                'title': str(exception),
-            }
+            # When a previous results exceptions is thrown, then do not set any
+            # new metadata
+            return dict()
+
         else:
             # Does it make sense to set this to "GRACEFUL_FAIL"?
             # In my opinion, FAILED tasks should not be saved. Moreover,

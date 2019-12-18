@@ -196,6 +196,11 @@ class MergeHDF5(iguazu.Task):
                     soft_fail = True
                     continue
 
+                if value.empty:
+                    logger.warning('Input %s is empty. Ignoring this file on '
+                                   'the HDF5 group merge')
+                    continue
+
                 with pd.HDFStore(value.file, 'r') as input_store:
                     for g, input_node in input_store.items():
                         # Copy the HDF5 data

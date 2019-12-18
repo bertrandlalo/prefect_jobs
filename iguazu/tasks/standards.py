@@ -9,22 +9,8 @@ logger = logging.getLogger(__name__)
 
 class Report(iguazu.Task):
 
-    def __init__(self, #*,
-                 suffix: str = '_merged',
-                 # temporary: bool = False,
-                 # check_status: bool = True,
-                 **kwargs):
-        super().__init__(**kwargs)
-        # self.suffix = suffix
-        # self.temporary = temporary
-        # self.check_status = check_status
-
-    # def run(self, *, parent: FileProxy, **kwargs) -> str:
-    #     output_file = self.default_outputs(parent=parent, **kwargs)
-    #     status = dict()
-
     def run(self, *, files):
-        logger.info('STANDARDIZATION REPORT NOT YET IMPLEMENTED WITH %s', files)
+        logger.info('This is a very reduced report!')
         status = []
         journal_family = self.meta.metadata_journal_family
         for f in files:
@@ -37,9 +23,9 @@ class Report(iguazu.Task):
             status.append(journal_status)
 
         counter = collections.Counter(status)
-        logger.info('status report:\n%s', counter)
-
         msg = []
         for k, v in counter.most_common():
             msg.append(f'{v} tasks with status {k}')
-        return '\n'.join(msg)
+        msg = '\n'.join(msg)
+        logger.info('Report is:\n%s', msg)
+        return msg
