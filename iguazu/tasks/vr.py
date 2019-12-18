@@ -170,10 +170,6 @@ class ExtractStandardEvents(iguazu.Task):
         original_kws = prefect.context.run_kwargs
         events = original_kws['events']
         output = events.make_child(suffix='_standard_events')
-        # empty = empty_events()
-        # key = self.output_hdf5_key
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, key)
         return output
 
     def postconditions(self, results):

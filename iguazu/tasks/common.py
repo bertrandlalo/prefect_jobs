@@ -268,12 +268,6 @@ class MergeHDF5(iguazu.Task):
                                    suffix=self.suffix)
         return output
 
-    # def default_metadata(self, exception, **inputs):
-    #     metadata = super().default_metadata(exception, **inputs)
-    #     if self.verify_status and isinstance(exception, GracefulFailWithResults):
-    #         metadata['iguazu']['status'] = 'FAILED'
-    #     return metadata
-
 
 class AddSourceMetadata(prefect.Task):
 
@@ -329,9 +323,17 @@ class AddSourceMetadata(prefect.Task):
 
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
+
+    def __init__(self, preamble=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.preamble = preamble
+
     def run(self, **kwargs):
+        message = kwargs.pop('message', None)
+        if self.preamble is not None and message is not None:
+            message = '\n'.join([str(self.preamble), str(message)])
         try:
-            super().run(**kwargs)
+            super().run(message=message, **kwargs)
         except Exception as ex:
             logger.info('Could not send slack notification: %s', ex)
             raise GRACEFULFAIL('Could not send notification') from None

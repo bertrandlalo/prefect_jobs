@@ -2,7 +2,7 @@ import logging
 
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import MergeHDF5, AddSourceMetadata
+from iguazu.tasks.common import MergeHDF5, AddSourceMetadata, SlackTask
 from iguazu.tasks.standards import Report
 from iguazu.tasks.vr import (
     ExtractNexusGSRSignal, ExtractNexusSignal,
@@ -90,10 +90,16 @@ ORDER BY id                                    -- always in the same order
             new_meta={
                 'standard': {
                     'standardized': True,
-                }
+                },
+                # TODO: think about adding this
+                # 'omi': {
+                #     'protocol': 'vr',
+                # },
             },
         )
         report = Report()
+        notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
+                                    'Task report:')
 
         # Build flow
         with self:
@@ -110,7 +116,8 @@ ORDER BY id                                    -- always in the same order
                 PZT=standard_pzt,
             )
             update_noresult = update_meta.map(target=merged, source=raw_files)
-            report(files=merged, upstream_tasks=[update_noresult])
+            message = report(files=merged, upstream_tasks=[update_noresult])
+            notify(message=message)
 
         logger.debug('Built flow %s with tasks %s', self, self.tasks)
 
