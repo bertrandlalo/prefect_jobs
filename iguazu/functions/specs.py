@@ -37,6 +37,8 @@ class SignalSpecificationErrorCode(enum.Enum):
     BAD_SAMPLING = 3
     INCORRECT_COLUMN_TYPE = 4
     UNKNOWN_COLUMN_NAME = 5
+    BAD_ANNOTATION_INDEX = 6
+    BAD_ANNOTATION_CONTENTS = 7
 
 
 class SpecificationError(Exception):
@@ -300,15 +302,19 @@ def empty_features() -> pd.DataFrame:
     return dataframe
 
 
-def check_signal_specification(obj, version=None):
+def check_signal_specification(signals_obj, annotations_obj=None, *, version=None):
     """ Verify that the input conforms to the signal specification
 
     The signal specification is detailed on :ref:`signal_specs`.
 
     Parameters
     ----------
-    obj: object
-        Input object to verify. Usually a dataframe
+    signals_obj: object
+        Input signals object to verify. As of today (version 1), it can only be
+        a dataframe.
+    annotations_obj: object
+        Optional input annotations object to verify. As of today (version 1),
+        it can only be a dataframe
     version: str
         Specification version. If not set, it uses the latest version.
 
@@ -326,7 +332,8 @@ def check_signal_specification(obj, version=None):
         version = '1'  # this is the latest version at the moment
 
     if version == '1':
-        _check_signal_specification_v1(obj)
+        _check_signal_specification_v1(signals_obj)
+        _check_signal_annotations_specification_v1(signals_obj, annotations_obj)
     else:
         raise ValueError(f'Unknown feature specification version "{version}"')
 
@@ -367,11 +374,9 @@ def _check_signal_specification_v1(obj):
     known_columns = (
         make_standard_montage('standard_1005').ch_names +  # EEG
         ['I', 'II', 'III', 'aVR', 'aVL', 'aVF'] +  # ECG
-        ['ppg', 'gsr', 'respi']
+        ['PPG', 'GSR', 'PZT']
     )
     for col in dataframe.columns:
-        if col.endswith('_annotations'):
-            continue
         if col == 'sample_number':
             continue
         if col not in known_columns:
@@ -390,6 +395,55 @@ def _check_signal_specification_v1(obj):
         if not np.issubdtype(dataframe['sample_number'], np.integer):
             raise SignalSpecificationError('Column "sample_number" must be of integer dtype',
                                            SignalSpecificationErrorCode.INCORRECT_COLUMN_TYPE)
+
+
+def _check_signal_annotations_specification_v1(signals_obj, annotations_obj):
+    # Accept None, which means that there are no specifications
+    if annotations_obj is None:
+        return
+
+    # [implicit] - it must be a dataframe
+    if not isinstance(annotations_obj, pd.DataFrame):
+        raise SignalSpecificationError('Annotations must be a dataframe',
+                                       SignalSpecificationErrorCode.BAD_TYPE)
+    # Synonyms for shorter code
+    signals = signals_obj
+    annotations = annotations_obj
+
+    # Same index
+    if not set(annotations.index).issubset(set(signals.index)):
+        raise SignalSpecificationError('Annotations does not have the same index of the signals',
+                                       SignalSpecificationErrorCode.BAD_ANNOTATION_INDEX)
+
+    # Same columns or subset of columns. No other columns
+    if not set(annotations).issubset(set(signals)):
+        # Here, since we are using sets, < means "is superset of" (or "not a subset of")
+        diff = set(annotations) - set(signals)
+        raise SignalSpecificationError(f'Annotations have additional columns not present in signals: '
+                                       f'{", ".join(diff)}',
+                                       SignalSpecificationErrorCode.UNKNOWN_COLUMN_NAME)
+
+    # String type
+    col_is_str = annotations.applymap(type).ne(str).any(axis='index')
+    if col_is_str.any():
+        raise SignalSpecificationError('Annotations must be all string values',
+                                       SignalSpecificationErrorCode.BAD_ANNOTATION_CONTENTS)
+
+    # NaN values on signal have a non-empty annotation
+    # TODO: Can't think of a loop-less way to do this at the moment.
+    #       The main problem here is that annotationos and signals may have
+    #       completely different shapes
+    nan_idx, nan_col = np.where(signals.isna().values)
+    nan_idx = signals.index[nan_idx]
+    nan_col = signals.columns[nan_col]
+    for i, j in zip(nan_idx, nan_col):
+        if annotations.loc[i, j] == '':
+            raise SignalSpecificationError('Annotations on samples where signal is NaN must '
+                                           'not be empty',
+                                           SignalSpecificationErrorCode.BAD_ANNOTATION_CONTENTS)
+
+    # No NaN or None values. This is redundant with the string type check.
+    pass
 
 
 def empty_signals() -> pd.DataFrame:

@@ -1,20 +1,21 @@
 """ Tasks related to standardization of data from the VR protocol """
 
 import logging
-from typing import List, Mapping, Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 import prefect
-from dsu.pandas_helpers import estimate_rate
+from dsu.exceptions import DSUException
 from dsu.dsp.resample import uniform_sampling
+from dsu.pandas_helpers import estimate_rate
 
 import iguazu
-from iguazu.core.exceptions import PostconditionFailed, SoftPreconditionFailed
+from iguazu.core.exceptions import (
+    PostconditionFailed, SoftPreconditionFailed
+)
 from iguazu.functions.specs import (
-    empty_events, check_event_specification,
-    empty_signals, check_signal_specification,
-    EventSpecificationError
+    check_event_specification, check_signal_specification, EventSpecificationError
 )
 from iguazu.functions.unity import extract_standardized_events
 from iguazu.helpers.files import FileProxy
@@ -101,7 +102,7 @@ class ExtractStandardEvents(iguazu.Task):
                  **kwargs):
         super().__init__(**kwargs)
 
-        self.output_hdf5_key = output_hdf5_key or '/'
+        self.output_hdf5_key = output_hdf5_key
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self, events: pd.DataFrame) -> FileProxy:
@@ -169,14 +170,10 @@ class ExtractStandardEvents(iguazu.Task):
         original_kws = prefect.context.run_kwargs
         events = original_kws['events']
         output = events.make_child(suffix='_standard_events')
-        # empty = empty_events()
-        # key = self.output_hdf5_key
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, key)
         return output
 
     def postconditions(self, results):
-        """Check standard event postconditions
+        """ Check standard event postconditions
 
         The postconditions of this task is that the result follows the event
         specification standard.
@@ -213,7 +210,7 @@ class FilterVRSequences(iguazu.Task):
                  **kwargs):
         super().__init__(**kwargs)
         self.selection = tuple(selection or VR_VALID_SEQUENCE_IDS)
-        self.output_hdf5_key = output_hdf5_key or '/'
+        self.output_hdf5_key = output_hdf5_key
         self.input_hdf5_key = input_hdf5_key
         self.auto_manage_input_dataframe('events', input_hdf5_key)
 
@@ -276,55 +273,76 @@ class ExtractNexusSignal(iguazu.Task):
 
     def __init__(self, *,
                  signals_hfd5_key: str = '/nexus/signal/nexus_signal_raw',
-                 signals_columns: Mapping[str, str],
+                 source_column: str,
+                 target_column: str,
                  sampling_rate: int = 512,
                  output_hdf5_key: str,
                  **kwargs):
         super().__init__(**kwargs)
 
-        self.output_hdf5_key = output_hdf5_key or '/'
-        self.signals_columns = signals_columns
+        self.output_hdf5_key = output_hdf5_key
+        self.output_annotations_hdf5_key = '/'.join([output_hdf5_key, 'annotations'])
+        self.source_column = source_column
+        self.target_column = target_column
         self.sampling_rate = sampling_rate
         self.auto_manage_input_dataframe('signals', signals_hfd5_key)
 
     def run(self, signals: pd.DataFrame) -> FileProxy:
-        if signals.empty:
-            raise SoftPreconditionFailed('Input signals are empty')
-
-        output_file = self.default_outputs()
+        logger.info('Extracting Nexus signal %s -> %s on file %s',
+                    self.source_column, self.target_column,
+                    prefect.context.run_kwargs['signals'])
 
         raw = (
-            signals[list(self.signals_columns)]
-            .rename(columns=self.signals_columns)
+            signals[[self.source_column]]
+            .rename(columns={self.source_column: self.target_column})
         )
 
         # Estimate the sampling frequency: weird signals that have a heavy jitter
         # will fail here early and raise a ValueError. See issue #44
-        fs = estimate_rate(raw)
+        try:
+            fs = estimate_rate(raw)
+        except DSUException as ex:
+            logger.warning('Failed to estimate rate: %s, raising a precondition fail', ex)
+            raise SoftPreconditionFailed(str(ex)) from ex
 
         logger.debug('Uniform resampling from %.3f Hz to %d Hz', fs, self.sampling_rate)
         # Uniform sampling, with linear interpolation.
         # sample-and-hold is not a good strategy, see issue 48:
         # https://github.com/OpenMindInnovation/iguazu/issues/48
-        raw_uniform = uniform_sampling(raw, self.sampling_rate,) # TODO: add linear interpolation
+        raw_uniform = uniform_sampling(raw, self.sampling_rate,)  # TODO: add linear interpolation
                                        #interpolation_kind='linear')
 
+        # Create the annotations companion dataframe and mark any nan as a
+        # "unknown" problem since it must come from the device / driver.
+        # idx_sparse = raw_uniform.isna().any(axis='columns')
+        #raw_annotations = raw_uniform.loc[idx_sparse].isna().replace({True: 'unknown', False: ''})
+        # I have changed my mind: sparse complicates the code, and we are only saving so little space
+        raw_annotations = raw_uniform.isna().replace({True: 'unknown', False: ''})
+
         n_samples = raw_uniform.shape[0]
-        n_nans = np.isnan(raw_uniform.values).any(axis=1).sum()
-        logger.debug('Finished standardization of nexus signals %s. '
+        n_nans = (raw_annotations != '').sum()
+        logger.debug('Finished standardization of Nexus signal %s -> %s. '
                      'Result has %d samples (%.1f seconds, %.1f minutes) '
-                     '%d samples are nans (%.1f %%).',
-                     ', '.join(self.signals_columns),
+                     '%d samples are NaN (%.1f %%).',
+                     self.source_column, self.target_column,
                      n_samples,
                      n_samples / self.sampling_rate,
                      n_samples / self.sampling_rate / 60,
                      n_nans,
                      100 * n_nans / n_samples)
         if n_samples > 0:
-            logger.debug('Extract of result:\n%s', raw_uniform.to_string(max_rows=5))
+            logger.debug('Extract of result:\n%s',
+                         raw_uniform.to_string(max_rows=5))
 
-        with pd.HDFStore(output_file.file, 'w') as store:
-            raw_uniform.to_hdf(store, self.output_hdf5_key)
+        return self.save(raw_uniform, raw_annotations)
+
+    # Refactored this method out of run so that it can be reused by a child
+    # class such as ExtractGSRSignal
+    def save(self, raw: pd.DataFrame, annotations: pd.DataFrame) -> FileProxy:
+        output_file = self.default_outputs()
+        with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
+            raw.to_hdf(store, self.output_hdf5_key)
+            annotations.to_hdf(store, self.output_annotations_hdf5_key)
             node = store.get_node(self.output_hdf5_key)
             node._v_attrs['standard'] = {
                 'sampling_rate': self.sampling_rate,
@@ -335,13 +353,16 @@ class ExtractNexusSignal(iguazu.Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        names = '_'.join(sorted(self.signals_columns.values()))
+        names = '_'.join([self.source_column, self.target_column])
         output = signals.make_child(suffix=f'_standard_{names}')
-        # empty = empty_signals()
-        # key = self.output_hdf5_key
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, key)
         return output
+
+    def preconditions(self, *, signals, **kwargs):
+        super().preconditions(signals=signals, **kwargs)
+
+        # Precondition: input signals is not empty
+        if signals.empty:
+            raise SoftPreconditionFailed('Input signals are empty')
 
     def postconditions(self, results):
         super().postconditions(results)
@@ -358,3 +379,70 @@ class ExtractNexusSignal(iguazu.Task):
         with pd.HDFStore(str(results.file.resolve()), 'r') as store:
             dataframe = pd.read_hdf(store, key)
             check_signal_specification(dataframe)
+
+
+class ExtractNexusGSRSignal(ExtractNexusSignal):
+    # Add documentation link to
+    # https://docs.google.com/presentation/d/1sjV9Jcng-UlZiIye-lrykPBOsTi2701pj1QUXSpoHL4/edit#slide=id.g4db82b9433_1_5
+
+    def __init__(self, *,
+                 linear_offset: float = 0,
+                 linear_slope: float = 1,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.b = linear_offset
+        self.m = linear_slope
+
+    def run(self, signals: pd.DataFrame) -> FileProxy:
+        # Call the regular extraction, then annotate known Nexus GSR problems.
+        parent_output_file = super().run(signals=signals)
+
+        logger.info('Running GSR-specific processing of Nexus signals')
+
+        # We need to re-read the dataframe
+        with pd.HDFStore(str(parent_output_file.file.resolve()), 'r') as store:
+            raw = pd.read_hdf(store, self.output_hdf5_key)
+            annotations = pd.read_hdf(store, self.output_annotations_hdf5_key)
+
+        # Quell typing checks because read_hdf returns object or dataframe
+        assert isinstance(raw, pd.DataFrame)
+        assert isinstance(annotations, pd.DataFrame)
+
+        # Nexus max-saturation:
+        # Because Nexus is weird, saturation should be >= 2000 but they set it to 0
+        saturation_max = (raw[self.target_column] == 0) | (raw[self.target_column] >= 2000)
+        # Nexus min-saturation:
+        # We are choosing zero, which has been observed with real resistances
+        # to be 10 to 100 Ω, that is, between 1e6 and 1e5 µS, so this is
+        # outside the amplifier range (which is documented to be
+        # between 0.1 and 1000 µS)
+        saturation_min = (raw[self.target_column] < 0)
+
+        # Convert from mV (amplifier values) to kΩ, then invert for µS
+        raw = 1000 / (raw * self.m + self.b)  # type: pd.DataFrame
+
+        # Mark saturations with nan and annotate them. Note that we need to
+        # do this AFTER converting to µS
+        raw.loc[saturation_min | saturation_max, self.target_column] = np.nan
+        annotations.loc[saturation_min, self.target_column] = 'saturated low'
+        annotations.loc[saturation_max, self.target_column] = 'saturated high'
+
+        n_samples = raw.shape[0]
+        n_saturated_min = saturation_min.sum()
+        n_saturated_max = saturation_max.sum()
+        logger.debug('Finished GSR-specific standardization of Nexus signal. '
+                     'Result has %d samples (%.1f seconds, %.1f minutes) '
+                     '%d samples are NaN (%.1f %%) due to '
+                     '%d samples being low-saturated (%.1f %%) and '
+                     '%d samples being high-saturated (%.1f %%)',
+                     n_samples,
+                     n_samples / self.sampling_rate,
+                     n_samples / self.sampling_rate / 60,
+                     n_saturated_min + n_saturated_max,
+                     100 * (n_saturated_min + n_saturated_max) / n_samples,
+                     n_saturated_min,
+                     100 * n_saturated_min / n_samples,
+                     n_saturated_max,
+                     100 * n_saturated_max / n_samples)
+
+        return self.save(raw, annotations)

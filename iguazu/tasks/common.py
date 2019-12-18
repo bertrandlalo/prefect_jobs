@@ -196,6 +196,11 @@ class MergeHDF5(iguazu.Task):
                     soft_fail = True
                     continue
 
+                if value.empty:
+                    logger.warning('Input %s is empty. Ignoring this file on '
+                                   'the HDF5 group merge')
+                    continue
+
                 with pd.HDFStore(value.file, 'r') as input_store:
                     for g, input_node in input_store.items():
                         # Copy the HDF5 data
@@ -207,7 +212,9 @@ class MergeHDF5(iguazu.Task):
                         output_node = output_store.get_node(g)
                         for meta_name in self.meta_keys:
                             if meta_name not in input_node._v_attrs:
-                                logger.info('HDF5 metadata %s not present on %s', meta_name, name)
+                                logger.info('HDF5 metadata key "%s" was not present on group %s '
+                                            'for file %s: no HDF5 metadata propagation',
+                                            meta_name, g, value)
                                 continue
                             output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
 
@@ -266,22 +273,16 @@ class MergeHDF5(iguazu.Task):
                                    suffix=self.suffix)
         return output
 
-    # def default_metadata(self, exception, **inputs):
-    #     metadata = super().default_metadata(exception, **inputs)
-    #     if self.verify_status and isinstance(exception, GracefulFailWithResults):
-    #         metadata['iguazu']['status'] = 'FAILED'
-    #     return metadata
-
 
 class AddSourceMetadata(prefect.Task):
 
     def __init__(self, *,
                  new_meta: Dict,
-                 source_family: Optional[str] = None,
+                 # source_family: Optional[str] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.new_meta = new_meta
-        self.source_family = source_family
+        # self.source_family = source_family
 
     def run(self, *, target: FileProxy, source: Optional[FileProxy]) -> NoReturn:
 
@@ -290,12 +291,13 @@ class AddSourceMetadata(prefect.Task):
         #     pass
 
         new_meta = copy.deepcopy(self.new_meta)
-        if source is not None and self.source_family is not None:
-            new_meta.setdefault(self.source_family, {})
-            new_meta[self.source_family]['source'] = source.id
+        # if source is not None and self.source_family is not None:
+        #     new_meta.setdefault(self.source_family, {})
+        #     new_meta[self.source_family]['source'] = source.id
 
         _deep_update(target.metadata, new_meta)
-        target.upload()
+        target.upload()  # TODO: for quetzal, we are going to need a .upload_metadata method
+                         #       so we don't download the file for nothing
 
         # return file
         # if 'data_2017-06-15.18.13.12' in source.id:
@@ -326,9 +328,17 @@ class AddSourceMetadata(prefect.Task):
 
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
+
+    def __init__(self, preamble=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.preamble = preamble
+
     def run(self, **kwargs):
+        message = kwargs.pop('message', None)
+        if self.preamble is not None and message is not None:
+            message = '\n'.join([str(self.preamble), str(message)])
         try:
-            super().run(**kwargs)
+            super().run(message=message, **kwargs)
         except Exception as ex:
             logger.info('Could not send slack notification: %s', ex)
             raise GRACEFULFAIL('Could not send notification') from None

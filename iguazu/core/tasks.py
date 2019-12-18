@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class ManagedTask(prefect.Task):
+    # This class is not meant to be used directly, use iguazu.Task
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -386,6 +387,11 @@ class Task(ManagedTask):
         if exception is None:
             status = 'SUCCESS'
             problem = None
+        elif isinstance(exception, PreviousResultsExist):
+            # When a previous results exceptions is thrown, then do not set any
+            # new metadata
+            return dict()
+
         else:
             # Does it make sense to set this to "GRACEFUL_FAIL"?
             # In my opinion, FAILED tasks should not be saved. Moreover,
