@@ -362,6 +362,8 @@ class ExtractNexusSignal(iguazu.Task):
         return output
 
     def preconditions(self, *, signals, **kwargs):
+        super().preconditions(signals=signals, **kwargs)
+
         # Precondition: input signals is not empty
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
