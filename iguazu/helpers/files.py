@@ -302,9 +302,10 @@ class QuetzalFile(FileProxy):
         for family in child._metadata:
             child._metadata[family].pop('id', None)
         # unset iguazu state
-        child._metadata['iguazu'].pop('state', None)
+        # no longer needed, iguazu.Task sets the default metadata
+        #child._metadata['iguazu'].pop('state', None)
         # link child to parent
-        child._metadata['iguazu']['parents'] = base_metadata['id']
+        # child._metadata['iguazu']['parents'] = base_metadata['id']
 
         child._temporary = temporary
         # If we are creating a new child, but there is already a file with that
@@ -323,9 +324,9 @@ class QuetzalFile(FileProxy):
         logger.info('File by name and path gave %d candidates', len(candidates))
         for file_detail in sorted(candidates, key=lambda d: d.date, reverse=True):
             meta = helpers.file.metadata(self.client, file_detail.id, wid=self._wid)
-            state = meta['base'].get('status', None)
-            parent = meta.get('iguazu', {}).get('parents', None)
-            if parent == parent_id and state != 'DELETED':
+            state = meta['base'].get('state', None)
+            parents = meta.get('iguazu', {}).get('parents', [])
+            if parent_id in parents and state != 'DELETED':
                 logger.info('Found a match with same parent %s', meta['base'])
                 return meta
         logger.info('No candidate matches')
@@ -514,6 +515,7 @@ class LocalFile(FileProxy):
             child = LocalFile(new, base_dir=file_dir)
             child._local_path = new
             child._temporary = temporary
+            # TODO: think: perhaps remove child metadata propagation
             child._metadata = copy.deepcopy(self._metadata)
             if not isinstance(child._metadata, collections.defaultdict):
                 tmp = collections.defaultdict(dict)
@@ -523,10 +525,15 @@ class LocalFile(FileProxy):
             child._metadata['base']['filename'] = new.name
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
             child._metadata['base']['id'] = child._file_id
-            # NEW! and TODO: we must remove the iguazu family!
-            child._metadata['iguazu']['parents'] = base_metadata['id']
-            # unset iguazu state
-            child._metadata['iguazu'].pop('status', None)
+            # # NEW! and TODO: we must remove the iguazu family!
+            # Response: no, the iguazu.Task takes care of setting the iguazu family
+            #
+            # child._metadata.pop('iguazu', None)
+            # if 'iguazu' in child._metadata:
+            #     del child._metadata['iguazu']
+            #child._metadata['iguazu']['parents'] = [base_metadata['id']]
+            # # unset iguazu state
+            # child._metadata['iguazu'].pop('state', None)
 
         return child
 
