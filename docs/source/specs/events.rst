@@ -1,17 +1,19 @@
+.. _event_specs:
+
 =================================
 Event and sequences specification
 =================================
 
 ========= ==========
-Status    PROPOSAL
+Status    ACCEPTED
 --------- ----------
 Authors   David
 --------- ----------
-Reviewers
+Reviewers Raphaëlle
 --------- ----------
-Version   0.1
+Version   1
 --------- ----------
-Date      2019-10-22
+Date      2019-12-13
 ========= ==========
 
 This specification aims to standardize how *events* and *sequences* are
@@ -53,7 +55,11 @@ of unstructured data elements.
 .. note::
 
   Although there are frameworks to systematically define events and their
-  hierarchy, like the `HED`_ tags project, **we are not using HED at the moment**.
+  hierarchy, like the `HED`_ tags project,
+  **we are not using HED at the moment**.
+  However, HED tags can easily be included on this specification by adding at
+  least one additional column to the dataframe Contents_
+  described later on this document.
 
 Sequences
 ---------
@@ -193,7 +199,7 @@ The following dataframe is **does** conform to this specification:
     2019-10-22 15:09:29.986288        task_2        task 2019-10-22 15:09:29.986288 2019-10-22 15:09:29.986288   {'kind': 'n-back', 'n': 10}      None      0
     2019-10-22 15:09:59.986288    baseline_2    baseline 2019-10-22 15:09:59.986288 2019-10-22 15:10:29.986288                          None      None      0
 
-The associates types of the dataframe above are:
+The associated types of the dataframe above are:
 
 .. code-block:: pycon
 

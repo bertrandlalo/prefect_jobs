@@ -7,6 +7,13 @@ This document lists all important changes to iguazu.
 Iguazu version numbers follow
 `semantic versioning <http://semver.org>`_.
 
+0.2.0 (unreleased)
+------------------
+
+* Added specifications of events, signals and features.
+* Added functions to verify specification of events, signals and features.
+* Added unit tests for specs-verification functions.
+
 0.1.2 (26-09-2019)
 ------------------
 

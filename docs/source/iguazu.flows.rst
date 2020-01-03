@@ -9,6 +9,30 @@ iguazu.flows package
 Submodules
 ----------
 
+iguazu.flows.behavior module
+----------------------------
+
+.. automodule:: iguazu.flows.behavior
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+iguazu.flows.cardiac module
+---------------------------
+
+.. automodule:: iguazu.flows.cardiac
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+iguazu.flows.datasets module
+----------------------------
+
+.. automodule:: iguazu.flows.datasets
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 iguazu.flows.galvanic module
 ----------------------------
 

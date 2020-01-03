@@ -1,17 +1,19 @@
+.. _feature_specs:
+
 =====================
 Feature specification
 =====================
 
 ========= ==========
-Status    PROPOSAL
+Status    ACCEPTED
 --------- ----------
 Authors   David
 --------- ----------
-Reviewers
+Reviewers Raphaëlle
 --------- ----------
-Version   0
+Version   1
 --------- ----------
-Date      2019-10-23
+Date      2019-12-13
 ========= ==========
 
 
@@ -114,18 +116,18 @@ The following dataframe conforms to this specification:
    >>> print(features)
 
          reference            id     value              name                               file_id units      nan_details
-    0   baseline_1        ppg_HR -0.186326        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm             None
-    1   baseline_1  gsr_peakrate  0.739373     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au             None
-    2   baseline_1      respi_Ti -0.123698  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s             None
+    0   baseline_1        ppg_HR -0.186326        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm
+    1   baseline_1  gsr_peakrate  0.739373     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au
+    2   baseline_1      respi_Ti -0.123698  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s
     3       task_1        ppg_HR       NaN        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm  Not enough data
-    4       task_1  gsr_peakrate  0.934251     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au             None
-    5       task_1      respi_Ti  0.653636  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s             None
+    4       task_1  gsr_peakrate  0.934251     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au
+    5       task_1      respi_Ti  0.653636  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s
     6       task_2        ppg_HR       NaN        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm       Artifacted
-    7       task_2  gsr_peakrate -0.171955     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au             None
-    8       task_2      respi_Ti  0.055566  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s             None
-    9   baseline_2        ppg_HR -0.410132        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm             None
-    10  baseline_2  gsr_peakrate  0.142616     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au             None
-    11  baseline_2      respi_Ti -0.690535  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s             None
+    7       task_2  gsr_peakrate -0.171955     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au
+    8       task_2      respi_Ti  0.055566  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s
+    9   baseline_2        ppg_HR -0.410132        Heart rate  c41da942-837f-4b46-b1e7-c08ea5e1d1d9   bpm
+    10  baseline_2  gsr_peakrate  0.142616     Phasic blabla  c41da942-837f-4b46-b1e7-c08ea5e1d1d9    au
+    11  baseline_2      respi_Ti -0.690535  Inspiration time  c41da942-837f-4b46-b1e7-c08ea5e1d1d9     s
 
 
 Note that this new specification can be easily converted to our old feature
