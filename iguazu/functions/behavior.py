@@ -63,41 +63,46 @@ def estimate_actions_transition_matrix(data):
     Examples
     --------
 
-    data =
+    >>> data
                                               button  action_succeed
         2018-02-27 09:09:03.069339126+00:00  trigger           False
         2018-02-27 09:09:04.086241246+00:00      pad           False
         2018-02-27 09:09:04.086338994+00:00      pad           False
         2018-02-27 09:09:04.946250588+00:00  trigger           False
         2018-02-27 09:09:06.096495085+00:00  trigger            True
+        ...
 
     First, we compute a state vector based on the nature of the action,
     that is based on both button type (trigger or pad) and result (success or fail),
     which gives us 4 possible states: trigger_failed, trigger_succeed, pad_failed, pad_succeed.
 
-    data =
+    >>> data
                                              button    action_succeed          state
         2018-02-27 09:09:03.069339126+00:00  trigger         False    trigger_failed
         2018-02-27 09:09:04.086241246+00:00      pad         False        pad_failed
         2018-02-27 09:09:04.086338994+00:00      pad         False        pad_failed
         2018-02-27 09:09:04.946250588+00:00  trigger         False    trigger_failed
         2018-02-27 09:09:06.096495085+00:00  trigger         True    trigger_succeed
-
+        ...
 
     Finally, we estimate the transition matrix, which gives the probability to jump from one state to another and we
     normalize it to ensure that its coefficients sums to the number of states (4 here).
 
     For that purpose, we computed the transition vector between successive space states, defined as follow:
     if transition[N] = 'state[N-1]__state[N]'
-    data =
+
+    >>> data
                                              button    action_succeed          state      transition
         2018-02-27 09:09:03.069339126+00:00  trigger         False    trigger_failed     NaN
         2018-02-27 09:09:04.086241246+00:00      pad         False        pad_failed     trigger_failed__pad_failed
         2018-02-27 09:09:04.086338994+00:00      pad         False        pad_failed     pad_failed__pad_failed
         2018-02-27 09:09:04.946250588+00:00  trigger         False    trigger_failed     pad_failed__trigger_failed
         2018-02-27 09:09:06.096495085+00:00  trigger         True    trigger_succeed     trigger_failed__trigger_succeed
+        ...
 
     The final output looks like:
+
+    >>> normalized_transition_matrix
                          trigger_succeed  trigger_failed  pad_succeed  pad_failed
         trigger_succeed           0.0000            0.50         0.00      0.5000
         trigger_failed            0.0500            0.70         0.05      0.2000
@@ -134,56 +139,67 @@ def estimate_space_transition_matrix(data):
 
     Examples
     --------
-    data =
-                                                     x         y
-            2018-02-27 09:09:03.069339126+00:00 -1.262700  2.015741
-            2018-02-27 09:09:04.086241246+00:00 -1.170901  2.145104
-            2018-02-27 09:09:04.086338994+00:00 -1.170901  2.145104
-            2018-02-27 09:09:04.946250588+00:00 -1.262700  2.015741
-            2018-02-27 09:09:06.096495085+00:00 -1.262700  2.015741
+    >>> data
+                                                 x         y
+        2018-02-27 09:09:03.069339126+00:00 -1.262700  2.015741
+        2018-02-27 09:09:04.086241246+00:00 -1.170901  2.145104
+        2018-02-27 09:09:04.086338994+00:00 -1.170901  2.145104
+        2018-02-27 09:09:04.946250588+00:00 -1.262700  2.015741
+        2018-02-27 09:09:06.096495085+00:00 -1.262700  2.015741
+        ...
 
     First, data are rescaled from [-5, 5] to [0, 1000], so that we have:
-    data =
-                                                   x      y
-            2018-02-27 09:09:15.032125953+00:00  616.0  809.0
-            2018-02-27 09:09:16.037933830+00:00  609.0  825.0
-            2018-02-27 09:09:22.684072199+00:00  618.0  798.0
-            2018-02-27 09:09:08.944721671+00:00  426.0  842.0
-            2018-02-27 09:09:25.901319314+00:00  609.0  800.0
+
+    >>> data
+                                               x      y
+        2018-02-27 09:09:15.032125953+00:00  616.0  809.0
+        2018-02-27 09:09:16.037933830+00:00  609.0  825.0
+        2018-02-27 09:09:22.684072199+00:00  618.0  798.0
+        2018-02-27 09:09:08.944721671+00:00  426.0  842.0
+        2018-02-27 09:09:25.901319314+00:00  609.0  800.0
+        ...
 
     Then, x and y coordinates are digitized so that space is divided in 6 partitions
     (3 horizontally, 2 vertically).
-                                                     x  x_digitize      y  y_digitize
-            2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2
-            2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2
-            2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2
-            2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2
-            2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2
+
+    >>> data
+                                                 x  x_digitize      y  y_digitize
+        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2
+        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2
+        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2
+        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2
+        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2
+        ...
 
     Then, we define a 'space-state' as an action done in a particular partition of the space.
     For instance, if the player shoot an enemy located in screen coordinate (616, 809),
     the space-state will be (3, 2).
-                                                     x  x_digitize      y  y_digitize     state
-            2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)
-            2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)
-            2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)
-            2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)
-            2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)
 
+    >>> data
+                                                 x  x_digitize      y  y_digitize     state
+        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)
+        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)
+        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)
+        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)
+        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)
+        ...
 
     Finally, we estimate the transition matrix, which gives the probability to jump from one state to another and we
     normalize it to ensure that its coefficients sums to the number of states (6 here).
 
     For that purpose, we computed the transition vector between successive space states, defined as follow:
     if transition[N] = 'state[N-1]__state[N]'
-                                                     x  x_digitize      y  y_digitize     state       transition
-            2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)      NaN
-            2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)     (3, 2)__(3, 2)
-            2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)     (3, 2)__(3, 2)
-            2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)     (3, 2)__(2, 2)
-            2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)     (3, 2)__(3, 2)
+    >>> data
+                                                 x  x_digitize      y  y_digitize     state       transition
+        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)      NaN
+        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)     (3, 2)__(3, 2)
+        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)     (3, 2)__(3, 2)
+        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)     (3, 2)__(2, 2)
+        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)     (3, 2)__(3, 2)
+        ...
 
     The output looks like:
+    >>> normalized_transition_matrix
                       (2, 2)    (1, 1)    (3, 2)
             (2, 2)  0.000000  0.571429  1.428571
             (1, 1)  0.400000  0.400000  1.200000
@@ -281,12 +297,15 @@ def extract_space_stress_participant_actions(events):
     Examples
     --------
     Output looks like:
-                                                                                      label   button         x         y         z  action_succeed failure_reason  wave  difficulty trajectory_length
-      2019-04-03 08:35:21.521755333+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428315  2.280506  5.309360  False          bad_precision   1.          5.            NaN
-      2019-04-03 08:35:21.775456032+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428315  2.280506  5.309360  False          bad_precision   1.          5.            0.000000
-      2019-04-03 08:35:22.500084331+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428408  2.402699  5.282661  False          bad_precision   1.          5.            0.122193
-      2019-04-03 08:35:22.753246430+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428408  2.402699  5.282661  False          bad_precision   1.          5.            0.000000
-      2019-04-03 08:35:22.986076530+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.448533  2.439976  5.272884  False          bad_precision   1.          5.            0.042363
+
+    >>> data
+                                                                                         label   button         x         y         z  action_succeed failure_reason  wave  difficulty trajectory_length
+        2019-04-03 08:35:21.521755333+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428315  2.280506  5.309360  False          bad_precision   1.          5.            NaN
+        2019-04-03 08:35:21.775456032+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428315  2.280506  5.309360  False          bad_precision   1.          5.            0.000000
+        2019-04-03 08:35:22.500084331+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428408  2.402699  5.282661  False          bad_precision   1.          5.            0.122193
+        2019-04-03 08:35:22.753246430+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.428408  2.402699  5.282661  False          bad_precision   1.          5.            0.000000
+        2019-04-03 08:35:22.986076530+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.448533  2.439976  5.272884  False          bad_precision   1.          5.            0.042363
+        ...
 
     Notes:
     ------
@@ -359,20 +378,15 @@ def extract_space_stress_spawns_stimulations(events):
     Examples
     --------
     Output looks like:
+    >>> data
+                                             id                                 label   type      x      y      z    wave  difficulty  trajectory_length
+        2019-04-03 08:36:07.464509437+00:00   0  unity_space-stress_game_enemy_spawns  enemy  1.989  2.766  5.480    1.         5.                NaN
+        2019-04-03 08:36:07.691995137+00:00   1  unity_space-stress_game_enemy_spawns  enemy  1.989  2.766  5.480    1.         5.                NaN
+        2019-04-03 08:36:07.890431837+00:00   2  unity_space-stress_game_enemy_spawns  enemy  0.278  1.919  5.673    1.         5.           1.955187
+        2019-04-03 08:36:08.142808336+00:00   3  unity_space-stress_game_enemy_spawns  enemy  1.591  4.102  4.411    1.         5.           2.547441
+        2019-04-03 08:36:08.324275836+00:00   4  unity_space-stress_game_enemy_spawns  enemy -1.140  1.840  5.230    1.         5.           3.546125
+        ...
 
-                                         id                                 label   type      x      y      z
-    2019-04-03 08:36:07.464509437+00:00   0  unity_space-stress_game_enemy_spawns  enemy  1.989  2.766  5.480
-    2019-04-03 08:36:07.691995137+00:00   1  unity_space-stress_game_enemy_spawns  enemy  1.989  2.766  5.480
-    2019-04-03 08:36:07.890431837+00:00   2  unity_space-stress_game_enemy_spawns  enemy  0.278  1.919  5.673
-    2019-04-03 08:36:08.142808336+00:00   3  unity_space-stress_game_enemy_spawns  enemy  1.591  4.102  4.411
-    2019-04-03 08:36:08.324275836+00:00   4  unity_space-stress_game_enemy_spawns  enemy -1.140  1.840  5.230
-
-                                      type      x      y      z  wave  difficulty  trajectory_length
-2019-04-03 08:36:07.464509437+00:00  enemy  1.989  2.766  5.480    1.         5.                NaN
-2019-04-03 08:36:07.691995137+00:00  enemy  1.989  2.766  5.480    1.         5.           3.132597
-2019-04-03 08:36:07.890431837+00:00  enemy  0.278  1.919  5.673    1.         5.           1.955187
-2019-04-03 08:36:08.142808336+00:00  enemy  1.591  4.102  4.411    1.         5.           2.547441
-2019-04-03 08:36:08.324275836+00:00  enemy -1.140  1.840  5.230    1.         5.           3.546125
 
     """
     # check that the input meets the events standard specifications
@@ -445,6 +459,7 @@ def extract_space_stress_scores(spawns_stimulations, participant_actions):
     ________
     Output dataframe looks like:
 
+    >>> features
                    coordination_inaccuracy  ...  trigger_actions
         wave0                      2.0  ...              7.0
         wave1                      2.0  ...              7.0
@@ -523,5 +538,5 @@ def extract_space_stress_scores(spawns_stimulations, participant_actions):
                                       actions_transition_trace,
                                       space_transition_trace])
         scores_df.append(score_df)
-    out = pd.concat(scores_df, 1, sort=True).T
-    return out
+    features = pd.concat(scores_df, 1, sort=True).T
+    return features
