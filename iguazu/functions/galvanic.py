@@ -3,66 +3,145 @@ import logging
 import numpy as np
 import pandas as pd
 from dsu.cvxEDA import apply_cvxEDA
-from dsu.dsp.filters import inverse_signal, filtfilt_signal, scale_signal, drop_rows
+from dsu.dsp.filters import filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
-from dsu.dsp.resample import uniform_sampling
 from dsu.epoch import sliding_window
 from dsu.pandas_helpers import estimate_rate
-from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
 from iguazu.core.exceptions import IguazuError
+from iguazu.functions.common import verify_monotonic
 
 logger = logging.getLogger(__name__)
 
 
-def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interpolation_kwargs, filter_kwargs,
-                   scaling_kwargs, corrupted_maxratio, sampling_rate):
+# TODO: delete this function that's no relevance now that we 'standardize' the signals/events before.
+# def galvanic_prepare(data, events, input_column, output_column, session_labels, warmup_duration,
+#                      sampling_rate, up, down, quality_kwargs, corrupted_maxratio=1, unit='ohm'):
+#     """
+#      Prepare the galvanic data to standardize data across devices.
+#      This function renames the columns, truncate the data based on the first and last event timestamps
+#      and detect bad quality samples.
+#
+#      It should be noted that the parameters chosen for this function are particularly
+#      specific to the device we use, ie. Nexus from MindMedia.
+#      Eg. When the amplifier saturates (ie. Voltage above 2V, ie. resistance too low), Nexus will return 0.0, but other
+#      devices might have different behaviors. Same for the so-called 'glitches' those may appear only in some devices.
+#
+#     The pipeline will:
+#         - resample signal at uniform rate (`sampling_rate`*`up`/`down`) using a polyphase filtering.
+#         - detect bad samples calling :py:func:dsu.quality.detect_bad_from_amplitude with `glitch_kwargs`
+#         - evaluate the corruption ratio. If too high, then raise an error.
+#
+#     Parameters
+#     ----------
+#     data: pd.DataFrame
+#         Dataframe containing the raw GSR in channel given by `input_column`.
+#     events: pd.DataFrame
+#         Dataframe with 2 columns: [label, data], containing string labels and serialized meta giving the context of the labels.
+#     session_labels: list|None
+#        Labels of first and last events, to truncate the data. If None, the first and last timestamp of the events dataframe are considered.
+#     input_column: str
+#         Name of column where the data of interest are located.
+#     output_column: str
+#         Name of column to rename the data of interest.
+#     warmup_duration: float
+#         Duration (in s) to select before and after the vr session (to avoid side effects in the future
+#     processing steps, ie. that we can then set to bad ).
+#     sampling_rate: float
+#         Sampling rate of the input signal, to resample it to (sampling_rate * up / down) using polyphase filtering.
+#     up : int
+#         The up-sampling factor.
+#     down : int
+#         The down-sampling factor.
+#     quality_kwargs:
+#         Keywords arguments to detect bad samples. This parameter depends on the device specifications.
+#     corrupted_maxratio: float
+#         Maximum acceptable ratio of corrupted (bad) samples.
+#
+#     Returns
+#     -------
+#     data: pd.DataFrame
+#           Dataframe with columns 'gsr', 'gsr_clean', 'gsr_clean_inversed', 'gsr_clean_inversed_lowpassed',
+#           'gsr_clean_inversed_lowpassed_zscored', 'bad'
+#
+#     """
+#     # select and rename galvanic column
+#     data = data.loc[:, [input_column]].rename(columns={input_column: output_column})
+#
+#     if not events.index.is_monotonic:
+#         raise Exception('Events index should be monotonic. ')
+#     warmup_timedelta = np.timedelta64(1, 's') * warmup_duration
+#     if session_labels is None:
+#         begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
+#         ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
+#     else:
+#         if session_labels[0] not in events.label.values or session_labels[1] not in events.label.values:
+#             raise IguazuError(f'Could not find labels {session_labels} in the events ')
+#         begins = events[events.label == session_labels[0]].index[
+#                      0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
+#         ends = events[events.label == session_labels[1]].index[
+#                    -1] + warmup_timedelta  # begin 30 seconds before the beginning of the session
+#     # truncate dataframe on session times
+#     data = data[begins:ends]
+#
+#     # resample uniformly the data using a polyphase filtering
+#     logger.debug('Uniform resampling to %d Hz', sampling_rate)
+#
+#     data = poly_uniform_sampling(data, sampling_rate, up, down)
+#     # add a column "bad" with rejection boolean on Amplifier and HF (glitches) criteria
+#     logger.debug('Detecting amplifier saturation and glitches')
+#     data = quality_gsr(data, column=output_column,
+#                        **quality_kwargs)  # /!\ before, we had: column=column + '_filtered'  /!\
+#     # estimate the corrupted ratio
+#     # if too many samples were dropped, raise an error
+#     corrupted_ratio = data.bad.mean()
+#     if corrupted_ratio > corrupted_maxratio:
+#         raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
+#                           f'exceeds {corrupted_maxratio * 100:.0f}%')
+#     if unit == 'ohm':
+#         # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
+#         logger.debug('Inverting signals')
+#         data = inverse_signal(data, columns=['gsr'], suffix='')
+#
+#     return data
+#
+
+def galvanic_clean(data, events, annotations, column, warmup_duration, corrupted_maxratio,
+                   interpolation_kwargs, filter_kwargs, scaling_kwargs):
     """
-     Preprocess the galvanic data and detect bad quality samples.
+     Preprocess the galvanic data.
      It should be noted that some steps here are specific to the device we use, ie. Nexus from MindMedia.
      Eg. When the amplifier saturates (ie. Voltage above 2V, ie. resistance too low), Nexus will return 0.0, but other
      devices might have different behaviors.
 
     The pipeline will:
 
-        - detect bad samples calling :py:func:dsu.quality.detect_bad_from_amplitude with `glitch_kwargs`
         - lowpass the resulting signal using :py:func:dsu.filters.dsp.bandpass_signal with `filter_kwargs`
-        - decimate signal at rate `sampling_rate`
-        - remove the bad samples and evaluate the corruption ratio. If too high, then raise an error.
-        - interpolate the missing signal e calling :py:meth:pandas.Series.interpolat with `interpolation_kwargs`.
+        - remove the bad samples and interpolate the missing signal e calling :py:meth:pandas.Series.interpolat with `interpolation_kwargs`.
         - inverse the signal to access galvanic conductance (G=1/R)
         - scale the signal on the whole session using using :py:func:dsu.filters.dsp.scale_signal with `scaling_kwargs`
 
     Parameters
     ----------
     data: pd.DataFrame
-        Dataframe containing the raw GSR in channel given by column_name.
-    events: pd.DataFrame
-        Dataframe with 2 columns: [label, data], containing string labels and serialized meta giving the context of the labels.
-    column: str
+        Dataframe containing the raw GSR samples (in channel given by column_name) and
+        their rejection status (in column named 'bad' ) .
+    column: str  #TODO: since it's now standardized, should we fix this to 'GSR'?
         Name of column where the data of interest are located.
-    warmup_duration: float
-        Duration (in s) to select before and after the vr session (to avoid side effects in the future
     processing steps, ie. that we can then set to bad ).
-    quality_kwargs:
-        Keywords arguments to detect bad samples.
     interpolation_kwargs:
         Keywords arguments to interpolate the missing (bad) samples.
     filter_kwargs:
         Keywords arguments to lowpass the data.
     scaling_kwargs:
         Keywords arguments to scale the data.
-    corrupted_maxratio: float
-        Maximum acceptable ratio of corrupted (bad) samples.
-    sampling_rate: float
-        Sampling rate to uniformly resample the input sample at the very
-        beginning of this function
 
     Returns
     -------
     data: pd.DataFrame
-          Dataframe with columns 'F', 'F_clean', 'F_clean_inversed', 'F_clean_inversed_lowpassed', 'F_clean_inversed_lowpassed_zscored', 'bad'
+          Dataframe with columns 'gsr', 'gsr_clean', 'gsr_clean_inversed', 'gsr_clean_inversed_lowpassed',
+          'gsr_clean_inversed_lowpassed_zscored', 'bad'
 
     Examples
     --------
@@ -70,46 +149,45 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         .. image:: ../source/_static/examples/galvanic_functions/io_clean.png
 
     """
-    if not events.index.is_monotonic:
-        raise Exception('Events index should be monotonic. ')
 
+    verify_monotonic(events, 'events')
     warmup_timedelta = np.timedelta64(1, 's') * warmup_duration
     begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
 
     # truncate dataframe on session times
-    data = data[begins:ends]
     data = data.loc[:, [column]]
 
-    # Estimate the sampling frequency: weird signals that have a heavy jitter
-    # will fail here early and raise a ValueError. See issue #44
-    fs = estimate_rate(data)
-    logger.debug('Signal sampling frequency before uniform resampling is %.3f Hz', fs)
+    data.loc[:begins] = np.NaN
+    data.loc[ends:] = np.NaN
 
-    # resample uniformly the data
-    logger.debug('Uniform resampling to %d Hz', sampling_rate)
-    data = uniform_sampling(data, sampling_rate)
+    annotations.loc[:begins, [column]] = 'outside_session'
+    annotations.loc[ends:, [column]] = 'outside_session'
 
-    # lowpass filter signal
-    logger.debug('Lowpass filtering to %s Hz', filter_kwargs.get('frequencies', []))
-    # TODO: logger says lowpass, but filter_kwargs could be something else!
-    data = filtfilt_signal(data, columns=[column],
-                           **filter_kwargs, suffix='_filtered')
 
-    # add a column "bad" with rejection boolean on Amplifier and HF (glitches) criteria
-    logger.debug('Detecting amplifier saturation and glitches')
-    data = quality_gsr(data, column=column + '_filtered', **quality_kwargs)
     # estimate the corrupted ratio
     # if too many samples were dropped, raise an error
-    corrupted_ratio = data.bad.mean()
+    # TODO/Question: do we keep raising an error when corrupted ratio is above a threshold?
+    corrupted_ratio = (~annotations[annotations.GSR != 'outside_session'].replace('', np.NaN).isna()).mean()[0]
     if corrupted_ratio > corrupted_maxratio:
         raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
                           f'exceeds {corrupted_maxratio * 100:.0f}%')
 
+    # set as 'bad' samples that are more than 5  standard deviations from mean
+    outliers = data[((data[column] - data[column].mean()) / data[column].std()).abs() > 5].dropna().index
+    annotations.loc[outliers, column] = 'outliers'
+    data.loc[outliers, column] = np.NaN
+
+    # lowpass filter signal
+    logger.debug('Filter with %s to %s Hz', filter_kwargs.get('filter_type', 'bandpass'),
+                 filter_kwargs.get('frequencies', []))
+    data = filtfilt_signal(data, columns=[column],
+                           **filter_kwargs, suffix='_filtered')
+
     # bad sample interpolation
-    logger.debug('Interpolating %d/%d bad samples', data.bad.sum(), data.shape[0])
+    logger.debug('Interpolating %d/%d bad samples', data[column].isna().sum(), data.shape[0])
     # make a copy of the signal with suffix "_clean", mask bad samples
-    data_clean = data[[column + '_filtered']].copy().add_suffix('_clean').mask(data.bad)
+    data_clean = data[[column + '_filtered']].copy().add_suffix('_clean')
     # Pandas does not like tz-aware timestamps when interpolating
     if data_clean.index.tzinfo is None:
         # old way: tz-naive
@@ -118,24 +196,19 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
         data_clean = (
             data_clean.set_index(data_clean.index.tz_convert(None))
-            .interpolate(**interpolation_kwargs)
-            .set_index(data_clean.index)
-        )
-
-    # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
-    logger.debug('Inverting signals')
-    data_clean = inverse_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_inversed')
+                .interpolate(**interpolation_kwargs)
+                .set_index(data_clean.index))
 
     # scale signal on the all session
     logger.debug('Rescaling signals')
-    data_clean = scale_signal(data_clean, columns=[column + '_filtered_clean_inversed'], suffix='_zscored',
+    data_clean = scale_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_zscored',
                               **scaling_kwargs)
 
     # return preprocessed data
     logger.debug('Concatenating clean and filtered signals')
     data = pd.concat([data, data_clean], axis=1)
 
-    return data
+    return data, annotations
 
 
 def downsample(data, sampling_rate):
@@ -145,7 +218,7 @@ def downsample(data, sampling_rate):
     return drop_rows(data, sampling_rate)
 
 
-def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
+def galvanic_cvx(data, annotations, column=None, warmup_duration=15, threshold_scr=4.0,
                  cvxeda_params=None, epoch_size=None, epoch_overlap=None):
     """ Separate galvanic components using a convex deconvolution.
 
@@ -193,13 +266,10 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
 
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
-    if 'bad' in data:
-        bad = data['bad']
-    else:
-        bad = pd.Series(False, name='bad', index=data.index)
+    bad = ~annotations.replace('', np.NaN).isna()
 
     # if no column is specified, consider the first one
-    column = column or data.columns[0]
+    column = column or data.columns[-1]
 
     n = data.shape[0]
     idx_epochs = np.arange(n)[np.newaxis, :]
@@ -229,13 +299,18 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
     epochs = []
     for i, idx in enumerate(idx_epochs):
         logger.debug('Epoch %d / %d', i+1, len(idx_epochs))
-        chunk = (
-            apply_cvxEDA(data.iloc[idx][[column]].dropna(), **cvxeda_params)
-            .iloc[idx_warmup]
-            .rename_axis(index='epoched_index')
-            .reset_index()
-        )
-        epochs.append(chunk)
+        input = data.iloc[idx][[column]].dropna()
+        if not input.empty:
+            chunk = (
+                apply_cvxEDA(input, **cvxeda_params)
+                    .iloc[idx_warmup]
+                    .rename_axis(index='epoched_index')
+                    .reset_index()
+            )
+            epochs.append(chunk)
+
+    if not epochs:
+        return pd.DataFrame(), pd.DataFrame()  # or None?
 
     data = (
         pd.concat(epochs, ignore_index=False)
@@ -244,22 +319,23 @@ def galvanic_cvx(data, column=None, warmup_duration=15, threshold_scr=4.0,
         .rename_axis(index=data.index.name)
     )
 
-    # add a column "bad" with rejection boolean on amplitude criteria
-    data['bad'] = bad
-    data.loc[data[column + '_SCR'] >= threshold_scr, 'bad'] = True
+    # add an annotation rejection boolean on amplitude criteria
+    # todo: helpers with inputs: data, annotations, and index or bool condition, that sets values in data to NaN and annotate in annotations
+    annotations.loc[data[data[
+                             column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'  # Todo: question: should we add a new column?
 
-    # set warmup period to "bad"
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
-    data.loc[:data.index[0] + warm_up_timedelta, 'bad'] = True
-    data.loc[data.index[-1] - warm_up_timedelta:, 'bad'] = True
-
+    annotations.loc[:data.index[0] + warm_up_timedelta,
+    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
+    annotations.loc[data.index[-1] - warm_up_timedelta:,
+    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
     # replace column string name by 'gsr' for lisibility purpose
     data.columns = data.columns.str.replace(column, 'gsr')
 
-    return data
+    return data, annotations
 
 
-def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, max_increase_duration=7):
+def galvanic_scrpeaks(data, annotations, column=None, warmup_duration=15, peaks_kwargs=None, max_increase_duration=7):
     """ Detect peaks of SCR component and estimate their characteristics.
 
     Parameters
@@ -293,26 +369,25 @@ def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, 
     # convert duration (s) in timedelta
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
 
-    if 'bad' not in data:
-        raise ValueError('Received data without a column named "bad"')
-
-    bad = data.bad
+    # if 'bad' not in data:
+    #     raise ValueError('Received data without a column named "bad"')
+    #
+    # bad = data.bad
 
     # if no column is specified, consider the first one
-    column = column or data.columns[0]
+    column = column or data.columns[-2]
 
     # Select the data of interest
     data = data.loc[:, [column]]
     data = data[data.index[0] + warm_up_timedelta:data.index[-1] - warm_up_timedelta]
 
     # Define the scaler to apply before detecting peaks
-    scaler = RobustScaler(with_centering=True, quantile_range=(5, 95.0))
-
+    scaler = RobustScaler(with_centering=False, quantile_range=(5, 95.0))
     # Detect peaks and estimate their properties
     data = detect_peaks(data, column=column, estimate_properties=True, scaler=scaler, **peaks_kwargs)
+
     data = data[data.label == 'peak'].loc[:,
            ['value', 'left_local', 'left_prominence', 'right_ips']]
-
     # Rename columns for lisibility purposes
     data = data.rename(
         columns={
@@ -323,7 +398,7 @@ def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, 
         })
 
     # Append the 'bad' column from input data
-    data.loc[:, 'bad'] = bad
+    # data.loc[:, 'bad'] = bad
     # Update the bad column with this new find of artefact, being false peak detection
     # (when thee increase duration is greater than the prominence window,
     # it means no local minima has been found, hence the peak was not significant)
@@ -332,7 +407,7 @@ def galvanic_scrpeaks(data, column=None, warmup_duration=15, peaks_kwargs=None, 
     # True if the peak is kept, False if not.
     data.loc[:, column + '_peaks_detected'] = ~data.bad
 
-    return data
+    return data, annotations
 
 
 def galvanic_baseline_correction(features, sequences, columns=None):
