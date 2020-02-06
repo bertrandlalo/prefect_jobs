@@ -1,85 +1,105 @@
 from typing import Mapping, Optional, Tuple
+import logging
 
 import pandas as pd
 import prefect
+from dsu.dsp.filters import filtfilt_signal, scale_signal
+from dsu.pandas_helpers import estimate_rate
 
-from iguazu.core.exceptions import SoftPreconditionFailed
+from iguazu.core.exceptions import PreconditionFailed, SoftPreconditionFailed
 from iguazu.core.tasks import Task
 from iguazu.helpers.files import FileProxy
 from iguazu.functions.cardiac import (
-    hrv_features, peak_to_rr, ppg_clean, ppg_peak_detection, rr_interpolation
+    hrv_features, peak_to_rr, ppg_clean, ppg_peak_detection, rr_interpolation,
+    extract_all_peaks, ssf
 )
 from iguazu.functions.ppg_report import render_ppg_report
 
-from dsu.pandas_helpers import estimate_rate
+logger = logging.getLogger(__name__)
 
 
 class CleanPPGSignal(Task):
 
     def __init__(self, *,
-                 signals_hdf5_key: str = '/nexus/signal/nexus_signal_raw',
-                 events_hdf5_key: str = '/unity/events/unity_events',
+                 #signals_hdf5_key: str = '/nexus/signal/nexus_signal_raw',
+                 signals_hdf5_key: str = '/iguazu/signal/ppg/standard',
+                 # events_hdf5_key: str = '/unity/events/unity_events',
                  output_hdf5_key: str = '/iguazu/signal/ppg/clean',
-                 warmup_duration: int = 30,
-                 sampling_rate: int = 512,
-                 filter_kwargs: Optional[Mapping] = None,
+                 # warmup_duration: int = 30,
+                 # sampling_rate: int = 512,
+                 # filter_kwargs: Optional[Mapping] = None,
                  **kwargs):
         super().__init__(**kwargs)
 
         self.output_hdf5_key = output_hdf5_key
-        self.warmup_duration = warmup_duration
-        self.filter_kwargs = filter_kwargs or {}
-        self.column = 'G'
-        self.sampling_rate = sampling_rate
+        # self.warmup_duration = warmup_duration
+        # self.filter_kwargs = filter_kwargs or {}
+        # self.column = 'G'
+        # self.sampling_rate = sampling_rate
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
-        self.auto_manage_input_dataframe('events', events_hdf5_key)
+        # self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self, *,
             signals: pd.DataFrame,
-            events: pd.DataFrame) -> FileProxy:
+            # events: pd.DataFrame
+            ) -> FileProxy:
 
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
-        if events.empty:
-            raise SoftPreconditionFailed('Input events are empty')
+        if 'PPG' not in signals.columns:
+            raise SoftPreconditionFailed('Input signals do not have a PPG column')
 
         output_file = self.default_outputs()
 
-        df_output = ppg_clean(signals, events,
-                              warmup_duration=self.warmup_duration,
-                              column=self.column,
-                              filter_kwargs=self.filter_kwargs,
-                              sampling_rate=self.sampling_rate)
+        filtered = filtfilt_signal(
+            signals,
+            # AK parameters
+            # order=2,
+            # frequencies=(0.1, 45),
+            # filter_type='bandpass',
+            # filter_design='iir',
+            # What I suggest we change:
+            order=100,
+            frequencies=(0.5, 11),
+            filter_type='bandpass',
+            filter_design='fir',
+        )
+        scaled = scale_signal(filtered, method='robust')
+        scaled['SSF_PPG'] = ssf(scaled['PPG'])
+
+        # df_output = ppg_clean(signals, events,
+        #                       warmup_duration=self.warmup_duration,
+        #                       column=self.column,
+        #                       filter_kwargs=self.filter_kwargs,
+        #                       sampling_rate=self.sampling_rate)
+
+        logger.info('Cleaned PPG signal, input shape %s, output shape %s',
+                    signals.shape, scaled.shape)
 
         with pd.HDFStore(output_file.file, 'w') as store:
-            df_output.to_hdf(store, self.output_hdf5_key)
+            scaled.to_hdf(store, self.output_hdf5_key)
 
         return output_file
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_cardiac_clean')  # TODO: rename GSR _clean to _gsr_clean !
-        # If it does not exist, create it? TODO: think about this... (the problem is that this is called several times!)
-        # empty = pd.DataFrame()
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, self.output_hdf5_key)
-        # OR
-        # open(output.file, 'w').close()
+        output = signals.make_child(suffix='_ppg_clean')  # TODO: rename GSR _clean to _gsr_clean !
         return output
 
 
 class PPGDetectRR(Task):
     def __init__(self, *,
-                 fs: int = 512,
+                 #fs: int = 512,
                  signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
-                 output_hdf5_key: str = '/iguazu/signal/ppg', # a /RR or /RRi will be added
+                 output_hdf5_key: str = '/iguazu/signal/ppg',  # a /RR or /RRi will be added
                  **kwargs):
         super().__init__(**kwargs)
 
-        self.fs = fs
-        self.column = 'G_filtered'
+        #self.fs = fs
+        #self.column = 'G_filtered'
+        self.column = 'PPG'
         self.output_hdf5_key = output_hdf5_key
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
 
@@ -93,7 +113,7 @@ class PPGDetectRR(Task):
         ppg_fs = estimate_rate(ppg)
         peaks = ppg_peak_detection(ppg)
         rr = peak_to_rr(ppg, peaks, ppg_fs)
-        rri = rr_interpolation(rr, self.fs)
+        rri = rr_interpolation(rr, ppg_fs)
 
         with pd.HDFStore(output_file.file, 'w') as store:
             rr.to_hdf(store, f'{self.output_hdf5_key}/RR')
@@ -105,10 +125,6 @@ class PPGDetectRR(Task):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
         output = signals.make_child(suffix='_ppg_peaks')
-        # If it does not exist, create it? TODO: think about this... (the problem is that this is called several times!)
-        # empty = pd.DataFrame()
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, self.output_hdf5_key)
         return output
 
 

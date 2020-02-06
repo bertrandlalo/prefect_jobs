@@ -2,7 +2,7 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional
+from typing import Dict, Iterable, NoReturn, Optional, Union, List
 
 import pandas as pd
 import prefect

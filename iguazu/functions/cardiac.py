@@ -6,7 +6,7 @@ import pandas as pd
 import scipy.signal
 import scipy.stats
 
-from dsu.dsp.filters import filtfilt_signal
+from dsu.dsp.filters import filtfilt_signal, scale_signal
 from dsu.dsp.resample import uniform_sampling
 from dsu.epoch import sliding_window
 from dsu.pandas_helpers import estimate_rate
@@ -55,16 +55,21 @@ def ppg_clean(data, events, column, warmup_duration, filter_kwargs, sampling_rat
     return data
 
 
-# def ssf(arr, win=64):
-#     x = np.asarray(arr)
-#     if x.ndim != 1:
-#         raise ValueError('ssf only supports 1D arrays')
-#     dx = np.diff(x)
-#     dx[dx <= 0] = 0
-#     dx_wins = sliding_window(dx, size=win, stepsize=1)  # shape is (n, win)
-#     return dx_wins.sum(axis=1)
-#
-#
+def ssf(arr, win=64, fill_value=np.nan):
+    x = np.asarray(arr)
+    if x.ndim != 1:
+        raise ValueError('ssf only supports 1D arrays')
+    dx = np.diff(x, prepend=0)
+    dx[dx <= 0] = 0
+    dx_wins = sliding_window(dx, size=win, stepsize=1, copy=False)
+    # shape of dx_wins is (n-win+1, win). The definition of ssf has the time
+    # of each SSFi aligned to the leftmost sample. We need to add some NaNs (or
+    # the fill value) to the right to fix the shape and the time
+    ssf0 = dx_wins.sum(axis=1).astype(float)
+    ssf1 = np.r_[np.repeat(fill_value, win - 1), ssf0]
+    return ssf1
+
+
 # def ssf_dataframe(dataframe, column, win=64):
 #     result = dataframe.copy()
 #     new_col = f'{column}_ssf'
@@ -77,6 +82,10 @@ def ppg_clean(data, events, column, warmup_duration, filter_kwargs, sampling_rat
 
 def extract_all_peaks(series: pd.Series, window_size: int = 512) -> Tuple[pd.DataFrame, pd.DataFrame]:
     n_samples = series.shape[0]
+    # From https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html
+    # before using find_peaks, NaNs should either be removed or replaced.
+    series = series.fillna(0)
+
     # Extract properties with a super-permissive find_peaks
     peaks, properties = scipy.signal.find_peaks(series,
                                                 height=-np.Inf,
@@ -86,7 +95,10 @@ def extract_all_peaks(series: pd.Series, window_size: int = 512) -> Tuple[pd.Dat
                                                 width=0,
                                                 plateau_size=0,
                                                 )
-    df_props = pd.DataFrame(properties, index=peaks).rename_axis(index='peak')
+    df_props = pd.DataFrame(properties)
+    df_props.insert(0, 'index', series.index[peaks])
+    df_props.insert(1, 'peak_sample', peaks)
+    df_props.set_index('index', inplace=True)
 
     # Extract all peaks by creating a sliding window and then indexing with the
     # peaks obtained just before. Keep only the peaks that have a
@@ -98,7 +110,7 @@ def extract_all_peaks(series: pd.Series, window_size: int = 512) -> Tuple[pd.Dat
 
     sample_peaks = series.values[idx_peak_window_samples]
     peak_number = np.repeat(complete_peaks, window_size)
-    relative_sample = np.repeat(np.arange(window_size) - window_size // 2, sample_peaks.shape[0])
+    relative_sample = np.tile(np.arange(window_size) - window_size // 2, sample_peaks.shape[0])
 
     df_extracts = pd.DataFrame({'relative_sample': relative_sample,
                                 series.name: sample_peaks.ravel()},
