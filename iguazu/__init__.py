@@ -1,3 +1,3 @@
-__version__ = '0.1.2'
+__version__ = '0.2.0-dev5'
 
-from .recipes import registry
+from .core.tasks import Task

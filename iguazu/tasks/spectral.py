@@ -6,7 +6,8 @@ import prefect
 
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
-from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
+from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
+from iguazu.core.exceptions import IguazuError
 from iguazu.functions.spectral import bandpower
 
 

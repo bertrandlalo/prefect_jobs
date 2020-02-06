@@ -39,6 +39,15 @@ class FileProxy(abc.ABC):
     def upload(self):
         pass
 
+    @abc.abstractmethod
+    def delete(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def empty(self):
+        pass
+
 
 class QuetzalFile(FileProxy):
 
@@ -166,7 +175,7 @@ class QuetzalFile(FileProxy):
         logger.info('File by name and path gave %d candidates', len(candidates))
         for file_detail in sorted(candidates, key=lambda d: d.date, reverse=True):
             meta = helpers.file.metadata(self.client, file_detail.id, wid=self._wid)
-            state = meta['base'].get('state', None)
+            state = meta['base'].get('status', None)
             parent = meta.get('iguazu', {}).get('parents', None)
             if parent == parent_id and state != 'DELETED':
                 logger.info('Found a match with same parent %s', meta['base'])
@@ -202,6 +211,12 @@ class QuetzalFile(FileProxy):
         helpers.workspace.update_metadata(self.client, self._wid, self._file_id, metadata)
         # unset the metadata so that next time it is refreshed
         self._metadata.clear()
+
+    def delete(self):
+        raise NotImplementedError
+
+    def empty(self):
+        raise NotImplementedError
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -321,16 +336,28 @@ class LocalFile(FileProxy):
             child._metadata['base']['filename'] = new.name
             child._metadata['base']['path'] = str(new.relative_to(file_dir).parent)
             child._metadata['base']['id'] = child._file_id
+            # NEW! and TODO: we must remove the iguazu family!
             child._metadata['iguazu']['parents'] = base_metadata['id']
             # unset iguazu state
-            child._metadata['iguazu'].pop('state', None)
+            child._metadata['iguazu'].pop('status', None)
 
         return child
 
     def upload(self):
         # Upload on local file dumps the meta in a json
         with open(self._meta_file, 'w') as outfile:
-            json.dump(self.metadata, outfile, indent=2)
+            json.dump(self.metadata, outfile, indent=2, sort_keys=True)
+
+    def delete(self):
+        # TODO: when we update to Python 3.8, use unlink(missing_ok=True)
+        #       instead of these if statements.
+        if self._file.exists():
+            self._file.unlink()
+        if self._meta_file.exists():
+            self._meta_file.unlink()
+
+    def empty(self):
+        return self.file.stat().st_size == 0
 
     def __repr__(self):
         base_metadata = self.metadata.get('base', {})

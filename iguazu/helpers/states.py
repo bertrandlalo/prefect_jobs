@@ -1,8 +1,8 @@
 from prefect.engine.signals import PrefectStateSignal
-from prefect.engine.state import Success, State
+from prefect.engine.state import Success
 
 
-class SkippedResult(Success):  # TODO: revisit the need of this class
+class SkippedResult(Success):
     """Skipped state with results
 
     This state represents a skipped state with results, used to express that a

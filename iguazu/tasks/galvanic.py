@@ -9,7 +9,8 @@ from iguazu.functions.galvanic import (
 )
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
-from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail, IguazuError
+from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
+from iguazu.core.exceptions import IguazuError
 
 
 class CleanSignal(prefect.Task):
@@ -50,13 +51,13 @@ class CleanSignal(prefect.Task):
         output_group: group in the output  hdf5 to store the output data. Default to
         '/gsr/timeseries/preprocessed'
         signal_column: column in the input signal to select. Default to 'F'.
-        warmup_duration: see the documentation of :py:func:`iguazu.functions.galvanic.galvanic_clean`.
-        glitch_kwargs: see the documentation of :py:func:`galvanic_clean`.
-        interpolation_kwargs: see the documentation of :py:func:`galvanic_clean`.
-        lowpass_kwargs: see the documentation of :py:func:`galvanic_clean`.
-        scaling_kwargs: see the documentation of :py:func:`galvanic_clean`.
-        corrupted_maxratio: see the documentation of :py:ref:`galvanic_clean`.
-        sampling_rate: see the documentation of :py:ref:`galvanic_clean`.
+        warmup_duration: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        glitch_kwargs: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        interpolation_kwargs: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        lowpass_kwargs: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        scaling_kwargs: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        corrupted_maxratio: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
+        sampling_rate: see the documentation of :py:func:`~iguazu.functions.galvanic.galvanic_clean`.
         force: if True, the task will run even if `output_group` from the output
          HDF5 file already contains some data.
         kwargs: additive keywords arguments to call the `run` method.

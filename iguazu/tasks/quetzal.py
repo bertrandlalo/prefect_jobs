@@ -83,13 +83,19 @@ class QuetzalBaseTask(Task):
 class Query(QuetzalBaseTask):
     """ Perform a query on Quetzal and return all its results
 
-    This task uses the :py:ref:`quetzal.client.helpers.query` function to
+    This task uses the :py:ref:`quetzal.client.helpers` query function to
     perform a SQL query on a Quetzal server and return all its results.
 
     Typically, this task will be used as one of the first tasks of a flow that
     uses Quetzal as a data source.
 
     """
+    # TODO: In the docstring above,
+    #       put back reference to :py:ref:`quetzal.client.helpers.query` when
+    #       the quetzal-client documentation includes this documentation.
+    #       Check with:
+    # python -m sphinx.ext.intersphinx \
+    #           https://quetzal-client.readthedocs.io/en/latest/objects.inv
 
     def __init__(self,
                  as_proxy: bool = False,
@@ -103,7 +109,7 @@ class Query(QuetzalBaseTask):
 
     def run(self,
             query: str,
-            alt_query: Optional[str] = None,
+            dialect: str = 'postgresql',
             workspace_id: Optional[int] = None,
             id_column: Optional[str] = None) -> List[ResultSetType]:
         """ Perform the Quetzal SQL query
@@ -111,10 +117,9 @@ class Query(QuetzalBaseTask):
         Parameters
         ----------
         query: str
-            Query in postgreSQL dialect.
-        alt_query: str
-            Alternate query, also in postgreSQL dialect, to perform in case the
-            initial `query` fails.
+            Quetzal query.
+        dialect: str
+            Dialect used to express the `query`.
         workspace_id: int
             Workspace where the query should be executed. If not set, it uses
             the global workspace.
@@ -130,25 +135,10 @@ class Query(QuetzalBaseTask):
         if not query:
             raise signals.FAIL('Query is empty')
 
-        self.logger.info('Querying Quetzal at %s with SQL=\n%s',
+        self.logger.info('Querying Quetzal at %s with SQL (dialect %s)=\n%s',
                          self.client.configuration.host,
-                         query)
-        rows, total = None, 0
-        try:
-            rows, total = helpers.query(self.client, workspace_id, query)
-        except QuetzalAPIException as ex:
-            self.logger.warning('Quetzal query failed: %s', ex.title)
-            if not alt_query:
-                raise
-
-        # Try the alt query if we failed and alt_query exists
-        if rows is None and alt_query:
-            self.logger.info('Querying Quetzal with alternate query SQL=\n%s', alt_query)
-            try:
-                rows, total = helpers.query(self.client, workspace_id, alt_query)
-            except QuetzalAPIException as ex:
-                self.logger.warning('Quetzal alternate query also failed: %s', ex.title)
-                raise
+                         dialect, query)
+        rows, total = helpers.query(self.client, workspace_id, query, dialect)
 
         # Handle results
         self.logger.info('Query gave %d results', total)
@@ -313,7 +303,7 @@ class CreateWorkspace(QuetzalBaseTask):
         Raises
         ------
         prefect.signals.PrefectStateSignal
-            A :py:ref:`prefect.signals.FAIL` signal when the verification fails.
+            A :py:class:`prefect.signals.FAIL` signal when the verification fails.
 
         """
         for name, version in families.items():

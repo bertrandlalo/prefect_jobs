@@ -23,9 +23,8 @@ def logging_handler(task, old_state, new_state):
     state_name = str(type(new_state).__name__).upper()
 
     if new_state.is_running():
-        logger.debug('Configuring logs for task')
-        temp_dir = context.get('temp_dir', None)
-        temp_dir = temp_dir or tempfile.mkstemp(prefix=context.task_full_name, suffix='.log')[1]
+        logger.debug('Configuring logs for %s', task)
+        temp_dir = context.get('temp_dir', None) or tempfile.mkdtemp()
         log_filename = (
             pathlib.Path(temp_dir) /
             'logs' /
@@ -44,6 +43,7 @@ def logging_handler(task, old_state, new_state):
         root.addHandler(handler)
 
     elif new_state.is_finished():
+        logger.debug('Closing logs for %s', task)
         root = logging.getLogger()
         for hdlr in root.handlers[:]:  # Note the copy: we need to modify this list while iterating over it
             if not isinstance(hdlr, CustomFileHandler):

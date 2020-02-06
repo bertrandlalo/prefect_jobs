@@ -5,10 +5,6 @@ from iguazu import __version__ as iguazu_version
 from iguazu.helpers.states import GRACEFULFAIL, SKIPRESULT
 
 
-class IguazuError(Exception):
-    pass
-
-
 def get_base_meta(task, state=None, **kwargs):
     meta = {
         'source': 'iguazu',
