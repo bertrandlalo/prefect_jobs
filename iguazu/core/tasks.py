@@ -101,6 +101,25 @@ class ManagedTask(prefect.Task):
 
     def _generic_safe(self, func: Callable, graceful_excs: Optional[Container[Exception]] = None) -> Any:
         GRACEFUL_EXCEPTIONS = tuple(graceful_excs or ())
+
+        # Note: the following if/elif/else block determines the function name
+        # for a more readable logging message. Here are some implementation
+        # comments that came up during the review of thtis function:
+        # - func is a Callable. However, there is a "special" kind of callable
+        #   that I want to manage here: functools.partial, a callable whose
+        #   parameters are partially set.
+        # - The thing is that I want to log the name of the function, and not
+        #   that it is a partial, because I want to inform the developer when
+        #   their function is being called. Iguazu calls the user functions at
+        #   one point with something like:
+        #   self._generic_safe(functools.partial(self.prepare_inputs, **kws)
+        #   so func can be a functools.partial object.
+        #   These objects have a reference to the original function on their
+        #   func member, as documented here:
+        #   https://docs.python.org/2/library/functools.html#partial-objects
+        #
+        # So, to wrap-up, I want to obtain the name of the function, but
+        # sometimes this is hidden by a partial object.
         if hasattr(func, 'func') and hasattr(func.func, '__name__'):
             name = func.func.__name__
         elif hasattr(func, '__name__'):
