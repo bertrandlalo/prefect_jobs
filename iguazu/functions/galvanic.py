@@ -11,8 +11,7 @@ from dsu.pandas_helpers import estimate_rate
 from dsu.quality import quality_gsr
 from sklearn.preprocessing import RobustScaler
 
-from iguazu.helpers.tasks import IguazuError  # Todo: move IguazuError to a module exceptions.py
-
+from iguazu.core.exceptions import IguazuError
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +92,7 @@ def galvanic_clean(data, events, column, warmup_duration, quality_kwargs, interp
 
     # lowpass filter signal
     logger.debug('Lowpass filtering to %s Hz', filter_kwargs.get('frequencies', []))
+    # TODO: logger says lowpass, but filter_kwargs could be something else!
     data = filtfilt_signal(data, columns=[column],
                            **filter_kwargs, suffix='_filtered')
 
