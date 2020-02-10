@@ -1,6 +1,7 @@
 name: iguazu-env
 channels:
   - defaults
+  - omind
   - conda-forge
 dependencies:
   # Python dependencies
@@ -20,9 +21,9 @@ dependencies:
   - statsmodels>=0.10.1,<0.11
   - pytables>=3.5,<4.0
   - tzlocal>=2.0,<3.0
+  - dsu>=0.3.0,<0.4
   - pip
   - pip:
     - graphviz>=0.11.1,<0.12.0
     - prefect>=0.6.1,<0.6.2
     - quetzal-client>=0.3.1,<0.4
-    - git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0#egg=dsu
