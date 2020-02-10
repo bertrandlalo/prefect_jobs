@@ -9,27 +9,27 @@ with open('iguazu/__init__.py') as f:
 
 
 dependencies = [
-    'bokeh>=1.3,<2.0',
-    'click>=7.0,<8.0',
-    'colorlog>=4.0,<5.0',
-    'dsu @ git+https://github.com/OpenMindInnovation/datascience_utils@v0.3.0',
-    'numpy>=1.16,<1.17',
-    'mne>=0.19.2,<0.20',
-    'pandas>=0.25.0,<0.26.0',
-    'psutil>=5.6.3,<5.7',
-    'prefect>=0.6.1,<0.6.2',
-    'quetzal-client>=0.5.0,<0.6',
-    'scikit-learn>=0.21.2,<0.22.0',
-    'scipy>=1.3,<2.0',
-    'simplegeneric>=0.8.1,<0.9.0',
-    'statsmodels>=0.10.1,<0.11',
-    'tables>=3.5,<4.0',
-    'tzlocal>=2.0,<3.0'
+    'bokeh',
+    'click',
+    'colorlog',
+    'dsu',
+    'numpy',
+    'mne',
+    'pandas',
+    'psutil',
+    'prefect',
+    'quetzal-client',
+    'scikit-learn',
+    'scipy',
+    'simplegeneric',
+    'statsmodels',
+    'tables',
+    'tzlocal'
 ]
 build_dependencies = dependencies + ['pytest-runner']
 test_dependencies = [
-    'pytest>=5.0.1,<6.0',
-    'pytest-mock>=1.10.4,<2.0',
+    'pytest',
+    'pytest-mock',
 ]
 authors = [
     ('Raphaëlle Bretrand-Lalo', 'raphaelle@omind.me'),
