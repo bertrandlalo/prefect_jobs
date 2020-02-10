@@ -22,8 +22,15 @@ dependencies:
   - pytables>=3.5,<4.0
   - tzlocal>=2.0,<3.0
   - dsu>=0.3.0,<0.4
+  # Note on pyyaml: it is important to avoid pyyaml version 5.2, because it is
+  # incompatible with a conda + pip package mix: dsu, and possibly other conda
+  # packages require pyyaml, and at the same time prefect and quetzal-client
+  # (which are pip packages) require pyyaml too. They way pyyaml is distributed
+  # makes it fail when pip and conda are mixed. This does not happen on previous
+  # versions of pyyaml.
+  - pyyaml>=5.1.2,<5.2
   - pip
   - pip:
     - graphviz>=0.11.1,<0.12.0
     - prefect>=0.6.1,<0.6.2
-    - quetzal-client>=0.3.1,<0.4
+    - quetzal-client>=0.5.0,<0.6
