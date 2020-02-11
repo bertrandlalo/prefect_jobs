@@ -276,54 +276,16 @@ class MergeHDF5(iguazu.Task):
 
 class AddSourceMetadata(prefect.Task):
 
-    def __init__(self, *,
-                 new_meta: Dict,
-                 # source_family: Optional[str] = None,
-                 **kwargs):
+    def __init__(self, *, new_meta: Dict, **kwargs):
         super().__init__(**kwargs)
         self.new_meta = new_meta
-        # self.source_family = source_family
 
     def run(self, *, target: FileProxy, source: Optional[FileProxy]) -> NoReturn:
-
-        # if 'data_2017-06-15.18.13.12' in source.id:
-        #     import ipdb; ipdb.set_trace(context=21)
-        #     pass
-
         new_meta = copy.deepcopy(self.new_meta)
-        # if source is not None and self.source_family is not None:
-        #     new_meta.setdefault(self.source_family, {})
-        #     new_meta[self.source_family]['source'] = source.id
-
         _deep_update(target.metadata, new_meta)
-        target.upload()  # TODO: for quetzal, we are going to need a .upload_metadata method
-                         #       so we don't download the file for nothing
-
-        # return file
-        # if 'data_2017-06-15.18.13.12' in source.id:
-        #     import ipdb; ipdb.set_trace(context=21)
-        #     pass
-        # new_meta = copy.deepcopy(self.new_meta)
-        # new_meta.setdefault(self.src_family, {})
-        # new_meta[self.src_family]['source'] = source.id
-        # _deep_update(file.metadata, new_meta)
-        # return file
-
-    # def default_metadata(self, exception, *, file, source):
-    #     # metadata = super().default_metadata(exception, file=file, source=source)
-    #     # metadata.pop('iguazu')
-    #     # metadata.pop('base')
-    #     # # if self.verify_status and isinstance(exception, GracefulFailWithResults):
-    #     # #     metadata['iguazu']['status'] = 'FAILED'
-    #     # return metadata
-    #     if 'data_2017-06-15.18.13.12' in source.id:
-    #         import ipdb; ipdb.set_trace(context=21)
-    #         pass
-    #     new_meta = copy.deepcopy(self.new_meta)
-    #     new_meta.setdefault(self.src_family, {})
-    #     new_meta[self.src_family]['source'] = source.id
-    #     _deep_update(file.metadata, new_meta)
-    #     return file.metadata
+        # TODO: for quetzal, we are going to need a .upload_metadata method
+        #       so we don't download the file for nothing
+        target.upload()
 
 
 class SlackTask(prefect.tasks.notifications.SlackTask):
