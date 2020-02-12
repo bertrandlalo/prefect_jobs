@@ -4,7 +4,7 @@ import logging
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.behavior import SpaceStressParticipantActions, SpaceStressSpawnsStimulations, SpaceStressScores
+from iguazu.tasks.behavior import SpaceStressFeatures
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
@@ -74,19 +74,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
         events = dataset_flow.terminal_tasks().pop()
 
         # Instantiate tasks
-        extract_participant_actions = SpaceStressParticipantActions(
-            # Prefect task arguments
-            state_handlers=[garbage_collect_handler, logging_handler],
-            cache_for=datetime.timedelta(days=7),
-            cache_validator=ParametrizedValidator(force=force),
-        )
-        extract_spawns_stimulations = SpaceStressSpawnsStimulations(
-            # Prefect task arguments
-            state_handlers=[garbage_collect_handler, logging_handler],
-            cache_for=datetime.timedelta(days=7),
-            cache_validator=ParametrizedValidator(force=force),
-        )
-        extract_scores = SpaceStressScores(
+        extract_scores = SpaceStressFeatures(
             # Prefect task arguments
             state_handlers=[garbage_collect_handler, logging_handler],
             cache_for=datetime.timedelta(days=7),
@@ -105,14 +93,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
         # Flow definition
         with self:
             # Behavior flow
-            actions = extract_participant_actions.map(events=events)
-            stimulations = extract_spawns_stimulations.map(events=events)
-            scores = extract_scores.map(parent=events, stimulations=stimulations, actions=actions)
-
-            subject_summary = merge_subject.map(parent=events,
-                                                behavior_spacestress_actions=actions,
-                                                behavior_spacestress_stimulations=stimulations,
-                                                behavior_spacestress_scores=scores)
+            scores = extract_scores.map(parent=events, events=events)
 
 
 class BehaviorSummaryFlow(PreparedFlow):
@@ -172,7 +153,7 @@ class BehaviorSummaryFlow(PreparedFlow):
         # instantiate tasks
         merge_population = SummarizePopulation(
             # Iguazu task constructor arguments
-            groups={'behavior_spacestress_scores': None},
+            groups={'behavior_spacestress_features': None},
             filename='behavior_summary',
             # Prefect task arguments
             state_handlers=[garbage_collect_handler, logging_handler],
