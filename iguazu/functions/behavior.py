@@ -16,24 +16,34 @@ from iguazu.functions.specs import check_event_specification
 
 @dataclass
 class SpaceStressFeatures:
-    performance: float = field(default=np.nan, metadata={'doc': 'Performance given by unity'})
+    performance: float = field(default=np.nan,
+                               metadata={'doc': 'Performance given by unity'})
     spatial_inaccuracy: float = field(default=np.nan,
                                       metadata={'doc': 'Number of failed actions because there were no target'})
-    temporal_inaccuracy: float = field(default=np.nan, metadata={
-        'doc': 'Number of failed actions because it was either too early or too late'})
-    coordination_inaccuracy: float = field(default=np.nan, metadata={
-        'doc': 'Number of failed actions because the button was not the right one'})
-    global_inaccuracy: float = field(default=np.nan, metadata={'doc': 'Number of failed actions'})
-    global_accuracy: float = field(default=np.nan, metadata={'doc': 'Number of successful actions'})
-    pad_actions: float = field(default=np.nan, metadata={'doc': 'Number of pad actions'})
-    trigger_actions: float = field(default=np.nan, metadata={'doc': 'Number of trigger actions'})
-    switch_actions: float = field(default=np.nan, metadata={'doc': 'Number of switch between pad and trigger'})
+    temporal_inaccuracy: float = field(default=np.nan,
+                                       metadata={
+                                           'doc': 'Number of failed actions because it was either too early or too late'})
+    coordination_inaccuracy: float = field(default=np.nan,
+                                           metadata={
+                                               'doc': 'Number of failed actions because the button was not the right one'})
+    global_inaccuracy: float = field(default=np.nan,
+                                     metadata={'doc': 'Number of failed actions'})
+    global_accuracy: float = field(default=np.nan,
+                                   metadata={'doc': 'Number of successful actions'})
+    pad_actions: float = field(default=np.nan,
+                               metadata={'doc': 'Number of pad actions'})
+    trigger_actions: float = field(default=np.nan,
+                                   metadata={'doc': 'Number of trigger actions'})
+    switch_actions: float = field(default=np.nan,
+                                  metadata={'doc': 'Number of switch between pad and trigger'})
     participant_motion_tau: float = field(default=np.nan,
                                           metadata={'doc': 'Motion tau estimated over participant actions'})
     information_motion_tau: float = field(default=np.nan,
                                           metadata={'doc': 'Motion tau estimated over game stimulations'})
-    actions_transition_trace: float = field(default=np.nan, metadata={'doc': 'Trace of action transition matrix'})
-    space_transition_trace: float = field(default=np.nan, metadata={'doc': 'Trace of space transition matrix'})
+    actions_transition_trace: float = field(default=np.nan,
+                                            metadata={'doc': 'Trace of action transition matrix'})
+    space_transition_trace: float = field(default=np.nan,
+                                          metadata={'doc': 'Trace of space transition matrix'})
 
 
 def estimate_transition_matrix(data, normalize='index', column='state'):
