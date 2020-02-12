@@ -3,12 +3,12 @@ from typing import Optional
 import pandas as pd
 import prefect
 
+from iguazu.core.exceptions import IguazuError
 from iguazu.functions.behavior import extract_space_stress_spawns_stimulations, \
-    extract_space_stress_participant_actions, extract_space_stress_scores
+    extract_space_stress_participant_actions, extract_space_stress_features
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
-from iguazu.core.exceptions import IguazuError
 
 
 class SpaceStressSpawnsStimulations(prefect.Task):
@@ -203,7 +203,7 @@ class SpaceStressScores(prefect.Task):
                 df_actions = pd.read_hdf(actions_store, actions_group)
                 df_stimulations = pd.read_hdf(stimulations_store, stimulations_group)
 
-                df_output = extract_space_stress_scores(df_stimulations, df_actions)
+                df_output = extract_space_stress_features(df_stimulations, df_actions)
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state)
                 # Manage output, save to file
