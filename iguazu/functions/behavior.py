@@ -1,4 +1,6 @@
 import functools
+import itertools
+from dataclasses import dataclass, asdict, field
 
 import numpy as np
 import pandas as pd
@@ -7,47 +9,59 @@ from dsu.pandas_helpers import truncate
 from dsu.space_stress import categorize_failure
 from dsu.unity import extract_complete_sequences, extract_complete_sequence_times
 from scipy.spatial import distance
-from skimage.util import view_as_windows
 
 from iguazu.core.exceptions import IguazuError
 from iguazu.functions.specs import check_event_specification
 
 
-def estimate_transition_matrix(data, normalize=True):
-    ''' Estimate transition matrix based on 'state' trajectory
+@dataclass
+class SpaceStressFeatures:
+    performance: float = field(default=np.nan, metadata={'doc': 'Performance given by unity'})
+    spatial_inaccuracy: float = field(default=np.nan,
+                                      metadata={'doc': 'Number of failed actions because there were no target'})
+    temporal_inaccuracy: float = field(default=np.nan, metadata={
+        'doc': 'Number of failed actions because it was either too early or too late'})
+    coordination_inaccuracy: float = field(default=np.nan, metadata={
+        'doc': 'Number of failed actions because the button was not the right one'})
+    global_inaccuracy: float = field(default=np.nan, metadata={'doc': 'Number of failed actions'})
+    global_accuracy: float = field(default=np.nan, metadata={'doc': 'Number of successful actions'})
+    pad_actions: float = field(default=np.nan, metadata={'doc': 'Number of pad actions'})
+    trigger_actions: float = field(default=np.nan, metadata={'doc': 'Number of trigger actions'})
+    switch_actions: float = field(default=np.nan, metadata={'doc': 'Number of switch between pad and trigger'})
+    participant_motion_tau: float = field(default=np.nan,
+                                          metadata={'doc': 'Motion tau estimated over participant actions'})
+    information_motion_tau: float = field(default=np.nan,
+                                          metadata={'doc': 'Motion tau estimated over game stimulations'})
+    actions_transition_trace: float = field(default=np.nan, metadata={'doc': 'Trace of action transition matrix'})
+    space_transition_trace: float = field(default=np.nan, metadata={'doc': 'Trace of space transition matrix'})
+
+
+def estimate_transition_matrix(data, normalize='index', column='state'):
+    """ Estimate transition probability  based on 'state' trajectory
 
     Parameters
     ----------
     data: pd.DataFrame
-        Dataframe with columns 'state'
+        Dataframe with column `column`
+    column: str
+        Name of column on which to consider the transition
+    normalize: bool, str, default False
+            Normalize by dividing all values by the sum of values.
+            If passed ‘all’ or True, will normalize over all values.
+            If passed ‘index’ will normalize over each row.
+            If passed ‘columns’ will normalize over each column.
 
     Returns
     -------
-    trans_mat: pd.DataFrame
+    transition_probs: pd.DataFrame
         DataFrame with states as columns and index and transition number (if normalize=False) or
-        probability (if normalize=True)
+        probability (if normalize='index')
 
-    '''
-    transition_id = dict()
-    states = set(data.state)
-    for k_i, state_i in enumerate(states):
-        for k_f, state_f in enumerate(states):
-            transition_id[(state_i, state_f)] = (f'{state_i}__{state_f}')
-    x = data['state'].values.reshape(1, -1)
-    data.loc[data.state.dropna().index[1:], 'transition'] = [
-        transition_id.get(tuple(states)) for states in view_as_windows(x, (1, 2), step=1)[0, :, 0, :]]
-
-    transition_counts = data.transition.value_counts(normalize=False)
-    trans_mat = np.zeros((len(states), len(states)))
-    for k_i, state_i in enumerate(states):
-        for k_f, state_f in enumerate(states):
-            trans_mat[k_i, k_f] = transition_counts.get(f'{state_i}__{state_f}', 0.)
-
-    if normalize:
-        states_sum = np.sum(trans_mat, axis=1)
-        states_sum[states_sum == 0.] = 1.
-        trans_mat = trans_mat / states_sum[:, np.newaxis]
-    return pd.DataFrame(trans_mat, columns=states, index=states)
+    """
+    data = data[[column]].assign(next=data[column].shift(+1))  # maybe +1 instead of -1 ?
+    transition_probs = pd.crosstab(data[column], data.next, normalize=normalize,
+                                   dropna=False)  # 🐼magic!  mind==blown, See https://stackoverflow.com/a/40839983/227103
+    return transition_probs
 
 
 def estimate_actions_transition_matrix(data):
@@ -55,10 +69,15 @@ def estimate_actions_transition_matrix(data):
 
     Parameters
     ----------
-    data
+    data: pd.DataFrame
+      DataFrame with each row corresponds to one player action and columns
+      button and action_succeed specifies its nature/type.
 
     Returns
     -------
+    normalized_transition_probs: pd.DataFrame
+            DataFrame with transition probability from one action type
+            to an other, with all values that sums to the nb of action types.
 
     Examples
     --------
@@ -85,60 +104,66 @@ def estimate_actions_transition_matrix(data):
         2018-02-27 09:09:06.096495085+00:00  trigger         True    trigger_succeed
         ...
 
-    Finally, we estimate the transition matrix, which gives the probability to jump from one state to another and we
+    Then, we estimate the transition matrix, which gives the probability to jump from one state to another and we
     normalize it to ensure that its coefficients sums to the number of states (4 here).
-
-    For that purpose, we computed the transition vector between successive space states, defined as follow:
-    if transition[N] = 'state[N-1]__state[N]'
-
-    >>> data
-                                             button    action_succeed          state      transition
-        2018-02-27 09:09:03.069339126+00:00  trigger         False    trigger_failed     NaN
-        2018-02-27 09:09:04.086241246+00:00      pad         False        pad_failed     trigger_failed__pad_failed
-        2018-02-27 09:09:04.086338994+00:00      pad         False        pad_failed     pad_failed__pad_failed
-        2018-02-27 09:09:04.946250588+00:00  trigger         False    trigger_failed     pad_failed__trigger_failed
-        2018-02-27 09:09:06.096495085+00:00  trigger         True    trigger_succeed     trigger_failed__trigger_succeed
-        ...
-
     The final output looks like:
 
-    >>> normalized_transition_matrix
-                         trigger_succeed  trigger_failed  pad_succeed  pad_failed
-        trigger_succeed           0.0000            0.50         0.00      0.5000
-        trigger_failed            0.0500            0.70         0.05      0.2000
-        pad_succeed               0.0000            1.00         0.00      0.0000
-        pad_failed                0.0625            0.25         0.00      0.6875
+    >>> normalized_transition_probs
+        next_state       pad_failed  pad_succeed  trigger_failed  trigger_succeed
+        state
+        pad_failed           0.6875         0.00            0.25           0.0625
+        pad_succeed          0.0000         0.00            1.00           0.0000
+        trigger_failed       0.2000         0.05            0.70           0.0500
+        trigger_succeed      0.5000         0.00            0.50           0.0000
     """
-    data = data.copy()
+    data = data.loc[:, ['button', 'action_succeed']].dropna()
 
-    data.loc[:, 'action_succeed'] = data.loc[:, 'action_succeed'].apply(lambda b: 'succeed' if b else 'failed')
+    data.action_succeed = data.action_succeed.replace({True: 'succeed', False: 'failed'})
 
-    data.loc[:, 'state'] = data.loc[:, ['button', 'action_succeed']].astype(str).apply(lambda x: '_'.join(x), axis=1)
+    data['state'] = data[['button', 'action_succeed']].astype(str).apply(lambda x: '_'.join(x), axis=1)
 
-    transition_matrix = estimate_transition_matrix(data, normalize=True)
+    transition_probs = estimate_transition_matrix(data, normalize='index')
+
+    # add missing states (0 occurence)
+    # notes: since we're only considering the trace of the matrix as a feature, this step is useless,
+    # still, for future analysis, I prefer ton compute the complete transition matrix, including states with no occurence.
+    states = ['trigger_succeed', 'trigger_failed', 'pad_succeed', 'pad_failed']
+    transition_probs = pd.concat([transition_probs, pd.DataFrame(columns=set(states) - set(transition_probs.columns),
+                                                                 index=set(states) - set(transition_probs.columns))],
+                                 axis=0).fillna(0.)
+
     # normalize the matrix so its coeff sums to the number of states
-    n_states = 4
-    normalized_transition_matrix = transition_matrix / transition_matrix.values.reshape(-1, 1).sum() * n_states
-    return normalized_transition_matrix
+    # [this is taken from Antoine Coutrot Matlab code]
+    n_states = len(states)
+    normalized_transition_probs = transition_probs / transition_probs.values.sum() * n_states
+    return normalized_transition_probs
 
 
-def estimate_space_transition_matrix(data):
-    ''' Estimate transition matrix of player action's location on the screen
+def estimate_space_transition_matrix(data, x_lim=(-3, 3), num_cols=3, y_lim=(1, 4), num_rows=2):
+    """ Estimate transition matrix of player action's location on the screen
 
     Parameters
     ----------
     data: pd.DataFrame
           DataFrame with each row corresponds to one player action and columns
           x and y specifies its normalized coordinate on the screen.
-
+    x_lim: tuple
+          Defines boundaries for x axis in screen
+    num_cols: int
+          Defines the number of columns in the grid partitioning of the screen
+    y_lim: tuple
+          Defines boundaries for y axis in screen
+    num_rows: int
+      Defines the number of rows in the grid partitioning of the screen
     Returns
     -------
-    normalized_transition_matrix: pd.DataFrame
+    normalized_transition_probs: pd.DataFrame
             DataFrame with transition probability from one part of the screen
-            to an other, with all values that sums to the nb of screen partition (6 here).
+            to an other, with all values that sums to the nb of screen partitions.
 
-    Examples
-    --------
+    Notes
+    ------
+    Here is an example of how the output is computed.
     >>> data
                                                  x         y
         2018-02-27 09:09:03.069339126+00:00 -1.262700  2.015741
@@ -148,101 +173,72 @@ def estimate_space_transition_matrix(data):
         2018-02-27 09:09:06.096495085+00:00 -1.262700  2.015741
         ...
 
-    First, data are rescaled from [-5, 5] to [0, 1000], so that we have:
-
-    >>> data
-                                               x      y
-        2018-02-27 09:09:15.032125953+00:00  616.0  809.0
-        2018-02-27 09:09:16.037933830+00:00  609.0  825.0
-        2018-02-27 09:09:22.684072199+00:00  618.0  798.0
-        2018-02-27 09:09:08.944721671+00:00  426.0  842.0
-        2018-02-27 09:09:25.901319314+00:00  609.0  800.0
-        ...
-
-    Then, x and y coordinates are digitized so that space is divided in 6 partitions
+    First, x and y coordinates are digitized so that space is divided in 6 partitions
     (3 horizontally, 2 vertically).
-
-    >>> data
-                                                 x  x_digitize      y  y_digitize
-        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2
-        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2
-        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2
-        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2
-        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2
-        ...
-
     Then, we define a 'space-state' as an action done in a particular partition of the space.
-    For instance, if the player shoot an enemy located in screen coordinate (616, 809),
+    For instance, if the player shoot an enemy located in screen coordinate (1.158936, 3.091643),
     the space-state will be (3, 2).
 
     >>> data
-                                                 x  x_digitize      y  y_digitize     state
-        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)
-        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)
-        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)
-        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)
-        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)
+                                                    x  x_digitize         y  y_digitize  state
+        2018-02-27 09:09:15.032125953+00:00  1.158936           3  3.091643           2  (3, 2)
+        2018-02-27 09:09:16.037933830+00:00  1.087157           3  3.250008           2  (3, 2)
+        2018-02-27 09:09:22.684072199+00:00  1.181086           3  2.984251           2  (3, 2)
+        2018-02-27 09:09:08.944721671+00:00 -0.739384           2  3.423615           2  (2, 2)
+        2018-02-27 09:09:25.901319314+00:00  1.093362           3  2.999314           2  (3, 2)
         ...
 
-    Finally, we estimate the transition matrix, which gives the probability to jump from one state to another and we
+    Then, we estimate the transition matrix, which gives the probability to jump from one state to another and we
     normalize it to ensure that its coefficients sums to the number of states (6 here).
 
-    For that purpose, we computed the transition vector between successive space states, defined as follow:
-    if transition[N] = 'state[N-1]__state[N]'
-    >>> data
-                                                 x  x_digitize      y  y_digitize     state       transition
-        2018-02-27 09:09:15.032125953+00:00  616.0           3  809.0           2     (3, 2)      NaN
-        2018-02-27 09:09:16.037933830+00:00  609.0           3  825.0           2     (3, 2)     (3, 2)__(3, 2)
-        2018-02-27 09:09:22.684072199+00:00  618.0           3  798.0           2     (3, 2)     (3, 2)__(3, 2)
-        2018-02-27 09:09:08.944721671+00:00  426.0           2  842.0           2     (2, 2)     (3, 2)__(2, 2)
-        2018-02-27 09:09:25.901319314+00:00  609.0           3  800.0           2     (3, 2)     (3, 2)__(3, 2)
-        ...
-
     The output looks like:
-    >>> normalized_transition_matrix
-                      (2, 2)    (1, 1)    (3, 2)
-            (2, 2)  0.000000  0.571429  1.428571
-            (1, 1)  0.400000  0.400000  1.200000
-            (3, 2)  0.444444  0.148148  1.407407
-    with a maximum size of (6x6). Is should be noted that here, states (1, 3), (3, 3) and (1, 2) are not
-    written because no actions have been performed in those screen partition (hence thee matrix could be padded with 0.0).
+    >>> normalized_transition_probs
+                (1, 1)    (1, 2)    (1, 3)  (2, 1)    (2, 2)    (2, 3)
+        (1, 2)     0.0  0.300000  0.600000     0.0  0.600000  0.000000
+        (1, 3)     0.0  0.214286  0.000000     0.0  0.642857  0.642857
+        (2, 2)     0.0  0.250000  0.250000     0.0  0.000000  1.000000
+        (2, 3)     0.0  0.142857  0.285714     0.0  0.071429  1.000000
+        (2, 1)     0.0  0.000000  0.000000     0.0  0.000000  0.000000
+        (1, 1)     0.0  0.000000  0.000000     0.0  0.000000  0.000000
 
     This can be read as follow:
     " If this player just made an action located in screen partition  (3, 2) - right up corner-,
       the more probable is that the next action will be in the same screen partition. "
      " If this player just made an action located in screen partition  (1, 1) - left bottom corner-,
       the more probable is that the next action will be located in partition (3, 2) - right up corner-. "
-
-    '''
+    """
     # copy the data
-    data = data.copy()
-
-    # normalize cursor values from [-5, 5] to [0, 1000]
-    normalize_cursor = lambda x: round((x + 5) * 100)
-    data.loc[:, ['x', 'y']] = data.loc[:, ['x', 'y']].apply(normalize_cursor)
-    xlim = [200, 800]
-    xnum = 3
-    ylim = [600, 900]
-    ynum = 2
+    data = data.loc[:, ['x', 'y']].dropna()
 
     # select actions in defined range
-    x_index = data[data.x.between(left=xlim[0], right=xlim[1])].index
-    y_index = data[data.y.between(left=ylim[0], right=ylim[1])].index
+    x_index = data[data.x.between(left=x_lim[0], right=x_lim[1])].index
+    y_index = data[data.y.between(left=y_lim[0], right=y_lim[1])].index
     xy_index = set(x_index).intersection(set(y_index))
+    data = data.loc[xy_index]
 
-    data.loc[xy_index, 'x_digitize'] = np.digitize(data.loc[xy_index, 'x'].values,
-                                                   np.linspace(xlim[0], xlim[1], xnum + 1))
-    data.loc[xy_index, 'y_digitize'] = np.digitize(data.loc[xy_index, 'y'].values,
-                                                   np.linspace(ylim[0], ylim[1], ynum + 1))
+    data['x_digitize'] = np.digitize(data.x.values, np.linspace(x_lim[0], x_lim[1], num_cols + 1))
+    data['y_digitize'] = np.digitize(data.y.values, np.linspace(y_lim[0], y_lim[1], num_rows + 1))
 
-    data.loc[xy_index, 'state'] = list(
-        map(lambda t: str(t), zip(data.loc[xy_index, 'x_digitize'].values,
-                                  data.loc[xy_index, 'y_digitize'].values)))
-    transition_matrix = estimate_transition_matrix(data, normalize=True)
+    data['state'] = list(
+        map(lambda t: str(t), zip(data.x_digitize,
+                                  data.y_digitize)))
+
+    transition_probs = estimate_transition_matrix(data, normalize='index')
+
     # normalize the matrix so its coeff sums to the number of states
-    n_states = xnum * ynum
-    normalized_transition_matrix = transition_matrix / transition_matrix.values.reshape(-1, 1).sum() * n_states
-    return normalized_transition_matrix
+    # [this is taken from Antoine Coutrot Matlab code]
+    states = [f'({i_x + 1}, {i_y + 1})' for (i_x, i_y) in itertools.product(range(num_cols), range(num_rows))]
+
+    # add missing states (0 occurence)
+    # notes: since we're only considering the trace of the matrix as a feature, this step is useless,
+    # still, for future analysis, I prefer ton compute the complete transition matrix, including states with no occurence.
+    transition_probs = pd.concat([transition_probs, pd.DataFrame(columns=set(states) - set(transition_probs.columns),
+                                                                 index=set(states) - set(transition_probs.columns))],
+                                 axis=0).fillna(0.)
+    n_states = len(states)
+
+    normalized_transition_probs = transition_probs / transition_probs.values.sum() * n_states
+    return normalized_transition_probs
 
 
 def estimate_trajectory_length(data, columns):
@@ -294,9 +290,9 @@ def extract_space_stress_participant_actions(events):
         - difficulty: Difficulty of the wave
         - trajectory_length: Euclidean distance between successive actions in plan (X,Y).
 
-    Examples
-    --------
-    Output looks like:
+    Notes
+    ------
+    Here is an example of how the output should look like.
 
     >>> data
                                                                                          label   button         x         y         z  action_succeed failure_reason  wave  difficulty trajectory_length
@@ -307,8 +303,6 @@ def extract_space_stress_participant_actions(events):
         2019-04-03 08:35:22.986076530+00:00  unity_space-stress_game_participant_pushes_button  trigger -1.448533  2.439976  5.272884  False          bad_precision   1.          5.            0.042363
         ...
 
-    Notes:
-    ------
     See the documentation of :py:func:dsu.space_stress.classify_failures
 
     """
@@ -336,14 +330,6 @@ def extract_space_stress_participant_actions(events):
         func_button = functools.partial(categorize_failure, button=button)
         out.loc[idx_button, 'failure_reason'] = out.loc[idx_button, 'result'].apply(func_button)
 
-    sequence_times = extract_complete_sequence_times(events, 'space-stress_game_enemy-wave', pedantic='warn',
-                                                     label_column='name')
-    for k_wave, (wave_begins, wave_ends) in enumerate(sequence_times):
-        # add a column with wave index and difficulty
-        out.loc[wave_begins:wave_ends, 'wave'] = k_wave
-        out.loc[wave_begins:wave_ends, 'difficulty'] = \
-            events.loc[events.name.str.contains('unity_space-stress_game_enemy-wave_end'), 'data'][k_wave]['report'][
-                'difficulty']
     # estimate trajectory length of participant actions in X,Y plan.
     out = estimate_trajectory_length(data=out, columns=['x', 'y'])
     return out.drop(['result', 'name'], axis=1)
@@ -375,9 +361,10 @@ def extract_space_stress_spawns_stimulations(events):
         - difficulty: Difficulty of the wave.
         - trajectory_length: Euclidean distance between successive spawns in plan (X,Y).
 
-    Examples
-    --------
-    Output looks like:
+    Notes
+    ------
+    Here is an example of how the outputshould look like:
+
     >>> data
                                              id                                 label   type      x      y      z    wave  difficulty  trajectory_length
         2019-04-03 08:36:07.464509437+00:00   0  unity_space-stress_game_enemy_spawns  enemy  1.989  2.766  5.480    1.         5.                NaN
@@ -386,7 +373,6 @@ def extract_space_stress_spawns_stimulations(events):
         2019-04-03 08:36:08.142808336+00:00   3  unity_space-stress_game_enemy_spawns  enemy  1.591  4.102  4.411    1.         5.           2.547441
         2019-04-03 08:36:08.324275836+00:00   4  unity_space-stress_game_enemy_spawns  enemy -1.140  1.840  5.230    1.         5.           3.546125
         ...
-
 
     """
     # check that the input meets the events standard specifications
@@ -406,17 +392,8 @@ def extract_space_stress_spawns_stimulations(events):
     breach_spawns['type'] = 'breach'
 
     out = pd.concat([breach_spawns, enemy_spawns], sort=True).sort_index()
-
-    for k_wave, (wave_begins, wave_ends) in enumerate(
-            extract_complete_sequence_times(events, 'space-stress_game_enemy-wave',
-                                            label_column='name', pedantic='warn')):
-        # add a column with wave index and difficulty
-        out.loc[wave_begins:wave_ends, 'wave'] = k_wave
-        out.loc[wave_begins:wave_ends, 'difficulty'] = \
-            events.loc[events.name.str.contains('unity_space-stress_game_enemy-wave_ends'),
-                       'data'][k_wave]["report"]["difficulty"]
-    # estimate trajectory length of spawns events in X,Y plan.
     out = estimate_trajectory_length(data=out, columns=['x', 'y'])
+
     return out.drop(['name', 'id'], axis=1)
 
 
