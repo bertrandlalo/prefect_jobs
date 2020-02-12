@@ -397,7 +397,7 @@ def extract_space_stress_spawns_stimulations(events):
     return out.drop(['name', 'id'], axis=1)
 
 
-def extract_space_stress_scores(spawns_stimulations, participant_actions):
+def extract_space_stress_features(events, wave_label='space-stress_game_enemy-wave'):
     """ Computes space stress scores from preprocessed events.
     This function extracts "scores" per waves, based on the number of action of a particular kind
     (failure, reason for failure, button type) and the motion tau from spawns events and from participant events.
@@ -432,88 +432,88 @@ def extract_space_stress_scores(spawns_stimulations, participant_actions):
 
         - space_transition_trace: Trace of space transition matrix
         - actions_transition_trace: Trace of action transition matrix
-    Examples
-    ________
-    Output dataframe looks like:
+    Notes
+    ------
+    Here is an example of how the output is computed.
 
-    >>> features
-                   coordination_inaccuracy  ...  trigger_actions
-        wave0                      2.0  ...              7.0
-        wave1                      2.0  ...              7.0
-        wave2                      0.0  ...              6.0
-        wave3                      0.0  ...              5.0
-        wave4                      1.0  ...              2.0
-        wave5                      1.0  ...             21.0
+    >>> df_features
+                                reference                  id  value
+        0  space-stress_game_enemy-wave_0         performance    5.0
+        1  space-stress_game_enemy-wave_1         performance    8.0
+        2  space-stress_game_enemy-wave_2         performance   27.0
+        3  space-stress_game_enemy-wave_3         performance   30.0
+        4  space-stress_game_enemy-wave_4         performance   30.0
+        5  space-stress_game_enemy-wave_5         performance   23.0
+        6  space-stress_game_enemy-wave_0  spatial_inaccuracy   20.0
+        7  space-stress_game_enemy-wave_1  spatial_inaccuracy   43.0
+        8  space-stress_game_enemy-wave_2  spatial_inaccuracy   61.0
+        9  space-stress_game_enemy-wave_3  spatial_inaccuracy   67.0
 
     """
-    scores_df = []
-    waves = np.unique(participant_actions.wave.dropna().values)
+    events = events.loc[events.name.str.contains('space-stress')]
+    participant_actions = extract_space_stress_participant_actions(events)
+    spawns_stimulations = extract_space_stress_spawns_stimulations(events)
+
+    features = []
     # loop amongst waves
-    for wave in waves:
-        index_wave = ['wave' + str(int(wave))]
-        events_wave = participant_actions.loc[(participant_actions.wave == wave)]
-        game_events_wave = spawns_stimulations.loc[(spawns_stimulations.wave == wave)]
-        duration = (events_wave.index[-1] - events_wave.index[0]) / np.timedelta64(1, 's')
+    for k_wave, (wave_begins, wave_ends) in enumerate(
+            extract_complete_sequence_times(events, wave_label,
+                                            label_column='name', pedantic='warn')):
+        feature_wave = SpaceStressFeatures()
+        reference = f'{wave_label}_{k_wave}'
+        # # add a column with wave index and difficulty
+        # enriched_events.loc[wave_begins:wave_ends, 'reference'] = f'{wave_label}_{k_wave}'
+        events_wave = events[wave_begins:wave_ends]
+        participant_actions_wave = participant_actions[wave_begins:wave_ends]
+        spawns_stimulations_wave = spawns_stimulations[wave_begins:wave_ends]
+        duration = (wave_ends - wave_begins) / np.timedelta64(1, 's')
 
         # count number of events based on action_succeed result
-        N_success = len(events_wave.loc[events_wave.action_succeed == True])
-        N_bad = len(events_wave.loc[events_wave.action_succeed == False])
+        count_action_succeed = participant_actions_wave.action_succeed.value_counts().to_dict()
+        feature_wave.global_accuracy = count_action_succeed.get(True, 0.)
+        feature_wave.global_inaccuracy = count_action_succeed.get(False, 0.)
         # count number of events based on failure_reason result
-        N_bad_spatial = len(events_wave.loc[events_wave.failure_reason == 'bad_precision'])
-        N_bad_temporal = len(events_wave.loc[events_wave.failure_reason == 'bad_planification'])
-        N_bad_coordination = len(events_wave.loc[events_wave.failure_reason == 'finger_confusion'])
+        count_failure_reason = participant_actions_wave.failure_reason.value_counts().to_dict()
+        feature_wave.spatial_inaccuracy = count_failure_reason.get('bad_precision', 0.)
+        feature_wave.temporal_inaccuracy = count_failure_reason.get('bad_planification', 0.)
+        feature_wave.coordination_inaccuracy = count_failure_reason.get('finger_confusion', 0.)
         # count number of events based on button type
-        N_pad = len(events_wave.loc[events_wave.button == 'pad'])
-        N_trigger = len(events_wave.loc[events_wave.button == 'trigger'])
+        count_button = participant_actions_wave.button.value_counts().to_dict()
+        feature_wave.pad_actions = count_failure_reason.get('pad', 0.)
+        feature_wave.trigger_actions = count_failure_reason.get('trigger', 0.)
 
         # count number of switch from button,ie. when previous != actual
-        # eg. ["pad", "trigger", "pad", "pad"] => [2, 1, 2, 2] => [None, True, True, False] => N_switch=2
-        N_switch = (events_wave.button.replace('trigger', 1).replace('pad', 2).diff() > 0).sum()
+        # eg. ["pad", "trigger", "pad", "pad"] => N_switch=2
+        M = estimate_transition_matrix(participant_actions_wave, normalize=False, column='button').values
+        feature_wave.switch_actions = M.flatten().sum() - np.trace(M)
 
         # estimate the trajectory lengths divided by wave duration
-        participant_motion_tau = events_wave.trajectory_length.sum() / duration
-        game_motion_tau = game_events_wave.trajectory_length.sum() / duration
+        feature_wave.participant_motion_tau = participant_actions_wave.trajectory_length.sum() / duration
+        feature_wave.information_motion_tau = spawns_stimulations_wave.trajectory_length.sum() / duration
 
         # difficulty is rated on 100, scale it to 1 for consistency purpose with other scores.
-        score_performance = events_wave.difficulty.values[0] / 100
+        feature_wave.performance = events_wave[events_wave.id.str.contains('ends')].data.values[0]['report'][
+            'difficulty']
 
         # trace of transition matrix of action's nature (what)
         # ----------------------------------------------------
-        actions_transition_matrix = estimate_actions_transition_matrix(events_wave)
-        actions_transition_trace = np.trace(actions_transition_matrix.values)
+        actions_transition_matrix = estimate_actions_transition_matrix(participant_actions_wave)
+        feature_wave.actions_transition_trace = np.trace(actions_transition_matrix.values)
         # trace of transition matrix of action's space (where)
         # ----------------------------------------------------
-        space_transition_matrix = estimate_space_transition_matrix(events_wave)
-        space_transition_trace = np.trace(space_transition_matrix.values)
+        space_transition_matrix = estimate_space_transition_matrix(participant_actions_wave)
+        feature_wave.space_transition_trace = np.trace(space_transition_matrix.values)
+        # Append feature wave to features
+        # -------------------------------
+        features.append((reference, asdict(feature_wave)))
 
-        score_df = pd.DataFrame(columns=index_wave,
-                                index=['performance',
-                                       'spatial_inaccuracy',
-                                       'temporal_inaccuracy',
-                                       'coordination_inaccuracy',
-                                       'global_inaccuracy',
-                                       'global_accuracy',
-                                       'pad_actions',
-                                       'trigger_actions',
-                                       'switch_actions',
-                                       'participant_motion_tau',
-                                       'information_motion_tau',
-                                       'actions_transition_trace',
-                                       'space_transition_trace'
-                                       ],
-                                data=[score_performance,
-                                      N_bad_spatial,
-                                      N_bad_temporal,
-                                      N_bad_coordination,
-                                      N_bad,
-                                      N_success,
-                                      N_pad,
-                                      N_trigger,
-                                      N_switch,
-                                      participant_motion_tau,
-                                      game_motion_tau,
-                                      actions_transition_trace,
-                                      space_transition_trace])
-        scores_df.append(score_df)
-    features = pd.concat(scores_df, 1, sort=True).T
-    return features
+    # Convert from
+    # [(sequence_name, {'feat1': value1, ...}), ...]
+    # to a dataframe that meets features specifications
+    if not features:
+        df_features = pd.DataFrame()
+    else:
+        df_features = pd.DataFrame.from_items(features).T \
+            .reset_index().melt('index') \
+            .rename(columns={'index': 'reference', 'variable': 'id'})
+    return df_features
