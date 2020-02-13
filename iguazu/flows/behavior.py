@@ -21,9 +21,11 @@ class BehaviorFeaturesFlow(PreparedFlow):
             FROM   metadata
             WHERE  base->>'state' = 'READY'                -- No temporary files
             AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-            AND    '/iguazu/events/standard' IN standard->>'groups'
-            AND    '/iguazu/events/standard' NOT IN standard->>'groups'
-            ORDER BY id                                    -- always in the same order                                  -- always in the same order
+            AND    (standard->'standardized')::bool        -- Only standardized files
+            AND    standard->'groups' ? '/iguazu/events/standard' -- with standardized events
+            AND    iguazu->>'status' = 'SUCCESS'
+            AND    iguazu->>'version' < '{version}'
+            ORDER BY id                                       -- always in the same order
     """
 
     def _build(self, **kwargs):
