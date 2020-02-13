@@ -10,12 +10,12 @@ from iguazu.core.exceptions import PreconditionFailed, SoftPreconditionFailed
 from iguazu.core.tasks import Task
 from iguazu.helpers.files import FileProxy
 from iguazu.functions.cardiac import (
-    hrv_features, peak_to_rr, ppg_clean, ppg_peak_detection, rr_interpolation,
-    extract_all_peaks, ssf
+    hrv_features, peak_to_nn, ppg_clean, ppg_peak_detection, nn_interpolation,
+    extract_all_peaks, ssf, peak_detect
 )
 from iguazu.functions.ppg_report import render_ppg_report
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 
 class CleanPPGSignal(Task):
@@ -51,31 +51,24 @@ class CleanPPGSignal(Task):
             raise SoftPreconditionFailed('Input signals do not have a PPG column')
 
         output_file = self.default_outputs()
+        fs = int(estimate_rate(signals))
+        bands = (0.5, 11)
+        self.logger.info('Band-pass filtering signal between %.2f -- %.2f Hz '
+                         'with a FIR filter of order %d', *bands, fs)
 
         filtered = filtfilt_signal(
             signals,
-            # AK parameters
-            # order=2,
-            # frequencies=(0.1, 45),
-            # filter_type='bandpass',
-            # filter_design='iir',
-            # What I suggest we change:
-            order=100,
-            frequencies=(0.5, 11),
+            order=fs,
+            frequencies=bands,
             filter_type='bandpass',
             filter_design='fir',
         )
         scaled = scale_signal(filtered, method='robust')
-        scaled['SSF_PPG'] = ssf(scaled['PPG'])
+        # scaled = filtered
+        # scaled['SSF_PPG'] = ssf(scaled['PPG'])
 
-        # df_output = ppg_clean(signals, events,
-        #                       warmup_duration=self.warmup_duration,
-        #                       column=self.column,
-        #                       filter_kwargs=self.filter_kwargs,
-        #                       sampling_rate=self.sampling_rate)
-
-        logger.info('Cleaned PPG signal, input shape %s, output shape %s',
-                    signals.shape, scaled.shape)
+        self.logger.info('Cleaned PPG signal, input shape %s, output shape %s',
+                         signals.shape, scaled.shape)
 
         with pd.HDFStore(output_file.file, 'w') as store:
             scaled.to_hdf(store, self.output_hdf5_key)
@@ -85,7 +78,65 @@ class CleanPPGSignal(Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_ppg_clean')  # TODO: rename GSR _clean to _gsr_clean !
+        output = signals.make_child(suffix='_ppg_clean')
+        return output
+
+
+class SSFPeakDetect(Task):
+
+    def __init__(self,
+                 signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
+                 ssf_output_hdf5_key: str = '/iguazu/signal/ppg/ssf',
+                 nn_output_hdf5_key: str = '/iguazu/signal/ppg/NN',
+                 nni_output_hdf5_key: str = '/iguazu/signal/ppg/NNi',
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.column = 'PPG'
+        self.window_fraction = 0.125  # 0.125 of 512Hz is 64 samples, like the original paper
+
+        self.ssf_output_hdf5_key = ssf_output_hdf5_key
+        self.ssf_nn_output_hdf5_key = nn_output_hdf5_key
+        self.ssf_nni_output_hdf5_key = nni_output_hdf5_key
+
+        self.auto_manage_input_dataframe('signals', signals_hdf5_key)
+
+    def run(self, *,  signals: pd.DataFrame) -> FileProxy:
+        if signals.empty:
+            raise SoftPreconditionFailed('Input signals are empty')
+        if self.column not in signals.columns:
+            raise SoftPreconditionFailed('Input signals do not have a PPG column')
+
+        output_file = self.default_outputs()
+
+        # Step 1: calculate SSF
+        fs = estimate_rate(signals)
+        window_samples = int(self.window_fraction * fs)
+        ppg = signals[self.column]
+        ppg_ssf = ssf(ppg, win=window_samples)
+        df_ssf = pd.DataFrame({'PPG_SSF': ppg_ssf}, index=signals.index)
+        self.logger.info('Calculated SSF signal, input shape %s, output shape %s',
+                         signals.shape, ppg_ssf.shape)
+
+        # Step 2: detect peak with adaptive threshold
+        peaks, thresh = peak_detect(df_ssf.PPG_SSF, threshold_percentage=0.50)
+
+        # Step 3: convert to PP intervals and post-process them
+        df_interval = peak_to_nn(peaks).rename(columns={'interval': 'NN'})
+
+        # Step 4: interpolate NN
+        df_interpolated = nn_interpolation(df_interval, fs=fs, column='NN')
+
+        with pd.HDFStore(output_file.file, 'w') as store:
+            df_ssf.to_hdf(store, self.ssf_output_hdf5_key)
+            df_interval.to_hdf(store, self.ssf_nn_output_hdf5_key)
+            df_interpolated.to_hdf(store, self.ssf_nni_output_hdf5_key)
+
+        return output_file
+
+    def default_outputs(self, **kwargs):
+        original_kws = prefect.context.run_kwargs
+        signals = original_kws['signals']
+        output = signals.make_child(suffix='_ssf')
         return output
 
 
@@ -128,12 +179,12 @@ class PPGDetectRR(Task):
         return output
 
 
-class ExtractHRVFeatures(Task):
+class ExtractHRVFeatures(Task): # TODO: add standard preconditions
 
     def __init__(self, *,
                  rr_hdf5_key: str = '/iguazu/signal/ppg/RR',
                  rri_hdf5_key: str = '/iguazu/signal/ppg/RRi',
-                 events_hdf5_key: str = '/iguazu/events',
+                 events_hdf5_key: str = '/iguazu/events/standard',
                  output_hdf5_key: str = '/iguazu/features/ppg',  # TODO: what to put here?
                  **kwargs):
         super().__init__(**kwargs)
@@ -148,6 +199,10 @@ class ExtractHRVFeatures(Task):
             rri: pd.DataFrame,
             events: Optional[pd.DataFrame] = None) -> FileProxy:  #TODO: events should be named sequences?
         output_file = self.default_outputs()
+
+        # if not events.empty:
+        #     import ipdb; ipdb.set_trace(context=21)
+        #     pass
 
         df_peaks = hrv_features(rr, rri, events)
 

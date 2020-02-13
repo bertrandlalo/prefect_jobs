@@ -70,14 +70,47 @@ def ssf(arr, win=64, fill_value=np.nan):
     return ssf1
 
 
-# def ssf_dataframe(dataframe, column, win=64):
-#     result = dataframe.copy()
-#     new_col = f'{column}_ssf'
-#     result[new_col] = 0
-#     x_ssf = ssf(dataframe[column], win=win)
-#     idx = result.index[win:]
-#     result.loc[idx, new_col] = x_ssf
-#     return result
+def peak_detect(signal, fs=None, max_bpm=180, baseline_length=3, threshold_percentage=0.70, peak_memory_size=5):
+    if fs is None:
+        fs = estimate_rate(signal)
+    if threshold_percentage < 0:
+        raise ValueError('threshold_percentage must be positive')
+
+    # Some synonyms for shorter code
+    min_dist = int(max_bpm * 60 / fs)
+    memsize = peak_memory_size
+    memratio = threshold_percentage
+
+    # Peak detection on complete signal, all at once
+    i_peaks, props = scipy.signal.find_peaks(signal.values,
+                                             distance=min_dist,
+                                             prominence=1e-2,
+                                             plateau_size=0)
+    # Use the left edge of the peak since SSF often a plateau
+    idx_peaks = signal.index[props['left_edges']]
+
+    # Calculate initial threshold on a baseline.
+    # On the original paper, this is done on the first 3 seconds of the SSF signal,
+    # using 70% of the max peak on this baseline
+    baseline_start = signal.index[0]
+    baseline_end = signal.index[0] + np.timedelta64(baseline_length, 's')
+    baseline = signal[baseline_start:baseline_end]
+    threshold = np.nan_to_num(baseline[idx_peaks].max() * memratio, nan=0)
+
+    # Keep a peak and threshold series
+    peaks_series = baseline[baseline > threshold][idx_peaks].dropna().rename('peaks')
+    threshold_series = pd.Series([threshold], index=[baseline_start], name='threshold')
+
+    for index, value in signal.loc[baseline_end:][idx_peaks].items():
+        if value > threshold:
+            peaks_series.at[index] = value
+            # Update the threshold to use the last N peaks. On the original paper
+            # the details are lost but there is a reference that indicates that
+            # it should be the 70% the median of the last 5 peaks
+            threshold = np.nan_to_num(peaks_series.tail(n=memsize).median() * memratio, nan=0)
+            threshold_series.at[index] = threshold
+
+    return peaks_series, threshold_series
 
 
 def extract_all_peaks(series: pd.Series, window_size: int = 512) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -127,22 +160,26 @@ def ppg_peak_detection(ppg):
     return peaks
 
 
-def peak_to_rr(signal, peaks, fs: int, diff_percentage: int = 25):
+#def peak_to_rr(signal, peaks, fs: int, diff_percentage: int = 25):
+def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(0.6, 1.3)):
     if not (0 < diff_percentage < 100):
         raise ValueError('diff_percentage must be in the (0, 100) range, non-inclusive')
+    min_nn, max_nn = np.asarray(interval_range) * 1000
 
     # Convert peaks (units: sample number) to intervals (units: milliseconds)
-    pp = np.diff(peaks) * 1000 / fs
+    time_ms = (peaks.index - peaks.index[0]) / np.timedelta64(1, 'ms')
+    intervals = np.diff(time_ms)
 
-    # Prepare the dataframe where the RR will be saved
-    df_rr = pd.DataFrame(
+    # Prepare the dataframe where the intervals will be saved
+    df_int = pd.DataFrame(
         data=dict(
-            RR=pp,
+            interval=intervals,
             bad=False,
             details='OK',
         ),
         # Note on the index: drop the first peak because it has no previous peak reference
-        index=signal.index[peaks[1:]],
+        # index=signal.index[peaks[1:]],
+        index=peaks.index[1:],
     )
 
     # First artifact detection + rejection strategy:
@@ -156,66 +193,73 @@ def peak_to_rr(signal, peaks, fs: int, diff_percentage: int = 25):
     # assumming that RR is strictly positive (> 0):
     # divide by RR[index-1], then apply log to get:
     # log(RR[index]) - log(RR[index-1]) < log(3/4)  or ... > log(5/4)
+    #
+    # Note this procedure is repeated several times until nothing is removed or
+    # a maximum number of repetitions is reached
     diff_ratio = diff_percentage / 100
     N_REPETITIONS = 1
-    # TODO: this should be repeated several times until
-    #       nothing is removed or a max number of repetitions
     for i in range(N_REPETITIONS):
-        good = df_rr.loc[~df_rr.bad]
-        log_rel_diff = np.log(good['RR']).diff()
+        good = df_int.loc[~df_int.bad]
+        log_rel_diff = np.log(good['interval']).diff()
         bool_artifacts = (
             (log_rel_diff < np.log(1 - diff_ratio)) |
             (log_rel_diff > np.log(1 + diff_ratio))
         )
         if np.sum(bool_artifacts) == 0:
-            logger.debug('After %d iterations, no more RR artifact rejection due '
+            logger.debug('After %d iterations, no more PP artifact rejection due '
                          'to relative difference', i+1)
             break
         idx_artifacts = good.loc[bool_artifacts].index
-        df_rr.loc[idx_artifacts, 'bad'] = True
-        df_rr.loc[idx_artifacts, 'details'] = f'Rejected: Delta RR > {diff_percentage}% (iteration {i+1})'
+        df_int.loc[idx_artifacts, 'bad'] = True
+        df_int.loc[idx_artifacts, 'details'] = f'Rejected: Delta interval > {diff_percentage}% (iteration {i+1})'
 
     # Second artifact + rejection detection:
     # "Physiological"
-    # Remove RR peaks that are not "normal", according to a publication
-    idx_not_physiological = df_rr.loc[
-        (~df_rr.bad) &        # From the remaining good RRs...
-        (df_rr.RR < 600) &    # detect intervals that are too short
-        (df_rr.RR > 1300)     # detect intervals that are too long
+    # Remove PP peaks that are not "normal", according to a publication
+    idx_not_physiological = df_int.loc[
+        (~df_int.bad) &                # From the remaining good PPs...
+        (df_int.interval < min_nn) &   # detect intervals that are too short
+        (df_int.interval > max_nn)     # detect intervals that are too long
     ]
-    df_rr.loc[idx_not_physiological, 'bad'] = True
-    df_rr.loc[idx_not_physiological, 'details'] = f'Rejected: outside physiological range ({600} - {1300} ms)'
+    df_int.loc[idx_not_physiological, 'bad'] = True
+    df_int.loc[idx_not_physiological, 'details'] = f'Rejected: outside physiological range ({600} - {1300} ms)'
 
     # Show a summary on the logs
     summary = (
-        df_rr.groupby('details').size()
+        df_int.groupby('details').size()
         .to_frame(name='number of intervals')
-        .assign(percentage=lambda x: 100 * x / df_rr.shape[0])
+        .assign(percentage=lambda x: 100 * x / df_int.shape[0])
     )
-    logger.info('RR artifact detection summary:\n%s', summary.to_string())
+    logger.info('NN artifact detection summary:\n%s', summary.to_string())
 
-    return df_rr
+    return df_int
 
 
-def rr_interpolation(RR, fs):
+def nn_interpolation(dataframe, fs, column='RR'):
     # Remove bad RRs
-    logger.debug('Removing %d/%d bad RR intervals', RR.bad.sum(), RR.shape[0])
-    RR = RR.loc[~RR.bad].drop(columns=['bad', 'details'])
+    if 'bad' in dataframe.columns:
+        logger.debug('Removing %d/%d bad intervals', dataframe.bad.sum(), dataframe.shape[0])
+        dataframe = dataframe.loc[~dataframe.bad]
+    else:
+        logger.debug('No interval removed due to missing "bad" column')
 
-    if RR.shape[0] < 2:
-        logger.warning('Cannot interpolate RR, did not receive enough clean RR intervals')
+    if dataframe.shape[0] < 2:
+        logger.warning('Cannot interpolate intervals, did not receive enough clean intervals')
         return pd.DataFrame()
+
+    dataframe = dataframe[[column]]
 
     # We want to interpolate with pchip, but we cannot send this directly to
     # uniform_sampling (at least not without some important recoding of
-    # uniform_sampling). So let's sample-and-hold, clear the interpolated
-    # values and then use pandas interpolate
-    tmp = uniform_sampling(RR, fs, interpolation_kind='zero')
-    tmp[~tmp.index.isin(RR.index)] = np.nan
-    RRi = (
+    # uniform_sampling). The soluation here is to use sample-and-hold
+    # (zero order interpolation) to generate the time index, then clear the
+    # interpolated values and then use pandas interpolate, which accepts pchip
+    tmp = uniform_sampling(dataframe, fs, interpolation_kind='zero')
+    tmp[~tmp.index.isin(dataframe.index)] = np.nan
+    dataframe_interp = (
         tmp
         .interpolate(method='pchip')
-        .rename(columns={'RR': 'RRi'})
+        .rename(columns={column: f'{column}i'})
     )
 
-    return RRi
+    return dataframe_interp

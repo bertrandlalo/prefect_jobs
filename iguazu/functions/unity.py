@@ -168,7 +168,9 @@ def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selectio
 
     """
 
-    if extract_marker_version(events) == 'legacy':
+    marker_version = extract_marker_version(events)
+    logger.info('Detected marker version is %s', marker_version)
+    if marker_version == 'legacy':
         # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
         logger.warning('Sequences report for legacy events not implemented yet')
         return empty_events()

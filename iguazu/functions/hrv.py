@@ -101,10 +101,11 @@ def hrv_features(RR, RRi, events, known_sequences=None):
     known_sequences = known_sequences or VALID_SEQUENCE_KEYS
 
     features = []
-    for name, row in events.T.iterrows():  # transpose due to https://github.com/OpenMindInnovation/iguazu/issues/54
-        logger.debug('Processing sequence %s', name)
-        if name not in known_sequences:
-            logger.debug('Sequence %s is not on the known sequence list', name)
+    # for name, row in events.T.iterrows():  # transpose due to https://github.com/OpenMindInnovation/iguazu/issues/54
+    for index, row in events.iterrows():
+        logger.debug('Processing sequence %s at %s', row.id, index)
+        if row.id not in known_sequences:
+            logger.debug('Sequence %s is not on the known sequence list', row.id)
             continue
 
         begin = row.begin
@@ -123,7 +124,7 @@ def hrv_features(RR, RRi, events, known_sequences=None):
         merged.update(asdict(geometric_features))
         merged.update(asdict(frequency_features))
         merged.update(asdict(nonlinear_features))
-        features.append((name, merged))
+        features.append((row.id, merged))
 
     # Convert from
     # [(sequence_name, {'feat1': value1, ...}), ...]
@@ -137,20 +138,20 @@ def hrv_features(RR, RRi, events, known_sequences=None):
     return df_features
 
 
-def hrv_time_features(df_rr: pd.DataFrame) -> HRVTimeFeatures:
-    verify_monotonic(df_rr, 'RR')
+def hrv_time_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVTimeFeatures:
+    verify_monotonic(dataframe, column)
 
-    if 'bad' in df_rr:
-        df_rr = df_rr.loc[~df_rr.bad]
+    if 'bad' in dataframe:
+        dataframe = dataframe.loc[~dataframe.bad]
 
     features = HRVTimeFeatures()
-    if df_rr.empty:
-        logger.warning('Not enough RR segments to calculate HRV time features, '
+    if dataframe.empty:
+        logger.warning('Not enough NN segments to calculate HRV time features, '
                        'returning nan for all features')
         return features
 
-    RR = df_rr['RR']
-    period_mins = (RR.index[-1] - RR.index[0]) / np.timedelta64(60, 's')
+    nn = dataframe['NN']
+    period_mins = (nn.index[-1] - nn.index[0]) / np.timedelta64(60, 's')
     logger.debug('Calculating time features on %.1f minutes of RR data', period_mins)
 
     # RMSSD: Root mean square of successive RR interval differences in ms
@@ -161,57 +162,57 @@ def hrv_time_features(df_rr: pd.DataFrame) -> HRVTimeFeatures:
     if period_mins < 5:
         logger.warning('The recommended minimum amount of data for RMSSD is 5 min, '
                        'calculating on %.1f min', period_mins)
-    features.RMSSD = np.sqrt(np.mean(np.diff(RR) ** 2))
+    features.RMSSD = np.sqrt(np.mean(np.diff(nn) ** 2))
 
     # meanNN: Mean of NN. Not a classic feature present on literature (to my knowledge),
     # but calculated in neurokit
-    features.meanNN = np.mean(RR)
+    features.meanNN = np.mean(nn)
 
     # SDNN: Standard deviation of NN intervals
     # [Shaffer and Ginsberg, page 3]
     if period_mins < 5:
         logger.warning('The recommended minimum amount of data for SDNN is 5 min, '
                        'calculating on %.1f min', period_mins)
-    features.SDNN = np.std(RR, ddof=1)
+    features.SDNN = np.std(nn, ddof=1)
 
     # medianNN: Median of NN. Not a classic feature present on literature (to my knowledge),
     # but calculated in neurokit
-    features.medianNN = np.median(RR)
+    features.medianNN = np.median(nn)
 
-    # pNN50: Percentage of successive RR intervals that differ by more than 50 ms
+    # pNN50: Percentage of successive NN intervals that differ by more than 50 ms
     # [Shaffer and Ginsberg, page 4]
     if period_mins < 2:
         logger.warning('The recommended minimum amount of data for pNN50 is 2 min, '
                        'calculating on %.1f min', period_mins)
-    nn50 = np.sum(np.diff(RR) > 50)
-    features.pNN50 = 100 * nn50 / len(RR)
+    nn50 = np.sum(np.diff(nn) > 50)
+    features.pNN50 = 100 * nn50 / len(nn)
 
-    # pNN50: Percentage of successive RR intervals that differ by more than 20 ms
+    # pNN50: Percentage of successive nn intervals that differ by more than 20 ms
     # [Voss et al., page 5]
-    nn20 = np.sum(np.diff(RR) > 20)
-    features.pNN20 = 100 * nn20 / len(RR)
+    nn20 = np.sum(np.diff(nn) > 20)
+    features.pNN20 = 100 * nn20 / len(nn)
 
     logger.debug('HRV time features: %s', features)
     return features
 
 
-def hrv_geometric_features(df_rr: pd.DataFrame) -> HRVGeometricFeatures:
-    verify_monotonic(df_rr, 'RR')
+def hrv_geometric_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVGeometricFeatures:
+    verify_monotonic(dataframe, column)
 
-    if 'bad' in df_rr:
-        df_rr = df_rr.loc[~df_rr.bad]
+    if 'bad' in dataframe:
+        dataframe = dataframe.loc[~dataframe.bad]
 
     features = HRVGeometricFeatures()
-    if df_rr.empty:
-        logger.warning('Not enough RR segments to calculate HRV geometric features,'
+    if dataframe.empty:
+        logger.warning('Not enough NN segments to calculate HRV geometric features,'
                        'returning nan for all features')
         return features
 
-    RR = df_rr['RR']
-    period_mins = (RR.index[-1] - RR.index[0]) / np.timedelta64(60, 's')
-    logger.debug('Calculating geometric features on %.1f minutes of RR data', period_mins)
+    nn = dataframe[column]
+    period_mins = (nn.index[-1] - nn.index[0]) / np.timedelta64(60, 's')
+    logger.debug('Calculating geometric features on %.1f minutes of NN data', period_mins)
 
-    # HRV Triangular index: Integral of the density of the RR interval histogram
+    # HRV Triangular index: Integral of the density of the NN interval histogram
     # divided by its height
     # [Shaffer and Ginsberg, page 4]
     # According to [Task force, page 356],
@@ -220,10 +221,10 @@ def hrv_geometric_features(df_rr: pd.DataFrame) -> HRVGeometricFeatures:
         logger.warning('The recommended minimum amount of data for HTI is 5 min, '
                        'calculating on %.1f min', period_mins)
     # Bin width is = 1 / 128 = 0.0078125 seconds = 7.8125 milliseconds
-    # note that since RR is in milliseconds, we need to put our bins in ms too
+    # note that since NN is in milliseconds, we need to put our bins in ms too
     bin_width = 1000 / 128
-    bins = np.arange(RR.min(), RR.max(), step=bin_width)
-    histogram = np.digitize(RR, bins)
+    bins = np.arange(nn.min(), nn.max(), step=bin_width)
+    histogram = np.digitize(nn, bins)
     max_bin = histogram.max()
     # According to Task force:
     # ... [the HRV triangular index] is approximated by the value:
@@ -231,7 +232,7 @@ def hrv_geometric_features(df_rr: pd.DataFrame) -> HRVGeometricFeatures:
     #
     # Note that in neurokit, this calculation is wrong, since it uses the
     # histogram density not the regular histogram
-    features.HTI = RR.shape[0] / max_bin
+    features.HTI = nn.shape[0] / max_bin
 
     # Shannon entropy
     # In [Voss], it's not really well explained what this is supposed to do
@@ -245,15 +246,15 @@ def hrv_geometric_features(df_rr: pd.DataFrame) -> HRVGeometricFeatures:
     return features
 
 
-def hrv_frequency_features(df_rri: pd.DataFrame) -> HRVFrequencyFeatures:
-    verify_monotonic(df_rri, 'RRi')
+def hrv_frequency_features(dataframe: pd.DataFrame, column: str = 'NNi') -> HRVFrequencyFeatures:
+    verify_monotonic(dataframe, column)
 
-    if df_rri.empty:
-        logger.warning('Not enough RR segments to calculate HRV frequency features, '
+    if dataframe.empty:
+        logger.warning('Not enough NN segments to calculate HRV frequency features, '
                        'returning nan for all features')
         return HRVFrequencyFeatures()
 
-    if df_rri.shape[1] != 1:
+    if dataframe.shape[1] != 1:
         # Fail now, otherwise the mean on the bandpower will give many results
         raise ValueError('hrv_frequency_features requires a single-column dataframe')
 
@@ -266,9 +267,9 @@ def hrv_frequency_features(df_rri: pd.DataFrame) -> HRVFrequencyFeatures:
         VHF=(0.400, 0.50,  60,  59),  # 6  bins at 512 Hz
     )
 
-    RRi = df_rri['RRi']
-    period_mins = (RRi.index[-1] - RRi.index[0]) / np.timedelta64(60, 's')
-    logger.debug('Calculating spectral features on %.1f minutes of RRi data', period_mins)
+    nni = dataframe[column]
+    period_mins = (nni.index[-1] - nni.index[0]) / np.timedelta64(60, 's')
+    logger.debug('Calculating spectral features on %.1f minutes of NNi data', period_mins)
 
     # Show all warnings first
     if period_mins < 5:
@@ -292,7 +293,7 @@ def hrv_frequency_features(df_rri: pd.DataFrame) -> HRVFrequencyFeatures:
             # density or regular spectrum, but papers usually report this value
             # with ms^2 units: Schaffer, (table 2), task force (figure 4).
             # Counter example: task force (figure 3)  ¯\_(ツ)_/¯
-            bp_windowed = bandpower(RRi, bands={name: (fstart, fstop)},
+            bp_windowed = bandpower(nni, bands={name: (fstart, fstop)},
                                     epoch_size=size, epoch_overlap=overlap,
                                     scaling='spectrum', relative=False)
             powers[name] = bp_windowed.mean()[0]
@@ -307,22 +308,22 @@ def hrv_frequency_features(df_rri: pd.DataFrame) -> HRVFrequencyFeatures:
     return features
 
 
-def hrv_nonlinear_features(df_rr: pd.DataFrame) -> HRVNonLinearFeatures:
-    verify_monotonic(df_rr, 'RR')
+def hrv_nonlinear_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVNonLinearFeatures:
+    verify_monotonic(dataframe, column)
 
-    if 'bad' in df_rr:
-        df_rr = df_rr.loc[~df_rr.bad]
+    if 'bad' in dataframe:
+        dataframe = dataframe.loc[~dataframe.bad]
 
     features = HRVNonLinearFeatures()
-    if df_rr.empty:
-        logger.warning('Not enough RR segments to calculate HRV nonlinear features,'
+    if dataframe.empty:
+        logger.warning('Not enough NN segments to calculate HRV nonlinear features,'
                        'returning nan for all features')
         return features
 
-    RR = df_rr['RR']
-    period_mins = (RR.index[-1] - RR.index[0]) / np.timedelta64(60, 's')
-    logger.debug('Calculating nonlinear features on %.1f minutes of RR data '
-                 '(%d samples)', period_mins, len(RR))
+    nn = dataframe[column]
+    period_mins = (nn.index[-1] - nn.index[0]) / np.timedelta64(60, 's')
+    logger.debug('Calculating nonlinear features on %.1f minutes of NN data '
+                 '(%d samples)', period_mins, len(nn))
 
     if period_mins < 5:
         logger.warning('The recommended minimum amount of data for DFA1 and DFA2 is 5 min, '
@@ -331,21 +332,21 @@ def hrv_nonlinear_features(df_rr: pd.DataFrame) -> HRVNonLinearFeatures:
     # Detrended fluctuation analysis:
     # Voss: quantifies the fractal scaling properties of time series
     # [Voss, page 5]  and [Tarvainen, page 16] define this as the
-    # correlation of the RR intervals for the 4th to 16th interval for DFA-alpha1
+    # correlation of the NN intervals for the 4th to 16th interval for DFA-alpha1
     # and 16th to 64th interval for DFA-alpha2.
     # However, these are 1-indexed values, not 0-indexed, which is why we need
     # to consider the 3-15 interval and 15-63 interval respectively.
     # On another note, neurokit uses 16th to 66th, who knows why, and does not
     # correct for the 1-indexed samples.
-    if len(RR) >= 16:
-        features.DFA1 = dfa(RR, np.arange(3, 16))
+    if len(nn) >= 16:
+        features.DFA1 = dfa(nn, np.arange(3, 16))
     else:
-        logger.warning('Not enough RR segments to calculate DFA1')
+        logger.warning('Not enough NN segments to calculate DFA1')
 
-    if len(RR) >= 64:
-        features.DFA2 = dfa(RR, np.arange(16, 64))
+    if len(nn) >= 64:
+        features.DFA2 = dfa(nn, np.arange(16, 64))
     else:
-        logger.warning('Not enough RR segments to calculate DFA2')
+        logger.warning('Not enough NN segments to calculate DFA2')
 
     logger.debug('HRV non-linear features: %s', features)
     return features

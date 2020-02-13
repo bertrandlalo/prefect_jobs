@@ -10,7 +10,7 @@ from iguazu import __version__
 from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.cardiac import CleanPPGSignal, ExtractHRVFeatures, PPGDetectRR, PPGReport
+from iguazu.tasks.cardiac import CleanPPGSignal, ExtractHRVFeatures, PPGDetectRR, PPGReport, SSFPeakDetect
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.signals import ExtractPeaks
@@ -81,19 +81,28 @@ class CardiacFeaturesFlow(PreparedFlow):
             # ),
             # graceful_exceptions=(SoftPreconditionFailed, DSUException),  # TODO: not convinced we should add DSUException here yet
         )
-        detect_peaks = PPGDetectRR(
-            # no kwargs?
-        )
-        extract_peaks = ExtractPeaks(
+        detect_peaks = SSFPeakDetect(
             signals_hdf5_key='/iguazu/signal/ppg/clean',
-            output_hdf5_key='/iguazu/peaks/ppg',
-            column='SSF_PPG',
+            ssf_output_hdf5_key='/iguazu/signal/ppg/ssf',
+            nn_output_hdf5_key='/iguazu/signal/ppg/NN',
+            nni_output_hdf5_key='/iguazu/signal/ppg/NNi',
         )
-        extract_features = ExtractHRVFeatures()
-        extract_sequences = ExtractStandardEvents(
-            events_hdf5_key='/unity/events/unity_events',
-            output_hdf5_key='/iguazu/events',
+        # detect_peaks = PPGDetectRR(
+        #     # no kwargs?
+        # )
+        # extract_peaks = ExtractPeaks(
+        #     signals_hdf5_key='/iguazu/signal/ppg/clean',
+        #     output_hdf5_key='/iguazu/peaks/ppg',
+        #     column='SSF_PPG',
+        # )
+        extract_features = ExtractHRVFeatures(
+            rr_hdf5_key='/iguazu/signal/ppg/NN',
+            rri_hdf5_key='/iguazu/signal/ppg/NNi',
         )
+        # extract_sequences = ExtractStandardEvents(
+        #     events_hdf5_key='/unity/events/unity_events',
+        #     output_hdf5_key='/iguazu/events',
+        # )
         merge_subject = MergeFilesFromGroups(  # TODO: migrate this task to iguazu core task
             # Iguazu task constructor arguments
             suffix="_ppg",
@@ -112,9 +121,10 @@ class CardiacFeaturesFlow(PreparedFlow):
             plot_param = Parameter('plot', default=plot, required=False)
             # Signal processing branch
             clean_signals = clean.map(signals=raw_signals)
-                                      #events=events)
-            rr_peaks = detect_peaks.map(signals=clean_signals)
-            all_peaks = extract_peaks.map(signals=clean_signals)
+            ssf = detect_peaks.map(signals=clean_signals)
+
+            # rr_peaks = detect_peaks.map(signals=clean_signals)
+            # all_peaks = extract_peaks.map(signals=clean_signals)
 
             # ifelse(plot_param,
             #        plot_signals.map(original=raw_signals,
@@ -124,10 +134,12 @@ class CardiacFeaturesFlow(PreparedFlow):
             #                         rri=rr_peaks),
             #        noop)
             #
-            # # Event handling branch
+            # Event handling branch
             # sequences = extract_sequences.map(events=events)
-            #
-            # # Feature extraction
+            sequences = raw_signals
+
+            # Feature extraction
+            features = extract_features.map(rr=ssf, rri=ssf, events=sequences)
             # features = extract_features.map(rr=rr_peaks,
             #                                 rri=rr_peaks,
             #                                 events=sequences)

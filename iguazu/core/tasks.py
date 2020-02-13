@@ -331,7 +331,16 @@ class Task(ManagedTask):
                                           'type was configured. Continuing...',
                                           key, file, k)
                 else:
-                    obj = pd.read_hdf(store, key, *args, **kwargs)
+                    # Read the dataframe, but be careful when the key is a group and not a node
+                    try:
+                        obj = pd.read_hdf(store, key, *args, **kwargs)
+                    except TypeError:
+                        self.logger.warning('Could read HDF5 key %s on file %s for input %s, '
+                                            'yet the key does exists on the HDF5. '
+                                            'Did you set a group name instead of a node name?',
+                                            key, file, k, exc_info=True)
+                        obj = None
+                    # Type verification
                     if not isinstance(obj, pd.DataFrame):
                         if exc_class is not None:
                             raise exc_class(f'Input {key} for input {k} '
@@ -341,8 +350,9 @@ class Task(ManagedTask):
                                               'HDF5 file %s for input %s, but no '
                                               'input exception type was configured. '
                                               'Continuing...')
-                    self.logger.debug('Input %s converted to a dataframe of shape %s',
-                                      k, obj.shape)
+                    else:
+                        self.logger.debug('Input %s read into a dataframe of shape %s',
+                                          k, obj.shape)
                     inputs[k] = obj
 
         return inputs
