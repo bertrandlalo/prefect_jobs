@@ -12,16 +12,16 @@ from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 
 class SpaceStressFeatures(prefect.Task):
     def __init__(self,
-                 events_group: Optional[str] = None,
-                 output_group: Optional[str] = None,
+                 events_hdf5_key: Optional[str] = None,
+                 output_hdf5_key: Optional[str] = None,
                  force: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
-        self.events_group = events_group
-        self.output_group = output_group
+        self.events_hdf5_key = events_hdf5_key
+        self.output_hdf5_key = output_hdf5_key
         self.force = force
 
-    def run(self, parent: FileProxy, events: FileProxy) -> FileProxy:
+    def run(self, parent: FileProxy, events: FileProxy, temporary: Optional[bool] = False) -> FileProxy:
         '''
         This task is a basic ETL where the input and output are HDF5 file proxy
         and where the transformation is made on a DataFrame.
@@ -36,19 +36,20 @@ class SpaceStressFeatures(prefect.Task):
         Parameters
         ----------
         parent: file proxy with parent events ('unity_events' original stream)
-        stimulations:  file proxy with events related to game stimuations
-        actions: file proxy with events related to participant actions
+        events:  file proxy with standardized events related to player actions and game stimuations
+        temporary: boolean to decide whether or not output file should be temporary
 
         Returns
         -------
         output: file proxy with
 
         '''
-        output = parent.make_child(suffix='_scores')
+
+        output = parent.make_child(suffix='_scores', temporary=temporary)
         self.logger.info('Space Stress scores for %s -> %s', parent, output)
 
-        events_group = self.events_group or '/iguazu/events/standard'
-        output_group = self.output_group or '/behavior/spacestress/features'
+        events_group = self.events_hdf5_key or '/iguazu/events/standard'
+        output_group = self.output_hdf5_key or '/iguazu/features/behavior'
 
         # Our current force detection code
         if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
