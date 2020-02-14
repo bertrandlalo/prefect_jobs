@@ -45,7 +45,7 @@ class SpaceStressFeatures(prefect.Task):
 
         '''
 
-        output = parent.make_child(suffix='_scores', temporary=temporary)
+        output = parent.make_child(suffix='_behavior', temporary=temporary)
         self.logger.info('Space Stress scores for %s -> %s', parent, output)
 
         events_group = self.events_hdf5_key or '/iguazu/events/standard'
@@ -69,6 +69,8 @@ class SpaceStressFeatures(prefect.Task):
                  pd.HDFStore(events_file, 'r') as store:
                 df_events = pd.read_hdf(store, events_group)
                 features = extract_space_stress_features(df_events)
+                # add, file_id
+                features['file_id'] = parent._file_id
                 state = 'SUCCESS'
                 meta = get_base_meta(self, state=state)
                 # Manage output, save to file
