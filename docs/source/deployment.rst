@@ -25,6 +25,8 @@ Status
 Preparations
 ============
 
+Public/private key
+------------------
 1. Generate a public/private key with an empty passphrase for github. This is
    needed for the automatic build of a Docker image that contains some of
    OpenMind Innovation Python modules. To generate such key, from iguazu's base
@@ -39,6 +41,37 @@ Preparations
 
 2. Add the public key pair contents in ``conf/github.pub`` to your
    `Github SSH keys <https://github.com/settings/ssh/new>`_ settings.
+
+Install G-Cloud
+----------------
+1. Download the archive file `here <https://cloud.google.com/sdk/docs/quickstart-macos?authuser=2>`_
+2. Use the install script to add Cloud SDK tools to your path.
+
+    .. code-block:: console
+
+      $ ./google-cloud-sdk/install.sh
+
+
+Docker & Kubernetes
+-------------------
+1. Create an account on  `Docker Hub <https://hub.docker.com>`_.
+2. Login to your account:
+
+   .. code-block:: console
+
+      $ docker login
+
+3. Use gcloud to configure a Docker registry. This will enable Docker to push images to GCR.
+
+    .. code-block:: console
+
+           $  gcloud auth configure-docker
+
+4. Finally, install the kubernetes client:
+
+    .. code-block:: console
+
+       $  gcloud components install kubectl
 
 Docker-compose
 ==============
@@ -104,7 +137,9 @@ Setup
 
       $ docker build .
 
-   Then, publish them:
+   Then, tag a new version in file iguazu/__init__.py.
+
+   Finally, publish them:
 
    .. code-block:: console
 
@@ -130,7 +165,7 @@ Setup
 
    .. code-block:: console
 
-    $ kubectl config get-context
+    $ kubectl config get-contexts
     CURRENT   NAME                                       CLUSTER                                    AUTHINFO                                   NAMESPACE
     *         gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu    gke_quetzal-omind_europe-west1-c_iguazu
 
@@ -251,6 +286,45 @@ the ``helm/iguazu`` directory, you can update the cluster with:
 
 where ``NAME`` is the name used when Iguazu was deployed the first time
 (see the Deployment_ section, or check with ``helm list``).
+
+Remote execution
+----------------
+
+In order to test or debug a new flow or a new image, you may want to run it
+locally, using the remote workers and schedulers. To do so, you need to
+'create a path' (that's a port) between your computer and the clusters.
+
+To connect to the server running in a Kubectl cluster, you need to 'forward a port'
+
+First:
+
+.. code-block:: console
+
+      $ kubectl get pods
+        NAME                                                READY   STATUS    RESTARTS   AGE
+        foo-iguazu-dask-scheduler-86d79c57b8-xmt7t          1/1     Running   0          17h
+        foo-iguazu-dask-worker-75db98746b-2n2n4             0/1     Pending   0          17h
+
+.. code-block:: console
+
+ $  kubectl port-forward NAME-OF-SCHEDULER  18786:8786
+
+where ``NAME-OF-SCHEDULER`` is the name of the scheduler pod (here `foo-iguazu-dask-scheduler-86d79c57b8-xmt7t`),
+``LOCAL-PORT`` is the local port number (eg. 18786) and ``REMOTE-PORT``
+is the remote port number (eg. 8786).
+
+
+Then, in your local iguazu virtual environment, you can run a flow :
+
+.. code-block:: console
+
+ $ iguazu flows run
+   --executor-type dask
+   --executor-address localhost:LOCAL-PORT  # eg. localhost:18786
+   --temp-dir /tmp
+   foo-flow  # name of flow
+   --data-source quetzal
+   --workspace-name foo-workspace # name of quetzal workspace
 
 
 Triggering a job
