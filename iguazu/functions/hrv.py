@@ -46,18 +46,17 @@ because literature often use these terms interchangeably.
 """
 
 import logging
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
-from pyentrp.entropy import shannon_entropy
 from nolds.measures import dfa
+from pyentrp.entropy import shannon_entropy
 
 from iguazu.core.features import dataclass_to_dataframe
 from iguazu.functions.common import verify_monotonic
 from iguazu.functions.spectral import bandpower
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
-
 
 logger = logging.getLogger(__name__)
 
@@ -221,11 +220,10 @@ def hrv_features(nn, nn_interpolated, events, known_sequences=None):
 
     if len(features) > 0:
         features = pd.concat(features, axis='index', ignore_index=True, sort=False)
+        logger.info('Generated a feature dataframe of shape %s', features.shape)
     else:
-        features = pd.DataFrame()
-
-
-    import ipdb; ipdb.set_trace(context=21)
+        logger.info('No features were generated')
+        features = pd.DataFrame(columns=['id', 'reference', 'value'])
 
     return features
 

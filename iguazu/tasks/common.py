@@ -2,14 +2,14 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional, Union, List
+from typing import Dict, Iterable, NoReturn, Optional, List
 
 import pandas as pd
 import prefect
 
 import iguazu
 from iguazu import __version__
-from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResults
+from iguazu.core.exceptions import PreconditionFailed, GracefulFailWithResults
 from iguazu.helpers.files import FileProxy, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
@@ -304,3 +304,53 @@ class SlackTask(prefect.tasks.notifications.SlackTask):
         except Exception as ex:
             logger.info('Could not send slack notification: %s', ex)
             raise GRACEFULFAIL('Could not send notification') from None
+
+
+class LoadDataframe(iguazu.Task):
+    """Generic task that reads a HDF5 group and returns its dataframe"""
+
+    def __init__(self, *, key: str, **kwargs):
+        super().__init__(**kwargs)
+        self.key = key
+
+    def run(self, *, file: FileProxy) -> pd.DataFrame:
+        with pd.HDFStore(file.file, 'r') as store:
+            contents = pd.read_hdf(store, key=self.key)
+            assert isinstance(contents, pd.DataFrame)
+            return contents
+
+
+class MergeDataframes(iguazu.Task):
+    """Generic task that merges dataframes into a single CSV file"""
+
+    def __init__(self, *, filename: str, path: str, **kwargs):
+        super().__init__(**kwargs)
+        self.filename = filename
+        self.path = path
+
+    def run(self, *,
+            parents: List[FileProxy],
+            dataframes: List[pd.DataFrame]) -> FileProxy:
+
+        output = self.default_outputs()
+
+        merged = pd.concat(dataframes, axis='index', ignore_index=True, sort=False)
+        self.logger.info('Merged dataframe to a shape of %s to %s', merged.shape, output)
+
+        merged.to_csv(output.file, index=False)
+        return output
+
+    def default_outputs(self, **kwargs):
+        original_kws = prefect.context.run_kwargs
+        parents = original_kws['parents']
+        dummy_reference = parents[0]
+        # TODO remove metadata propagation
+        output = dummy_reference.make_child(
+            filename=self.filename, path=self.path, temporary=False)
+        return output
+
+    def preconditions(self, **kwargs) -> NoReturn:
+        super().preconditions(**kwargs)
+        parents = kwargs['parents']
+        if len(parents) == 0:
+            raise PreconditionFailed('Cannot summarize an empty dataset')

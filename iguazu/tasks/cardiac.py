@@ -205,7 +205,7 @@ class ExtractHRVFeatures(Task): # TODO: add standard preconditions
                  nn_hdf5_key: str = '/iguazu/signal/ppg/NN',
                  nni_hdf5_key: str = '/iguazu/signal/ppg/NNi',
                  events_hdf5_key: str = '/iguazu/events/standard',
-                 output_hdf5_key: str = '/iguazu/features/ppg',  # TODO: what to put here?
+                 output_hdf5_key: str = '/iguazu/features/ppg',
                  **kwargs):
         super().__init__(**kwargs)
 
