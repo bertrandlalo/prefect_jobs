@@ -1,5 +1,6 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.behavior import SpaceStressFeatures
@@ -14,17 +15,17 @@ class BehaviorFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_behavior'
 
-    DEFAULT_QUERY = """\
+    DEFAULT_QUERY = f"""\
            SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
                    base->>'filename' AS filename,  -- this is just to help the human debugging this
                    omi->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
             FROM   metadata
             WHERE  base->>'state' = 'READY'                -- No temporary files
-            AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+            AND    base->>'filename' LIKE '%standard_events.hdf5'         -- Only HDF5 files # todo: fix this ugly query
             AND    (standard->'standardized')::bool        -- Only standardized files
             AND    standard->'groups' ? '/iguazu/events/standard' -- with standardized events
             AND    iguazu->>'status' = 'SUCCESS'
-            AND    iguazu->>'version' < '{version}'
+           -- AND    iguazu->>'version' < '{__version__}'
             ORDER BY id                                       -- always in the same order
     """
 
