@@ -243,7 +243,7 @@ def ppg_peak_detection(ppg):
     return peaks
 
 
-def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(0.6, 1.3)):
+def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(600, 1300)):
     """ Convert peaks to NN intervals
 
     This function converts input peaks into NN intervals and then applies two
@@ -260,7 +260,7 @@ def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(0.6,
         Maximum percentage difference accepted between two consecutive beats.
     interval_range: tuple
         Mininum and maximum values for acceptable physiological NN values, in
-        seconds.
+        milliseconds.
 
     Returns
     -------
@@ -273,7 +273,7 @@ def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(0.6,
     """
     if not (0 < diff_percentage < 100):
         raise ValueError('diff_percentage must be in the (0, 100) range, non-inclusive')
-    min_nn, max_nn = np.asarray(interval_range) * 1000
+    min_nn, max_nn = np.asarray(interval_range)
 
     # Convert peaks (units: sample number) to intervals (units: milliseconds)
     time_ms = (peaks.index - peaks.index[0]) / np.timedelta64(1, 'ms')
@@ -327,9 +327,9 @@ def peak_to_nn(peaks: pd.Series, diff_percentage: int = 25, interval_range=(0.6,
     # Remove PP peaks that are not "normal", according to a publication
     idx_not_physiological = df_int.loc[
         (~df_int.bad) &                # From the remaining good PPs...
-        (df_int.interval < min_nn) &   # detect intervals that are too short
-        (df_int.interval > max_nn)     # detect intervals that are too long
-    ]
+        ((df_int.interval < min_nn) |  # detect intervals that are too short
+         (df_int.interval > max_nn))   # detect intervals that are too long
+    ].index
     df_int.loc[idx_not_physiological, 'bad'] = True
     df_int.loc[idx_not_physiological, 'details'] = f'Rejected: outside physiological range ({600} - {1300} ms)'
 
