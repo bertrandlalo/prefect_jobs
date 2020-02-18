@@ -280,12 +280,12 @@ class AddSourceMetadata(prefect.Task):
         super().__init__(**kwargs)
         self.new_meta = new_meta
 
-    def run(self, *, target: FileProxy, source: Optional[FileProxy]) -> NoReturn:
+    def run(self, *, file: FileProxy) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
-        _deep_update(target.metadata, new_meta)
+        _deep_update(file.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
         #       so we don't download the file for nothing
-        target.upload()
+        file.upload()
 
 
 class SlackTask(prefect.tasks.notifications.SlackTask):

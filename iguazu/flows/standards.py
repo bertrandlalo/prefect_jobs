@@ -115,7 +115,7 @@ ORDER BY id                                    -- always in the same order
                 GSR=standard_gsr,
                 PZT=standard_pzt,
             )
-            update_noresult = update_meta.map(target=merged, source=raw_files)
+            update_noresult = update_meta.map(file=merged)
             message = report(files=merged, upstream_tasks=[update_noresult])
             notify(message=message)
 
