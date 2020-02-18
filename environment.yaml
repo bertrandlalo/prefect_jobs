@@ -42,7 +42,7 @@ dependencies:
   - pip
   - pip:
     - graphviz>=0.11.1,<0.12.0
-    - prefect>=0.6.1,<0.6.2
+    - prefect>=0.9.4,<0.9.5
     - pendulum>=2.0.5,<2.1
     - pyentrp>=0.5.0,<0.6
     - nolds>=0.5.2,<0.6
