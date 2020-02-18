@@ -1,49 +1,33 @@
 from typing import Mapping, Optional, Tuple
-import logging
 
 import pandas as pd
 import prefect
+
 from dsu.dsp.filters import filtfilt_signal, scale_signal
-from dsu.pandas_helpers import estimate_rate
-
-from iguazu.core.exceptions import PreconditionFailed, SoftPreconditionFailed
+from dsu.pandas_helpers import estimate_rate, reorder_columns
+from iguazu.core.exceptions import PostconditionFailed, SoftPreconditionFailed
 from iguazu.core.tasks import Task
-from iguazu.helpers.files import FileProxy
-from iguazu.functions.cardiac import (
-    hrv_features, peak_to_nn, ppg_clean, ppg_peak_detection, nn_interpolation,
-    extract_all_peaks, ssf, peak_detect
-)
+from iguazu.functions.cardiac import detect_ssf_peaks, hrv_features, nn_interpolation, peak_to_nn, ssf
 from iguazu.functions.ppg_report import render_ppg_report
-
-# logger = logging.getLogger(__name__)
+from iguazu.functions.specs import (
+    check_feature_specification, check_signal_specification
+)
+from iguazu.helpers.files import FileProxy
 
 
 class CleanPPGSignal(Task):
 
     def __init__(self, *,
-                 #signals_hdf5_key: str = '/nexus/signal/nexus_signal_raw',
                  signals_hdf5_key: str = '/iguazu/signal/ppg/standard',
-                 # events_hdf5_key: str = '/unity/events/unity_events',
                  output_hdf5_key: str = '/iguazu/signal/ppg/clean',
-                 # warmup_duration: int = 30,
-                 # sampling_rate: int = 512,
-                 # filter_kwargs: Optional[Mapping] = None,
                  **kwargs):
         super().__init__(**kwargs)
 
         self.output_hdf5_key = output_hdf5_key
-        # self.warmup_duration = warmup_duration
-        # self.filter_kwargs = filter_kwargs or {}
-        # self.column = 'G'
-        # self.sampling_rate = sampling_rate
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
-        # self.auto_manage_input_dataframe('events', events_hdf5_key)
 
-    def run(self, *,
-            signals: pd.DataFrame,
-            # events: pd.DataFrame
-            ) -> FileProxy:
+    def run(self, *, signals: pd.DataFrame) -> FileProxy:
 
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
@@ -64,8 +48,6 @@ class CleanPPGSignal(Task):
             filter_design='fir',
         )
         scaled = scale_signal(filtered, method='robust')
-        # scaled = filtered
-        # scaled['SSF_PPG'] = ssf(scaled['PPG'])
 
         self.logger.info('Cleaned PPG signal, input shape %s, output shape %s',
                          signals.shape, scaled.shape)
@@ -80,6 +62,22 @@ class CleanPPGSignal(Task):
         signals = original_kws['signals']
         output = signals.make_child(suffix='_ppg_clean')
         return output
+
+    def postconditions(self, results):
+        super().postconditions(results)
+
+        if not isinstance(results, FileProxy):
+            raise PostconditionFailed('Output was not a file')
+
+        # Postcondition: file is empty
+        if results.empty:
+            return
+
+        # Postcondition: when file is not empty, it follows the signal spec
+        key = self.output_hdf5_key
+        with pd.HDFStore(str(results.file.resolve()), 'r') as store:
+            dataframe = pd.read_hdf(store, key)
+            check_signal_specification(dataframe)
 
 
 class SSFPeakDetect(Task):
@@ -118,7 +116,7 @@ class SSFPeakDetect(Task):
                          signals.shape, ppg_ssf.shape)
 
         # Step 2: detect peak with adaptive threshold
-        peaks, thresh = peak_detect(df_ssf.PPG_SSF, threshold_percentage=0.50)
+        peaks, thresh = detect_ssf_peaks(df_ssf.PPG_SSF, threshold_percentage=0.50)
 
         # Step 3: convert to PP intervals and post-process them
         df_interval = peak_to_nn(peaks).rename(columns={'interval': 'NN'})
@@ -139,87 +137,122 @@ class SSFPeakDetect(Task):
         output = signals.make_child(suffix='_ssf')
         return output
 
+    def postconditions(self, results):
+        super().postconditions(results)
 
-class PPGDetectRR(Task):
-    def __init__(self, *,
-                 #fs: int = 512,
-                 signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
-                 output_hdf5_key: str = '/iguazu/signal/ppg',  # a /RR or /RRi will be added
-                 **kwargs):
-        super().__init__(**kwargs)
+        if not isinstance(results, FileProxy):
+            raise PostconditionFailed('Output was not a file')
 
-        #self.fs = fs
-        #self.column = 'G_filtered'
-        self.column = 'PPG'
-        self.output_hdf5_key = output_hdf5_key
-        self.auto_manage_input_dataframe('signals', signals_hdf5_key)
+        # Postcondition: file is empty
+        if results.empty:
+            return
 
-    def run(self, *,
-            signals: pd.DataFrame) -> FileProxy:
-        output_file = self.default_outputs()
+        # Postcondition: when file is not empty, it follows the signal spec
+        # TODO: add this, but needs modification of the current specification
+        #       due to the column names
+        # keys = (
+        #     self.ssf_output_hdf5_key,
+        #     self.ssf_nni_output_hdf5_key
+        # )
+        # with pd.HDFStore(str(results.file.resolve()), 'r') as store:
+        #     for k in keys:
+        #         dataframe = pd.read_hdf(store, k)
+        #         check_signal_specification(dataframe)
 
-        if self.column not in signals:
-            raise SoftPreconditionFailed(f'Input dataframe does not have column "{self.column}"')
-        ppg = signals[self.column]
-        ppg_fs = estimate_rate(ppg)
-        peaks = ppg_peak_detection(ppg)
-        rr = peak_to_rr(ppg, peaks, ppg_fs)
-        rri = rr_interpolation(rr, ppg_fs)
 
-        with pd.HDFStore(output_file.file, 'w') as store:
-            rr.to_hdf(store, f'{self.output_hdf5_key}/RR')
-            rri.to_hdf(store, f'{self.output_hdf5_key}/RRi')
-
-        return output_file
-
-    def default_outputs(self, **kwargs):
-        original_kws = prefect.context.run_kwargs
-        signals = original_kws['signals']
-        output = signals.make_child(suffix='_ppg_peaks')
-        return output
+# class PPGDetectRR(Task):
+#     def __init__(self, *,
+#                  #fs: int = 512,
+#                  signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
+#                  output_hdf5_key: str = '/iguazu/signal/ppg',  # a /RR or /RRi will be added
+#                  **kwargs):
+#         super().__init__(**kwargs)
+#
+#         #self.fs = fs
+#         #self.column = 'G_filtered'
+#         self.column = 'PPG'
+#         self.output_hdf5_key = output_hdf5_key
+#         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
+#
+#     def run(self, *,
+#             signals: pd.DataFrame) -> FileProxy:
+#         output_file = self.default_outputs()
+#
+#         if self.column not in signals:
+#             raise SoftPreconditionFailed(f'Input dataframe does not have column "{self.column}"')
+#         ppg = signals[self.column]
+#         ppg_fs = estimate_rate(ppg)
+#         peaks = ppg_peak_detection(ppg)
+#         rr = peak_to_rr(ppg, peaks, ppg_fs)
+#         rri = rr_interpolation(rr, ppg_fs)
+#
+#         with pd.HDFStore(output_file.file, 'w') as store:
+#             rr.to_hdf(store, f'{self.output_hdf5_key}/RR')
+#             rri.to_hdf(store, f'{self.output_hdf5_key}/RRi')
+#
+#         return output_file
+#
+#     def default_outputs(self, **kwargs):
+#         original_kws = prefect.context.run_kwargs
+#         signals = original_kws['signals']
+#         output = signals.make_child(suffix='_ppg_peaks')
+#         return output
 
 
 class ExtractHRVFeatures(Task): # TODO: add standard preconditions
 
     def __init__(self, *,
-                 rr_hdf5_key: str = '/iguazu/signal/ppg/RR',
-                 rri_hdf5_key: str = '/iguazu/signal/ppg/RRi',
+                 nn_hdf5_key: str = '/iguazu/signal/ppg/NN',
+                 nni_hdf5_key: str = '/iguazu/signal/ppg/NNi',
                  events_hdf5_key: str = '/iguazu/events/standard',
                  output_hdf5_key: str = '/iguazu/features/ppg',  # TODO: what to put here?
                  **kwargs):
         super().__init__(**kwargs)
 
         self.output_hdf5_key = output_hdf5_key
-        self.auto_manage_input_dataframe('rr', rr_hdf5_key)
-        self.auto_manage_input_dataframe('rri', rri_hdf5_key)
+        self.auto_manage_input_dataframe('nn', nn_hdf5_key)
+        self.auto_manage_input_dataframe('nni', nni_hdf5_key)
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self, *,
-            rr: pd.DataFrame,
-            rri: pd.DataFrame,
-            events: Optional[pd.DataFrame] = None) -> FileProxy:  #TODO: events should be named sequences?
+            nn: pd.DataFrame,
+            nni: pd.DataFrame,
+            events: Optional[pd.DataFrame] = None,
+            parent: Optional[FileProxy] = None) -> FileProxy:
+
         output_file = self.default_outputs()
+        df_features = hrv_features(nn, nni, events)
 
-        # if not events.empty:
-        #     import ipdb; ipdb.set_trace(context=21)
-        #     pass
-
-        df_peaks = hrv_features(rr, rri, events)
+        # Reorder for a more human-readable dataframe (this is optional
+        df_features = reorder_columns(df_features, 'reference', 'id', 'value', 'units', 'name', ...)
+        if parent is not None:
+            df_features['file_id'] = parent.id
 
         with pd.HDFStore(output_file.file, 'w') as store:
-            df_peaks.to_hdf(store, self.output_hdf5_key)
+            df_features.to_hdf(store, self.output_hdf5_key)
 
         return output_file
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
-        signals = original_kws['rr']
-        output = signals.make_child(suffix='_hrv_features')
-        # If it does not exist, create it? TODO: think about this... (the problem is that this is called several times!)
-        # empty = pd.DataFrame()
-        # with pd.HDFStore(output.file, 'w') as store:
-        #     empty.to_hdf(store, self.output_hdf5_key)
+        signals = original_kws['nn']
+        output = signals.make_child(suffix='_hrv_features', temporary=False)
         return output
+
+    def postconditions(self, results):
+        super().postconditions(results)
+
+        if not isinstance(results, FileProxy):
+            raise PostconditionFailed('Output was not a file')
+
+        # Postcondition: file is empty
+        if results.empty:
+            return
+
+        # Postcondition: when file is not empty, it follows the features spec
+        with pd.HDFStore(str(results.file.resolve()), 'r') as store:
+            dataframe = pd.read_hdf(store, self.output_hdf5_key)
+            check_feature_specification(dataframe)
 
 
 class PPGReport(Task):

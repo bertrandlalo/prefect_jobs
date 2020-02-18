@@ -46,13 +46,14 @@ because literature often use these terms interchangeably.
 """
 
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field, fields
 
 import numpy as np
 import pandas as pd
 from pyentrp.entropy import shannon_entropy
 from nolds.measures import dfa
 
+from iguazu.core.features import dataclass_to_dataframe
 from iguazu.functions.common import verify_monotonic
 from iguazu.functions.spectral import bandpower
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
@@ -68,36 +69,123 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HRVTimeFeatures:
-    RMSSD: float = np.nan
-    meanNN: float = np.nan
-    SDNN: float = np.nan
-    medianNN: float = np.nan
-    pNN50: float = np.nan
-    pNN20: float = np.nan
+    RMSSD: float = field(default=np.nan,
+                         metadata=dict(
+                             name='Root mean square of successive NN interval differences',
+                             unit='ms',
+                         ))
+    meanNN: float = field(default=np.nan,
+                          metadata=dict(
+                             name='Mean of NN intervals',
+                             unit='ms',
+                          ))
+    SDNN: float = field(default=np.nan,
+                        metadata=dict(
+                            name='Standard deviation of NN intervals',
+                            unit='ms',
+                        ))
+    medianNN: float = field(default=np.nan,
+                            metadata=dict(
+                                name='Median of NN intervals',
+                                unit='ms',
+                            ))
+    pNN50: float = field(default=np.nan,
+                         metadata=dict(
+                            name='Percentage of successive NN intervals that differ by more than 50 ms',
+                            unit='%',
+                         ))
+    pNN20: float = field(default=np.nan,
+                         metadata=dict(
+                            name='Percentage of successive NN intervals that differ by more than 20 ms',
+                            unit='%',
+                         ))
 
 
 @dataclass
 class HRVFrequencyFeatures:
-    VLF: float = np.nan
-    LF: float = np.nan
-    HF: float = np.nan
-    VHF: float = np.nan
-    LFHF: float = np.nan
+    VLF: float = field(default=np.nan,
+                       metadata=dict(
+                           name='Absolute power of the very-low frequency band',
+                           unit='ms^2',
+                       ))
+    LF: float = field(default=np.nan,
+                      metadata=dict(
+                          name='Absolute power of the low frequency band',
+                          unit='ms^2',
+                      ))
+    HF: float = field(default=np.nan,
+                      metadata=dict(
+                          name='Absolute power of the high frequency band',
+                          unit='ms^2',
+                      ))
+    VHF: float = field(default=np.nan,
+                       metadata=dict(
+                           name='Absolute power of the very-high frequency band',
+                           unit='ms^2',
+                       ))
+    LFHF: float = field(default=np.nan,
+                        metadata=dict(
+                            name='Ratio of LF-to-HF power',
+                            unit='%',
+                        ))
 
 
 @dataclass
 class HRVNonLinearFeatures:
-    DFA1: float = np.nan
-    DFA2: float = np.nan
+    DFA1: float = field(default=np.nan,
+                        metadata=dict(
+                            name='DFA α1, short-term fractal scaling exponent',
+                            unit=None,
+                        ))
+    DFA2: float = field(default=np.nan,
+                        metadata=dict(
+                            name='DFA α2, long-term fractal scaling exponent',
+                            unit=None,
+                        ))
 
 
 @dataclass
 class HRVGeometricFeatures:
-    HTI: float = np.nan
-    Shannon_h: float = np.nan
+    HTI: float = field(default=np.nan,
+                       metadata=dict(
+                           name='HRV triangular index',
+                           unit=None,
+                       ))
+    Shannon_h: float = field(default=np.nan,
+                             metadata=dict(
+                                 name='Shannon entropy',
+                                 unit='bit',
+                             ))
 
 
-def hrv_features(RR, RRi, events, known_sequences=None):
+# def hrv_features_dataframe(*args, **kwargs):
+#     features = hrv_features(*args, **kwargs)
+#     # Convert from
+#     # [(sequence_name, {'feat1': value1, ...}), ...]
+#     # to a dataframe with sequences in rows, features in columns
+#     if not features:
+#         df_features = pd.DataFrame()
+#     else:
+#         tmp = []
+#         for f in features:
+#             tmp.append(
+#
+#             )
+#         tmp = pd.DataFrame.from_dict(dict(features), orient='index')
+#         df_features = pd.concat([tmp[col].apply(pd.Series) for col in tmp.columns],
+#                                 axis='index', sort=False)
+#         import ipdb; ipdb.set_trace(context=21)
+#         pass
+#
+#
+#     logger.debug('HRV features, wide version:\n%s', df_features.to_string())
+#
+#     df_wide = df_features.rename_axis(index='id').reset_index()
+#
+#     return df_features
+
+
+def hrv_features(nn, nn_interpolated, events, known_sequences=None):
     known_sequences = known_sequences or VALID_SEQUENCE_KEYS
 
     features = []
@@ -110,32 +198,36 @@ def hrv_features(RR, RRi, events, known_sequences=None):
 
         begin = row.begin
         end = row.end
-        RR_sequence = RR.loc[begin:end].copy()
-        RRi_sequence = RRi.loc[begin:end].copy()
+        nn_sequence = nn.loc[begin:end].copy()
+        nni_sequence = nn_interpolated.loc[begin:end].copy()
 
-        logger.debug('RR sequence has %d potential elements', len(RR_sequence))
-        time_features = hrv_time_features(RR_sequence)
-        geometric_features = hrv_geometric_features(RR_sequence)
-        frequency_features = hrv_frequency_features(RRi_sequence)
-        nonlinear_features = hrv_nonlinear_features(RR_sequence)
+        logger.debug('NN series has %d samples', len(nn_sequence))
+        time_features = hrv_time_features(nn_sequence)
+        geometric_features = hrv_geometric_features(nn_sequence)
+        frequency_features = hrv_frequency_features(nni_sequence)
+        nonlinear_features = hrv_nonlinear_features(nn_sequence)
 
-        merged = dict()
-        merged.update(asdict(time_features))
-        merged.update(asdict(geometric_features))
-        merged.update(asdict(frequency_features))
-        merged.update(asdict(nonlinear_features))
-        features.append((row.id, merged))
+        all_features = (
+            pd.concat([dataclass_to_dataframe(time_features),
+                       dataclass_to_dataframe(geometric_features),
+                       dataclass_to_dataframe(frequency_features),
+                       dataclass_to_dataframe(nonlinear_features)],
+                      axis='index', sort=False)
+            .rename_axis(index='id')
+            .reset_index()
+        )
+        all_features.insert(0, 'reference', row.id)
+        features.append(all_features)
 
-    # Convert from
-    # [(sequence_name, {'feat1': value1, ...}), ...]
-    # to a dataframe with sequences in rows, features in columns
-    if not features:
-        df_features = pd.DataFrame()
+    if len(features) > 0:
+        features = pd.concat(features, axis='index', ignore_index=True, sort=False)
     else:
-        df_features = pd.DataFrame.from_items(features).T
+        features = pd.DataFrame()
 
-    logger.debug('HRV features:\n%s', df_features.to_string())
-    return df_features
+
+    import ipdb; ipdb.set_trace(context=21)
+
+    return features
 
 
 def hrv_time_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVTimeFeatures:
@@ -152,13 +244,10 @@ def hrv_time_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVTimeFea
 
     nn = dataframe['NN']
     period_mins = (nn.index[-1] - nn.index[0]) / np.timedelta64(60, 's')
-    logger.debug('Calculating time features on %.1f minutes of RR data', period_mins)
+    logger.debug('Calculating time features on %.1f minutes of NN data', period_mins)
 
-    # RMSSD: Root mean square of successive RR interval differences in ms
+    # RMSSD: Root mean square of successive NN interval differences in ms
     # [Shaffer and Ginsberg, page 4]
-    # TODO: should this be on the NN (normal peaks) or the RR ?
-    #       Neurokit uses NN (even if it calls it RR)
-    #       I am going to assume that NN is RR, in other words RR is all clean data
     if period_mins < 5:
         logger.warning('The recommended minimum amount of data for RMSSD is 5 min, '
                        'calculating on %.1f min', period_mins)
@@ -236,7 +325,7 @@ def hrv_geometric_features(dataframe: pd.DataFrame, column: str = 'NN') -> HRVGe
 
     # Shannon entropy
     # In [Voss], it's not really well explained what this is supposed to do
-    # "...calculated on the basis ofthe class probabilities pi ... of the NN
+    # "...calculated on the basis of the class probabilities p_i ... of the NN
     # interval density distribution ... resulting in a smoothed histogram
     # suitable for HRV analysis [1].
     density = histogram / bin_width / histogram.sum()  # This is how np.histogram calculates density
