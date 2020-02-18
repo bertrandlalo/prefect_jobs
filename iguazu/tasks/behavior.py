@@ -1,8 +1,8 @@
 from typing import Optional
 
 import pandas as pd
-import prefect
 
+import iguazu
 from iguazu.core.exceptions import IguazuError
 from iguazu.functions.behavior import extract_space_stress_features
 from iguazu.helpers.files import FileProxy
@@ -10,7 +10,7 @@ from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 
 
-class SpaceStressFeatures(prefect.Task):
+class SpaceStressFeatures(iguazu.Task):
     def __init__(self,
                  events_hdf5_key: Optional[str] = None,
                  output_hdf5_key: Optional[str] = None,
