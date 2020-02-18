@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class StandardizeVRFlow(PreparedFlow):
-    """Extract and standardize all data from the VR protocol"""
+    """Standardize all data from the VR protocol"""
 
     REGISTRY_NAME = 'standardize_vr'
 
