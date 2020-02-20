@@ -215,6 +215,20 @@ class FilterVRSequences(iguazu.Task):
         self.auto_manage_input_dataframe('events', input_hdf5_key)
 
     def run(self, events: pd.DataFrame) -> FileProxy:
+        """ Filter input events to keep sequences
+
+        Parameters
+        ----------
+        events
+            Input dataframe (auto-converted from a
+            :py:class:`~iguazu.helpers.files.FileProxy` object using
+            :py:func:`~iguazu.core.tasks.Task.auto_manage_input_dataframe`)
+
+        Returns
+        -------
+        A file with only the selected sequences.
+
+        """
         output_file = self.default_outputs()
         idx_selected = events['id'].isin(self.selection)
         idx_sequences = ~events['end'].isnull()
@@ -242,6 +256,13 @@ class FilterVRSequences(iguazu.Task):
         return output
 
     def preconditions(self, *, events, **inputs):
+        """ Verify task preconditions
+
+        Soft preconditions to this task are:
+
+        * Input events follow the :ref:`event_specs`.
+
+        """
         super().preconditions(events=events, **inputs)
         try:
             with pd.HDFStore(events.file, 'r') as store:
@@ -254,6 +275,16 @@ class FilterVRSequences(iguazu.Task):
                                          'event specification') from ex
 
     def postconditions(self, results):
+        """ Verify task postconditions
+
+        Postconditions to this tasks are:
+
+        * The results object is a :py:class:`~iguazu.helpers.files.FileProxy`
+        * One of:
+          * Results are empty
+          * Results contents adhere to :ref:`event_specs`.
+
+        """
         super().postconditions(results)
 
         if not isinstance(results, FileProxy):
@@ -270,6 +301,31 @@ class FilterVRSequences(iguazu.Task):
 
 
 class ExtractNexusSignal(iguazu.Task):
+    """Generic task to extract and pre-process signals from a Nexus device
+
+    This task reads raw data from a HDF5 file whose contents come from a
+    Nexus device acquisition. Nexus data has some particularities that are
+    addressed in this task:
+
+    * The naming and units of the signals does not inform on the signal type.
+    * Timeflux manages the timestamps of this signal using an estimation
+      that results in jittered, non-uniformly sampled signal (which is
+      completely artificial).
+
+    Parameters
+    ----------
+    signals_hdf5_key
+        Name of the HDF5 key where the raw Nexus signals are stored.
+    source_column
+        Name of the dataframe column that will be converted.
+    target_column
+        Name of the dataframe column that will be used as a result.
+    sampling_rate
+        Target sampling rate for the result.
+    output_hdf5_key
+        Name of the HDF5 key where the pre-processed signals will be stored.
+
+    """
 
     def __init__(self, *,
                  signals_hfd5_key: str = '/nexus/signal/nexus_signal_raw',
@@ -288,6 +344,7 @@ class ExtractNexusSignal(iguazu.Task):
         self.auto_manage_input_dataframe('signals', signals_hfd5_key)
 
     def run(self, signals: pd.DataFrame) -> FileProxy:
+        """Extract and pre-process signals"""
         logger.info('Extracting Nexus signal %s -> %s on file %s',
                     self.source_column, self.target_column,
                     prefect.context.run_kwargs['signals'])
@@ -309,8 +366,8 @@ class ExtractNexusSignal(iguazu.Task):
         # Uniform sampling, with linear interpolation.
         # sample-and-hold is not a good strategy, see issue 48:
         # https://github.com/OpenMindInnovation/iguazu/issues/48
-        raw_uniform = uniform_sampling(raw, self.sampling_rate,)  # TODO: add linear interpolation
-                                       #interpolation_kind='linear')
+        raw_uniform = uniform_sampling(raw, self.sampling_rate,
+                                       interpolation_kind='linear')
 
         # Create the annotations companion dataframe and mark any nan as a
         # "unknown" problem since it must come from the device / driver.
@@ -382,6 +439,16 @@ class ExtractNexusSignal(iguazu.Task):
 
 
 class ExtractNexusGSRSignal(ExtractNexusSignal):
+    """GSR-specific task to extract and pre-process GSR signals from a Nexus device
+
+    This task implements the Nexus-specific particularities of their GSR signals:
+
+    * It has a particular saturation behavior, where larger values are set
+      to zero
+    * There is a linear relationship between the saved value and the
+      corresponding resistance, which need to be inversed to obtain conductance
+    """
+
     # Add documentation link to
     # https://docs.google.com/presentation/d/1sjV9Jcng-UlZiIye-lrykPBOsTi2701pj1QUXSpoHL4/edit#slide=id.g4db82b9433_1_5
 

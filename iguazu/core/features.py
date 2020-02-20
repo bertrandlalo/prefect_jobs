@@ -33,7 +33,7 @@ def dataclass_meta_to_dataframe(instance) -> pd.DataFrame:
         }
 
     Then, this dictionary is transformed to a
-    :py:class:`pandas.DataFrame` using :py:func:`pandas.DataFrame.from_dict`::
+    :py:class:`pandas.DataFrame` using :py:meth:`pandas.DataFrame.from_dict`::
 
         instance = Thing(feature_1=1, feature_2=2, feature_3=3)
         d = dataclass_meta_to_dataframe(instance)
@@ -53,7 +53,7 @@ def dataclass_meta_to_dataframe(instance) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame
+    pandas.DataFrame
         A dataframe representation of the dataclass whose index is the field
         name and columns are the field metadata
 
@@ -72,7 +72,7 @@ def dataclass_to_dataframe(instance) -> pd.DataFrame:
     This function creates a dataframe from a dataclass instance, where each
     row is a field of the dataclass. It contains at least one column called
     `value` with the dataclass field value, and as many columns as the metadata
-    fields. See :py:ref:`dataclass_meta_to_dataframe` on how the metadata of
+    fields. See :py:func:`dataclass_meta_to_dataframe` on how the metadata of
     a field is extracted.
 
     Given a dataclass defined as follows::
@@ -99,7 +99,7 @@ def dataclass_to_dataframe(instance) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame
+    pandas.DataFrame
         A dataframe representation of the dataclass whose index is the field
         name and columns are both the field value and the field metadata
 
