@@ -160,46 +160,7 @@ class SSFPeakDetect(Task):
         #         check_signal_specification(dataframe)
 
 
-# class PPGDetectRR(Task):
-#     def __init__(self, *,
-#                  #fs: int = 512,
-#                  signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
-#                  output_hdf5_key: str = '/iguazu/signal/ppg',  # a /RR or /RRi will be added
-#                  **kwargs):
-#         super().__init__(**kwargs)
-#
-#         #self.fs = fs
-#         #self.column = 'G_filtered'
-#         self.column = 'PPG'
-#         self.output_hdf5_key = output_hdf5_key
-#         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
-#
-#     def run(self, *,
-#             signals: pd.DataFrame) -> FileProxy:
-#         output_file = self.default_outputs()
-#
-#         if self.column not in signals:
-#             raise SoftPreconditionFailed(f'Input dataframe does not have column "{self.column}"')
-#         ppg = signals[self.column]
-#         ppg_fs = estimate_rate(ppg)
-#         peaks = ppg_peak_detection(ppg)
-#         rr = peak_to_rr(ppg, peaks, ppg_fs)
-#         rri = rr_interpolation(rr, ppg_fs)
-#
-#         with pd.HDFStore(output_file.file, 'w') as store:
-#             rr.to_hdf(store, f'{self.output_hdf5_key}/RR')
-#             rri.to_hdf(store, f'{self.output_hdf5_key}/RRi')
-#
-#         return output_file
-#
-#     def default_outputs(self, **kwargs):
-#         original_kws = prefect.context.run_kwargs
-#         signals = original_kws['signals']
-#         output = signals.make_child(suffix='_ppg_peaks')
-#         return output
-
-
-class ExtractHRVFeatures(Task): # TODO: add standard preconditions
+class ExtractHRVFeatures(Task):  # TODO: add standard preconditions
 
     def __init__(self, *,
                  nn_hdf5_key: str = '/iguazu/signal/ppg/NN',
@@ -223,7 +184,7 @@ class ExtractHRVFeatures(Task): # TODO: add standard preconditions
         output_file = self.default_outputs()
         df_features = hrv_features(nn, nni, events)
 
-        # Reorder for a more human-readable dataframe (this is optional
+        # Reorder for a more human-readable dataframe (this is optional)
         df_features = reorder_columns(df_features, 'reference', 'id', 'value', 'units', 'name', ...)
         if parent is not None:
             df_features['file_id'] = parent.id
