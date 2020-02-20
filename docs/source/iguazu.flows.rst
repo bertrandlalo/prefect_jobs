@@ -41,3 +41,11 @@ iguazu.flows.galvanic module
    :undoc-members:
    :show-inheritance:
 
+iguazu.flows.standards module
+-----------------------------
+
+.. automodule:: iguazu.flows.standards
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

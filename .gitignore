@@ -2,6 +2,9 @@
 conf/*
 debug.log
 
+# Local sandbox
+local/*
+
 # OSX stuff
 **/.DS_Store
 

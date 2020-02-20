@@ -168,7 +168,9 @@ def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selectio
 
     """
 
-    if extract_marker_version(events) == 'legacy':
+    marker_version = extract_marker_version(events)
+    logger.info('Detected marker version is %s', marker_version)
+    if marker_version == 'legacy':
         # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
         logger.warning('Sequences report for legacy events not implemented yet')
         return empty_events()
@@ -180,13 +182,6 @@ def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selectio
     # correct unity events # TODO: put this in the conversion xdf to hdf
     events = fix_unity_events(events)
     complete_sequences = extract_complete_sequences(events)
-    # selection = selection or complete_sequences
-    # intersection between sequences found in events and sequences specified in the parameters
-    # TODO: rewrite this part; it's very confusing
-    # available_sequences = [seq for seq in complete_sequences if seq in selection]
-    # if set(available_sequences) != set(selection):
-    #     logger.warning('Could not find %s in the sequences.',
-    #                    ', '.join([str(a) for a in selection if a not in available_sequences]))
 
     records = []
     for sequence_name in complete_sequences:
@@ -210,12 +205,13 @@ def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selectio
             })
 
     standard_sequences = (
-        pd.DataFrame.from_records(records)
+        pd.DataFrame.from_records(records,
+                                  # Inform on column names so that the set_index later does not fail
+                                  columns=['timestamp', 'id', 'name', 'begin', 'end', 'data'])
         .set_index('timestamp')
         .rename_axis(index='index')
         .sort_index()
     )
-    #import ipdb; ipdb.set_trace(context=21)
 
     # Convert the existing events to standard form
     standard_events = events.copy()

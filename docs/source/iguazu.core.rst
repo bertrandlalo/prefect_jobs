@@ -17,6 +17,14 @@ iguazu.core.exceptions module
    :undoc-members:
    :show-inheritance:
 
+iguazu.core.features module
+---------------------------
+
+.. automodule:: iguazu.core.features
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 iguazu.core.flows module
 ------------------------
 

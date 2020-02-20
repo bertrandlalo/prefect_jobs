@@ -57,10 +57,26 @@ iguazu.tasks.quetzal module
    :undoc-members:
    :show-inheritance:
 
+iguazu.tasks.signals module
+---------------------------
+
+.. automodule:: iguazu.tasks.signals
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 iguazu.tasks.spectral module
 ----------------------------
 
 .. automodule:: iguazu.tasks.spectral
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+iguazu.tasks.standards module
+-----------------------------
+
+.. automodule:: iguazu.tasks.standards
    :members:
    :undoc-members:
    :show-inheritance:

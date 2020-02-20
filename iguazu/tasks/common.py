@@ -2,14 +2,14 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional
+from typing import Dict, Iterable, NoReturn, Optional, List
 
 import pandas as pd
 import prefect
 
 import iguazu
 from iguazu import __version__
-from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResults
+from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
 from iguazu.helpers.files import FileProxy, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
@@ -276,54 +276,16 @@ class MergeHDF5(iguazu.Task):
 
 class AddSourceMetadata(prefect.Task):
 
-    def __init__(self, *,
-                 new_meta: Dict,
-                 # source_family: Optional[str] = None,
-                 **kwargs):
+    def __init__(self, *, new_meta: Dict, **kwargs):
         super().__init__(**kwargs)
         self.new_meta = new_meta
-        # self.source_family = source_family
 
-    def run(self, *, target: FileProxy, source: Optional[FileProxy]) -> NoReturn:
-
-        # if 'data_2017-06-15.18.13.12' in source.id:
-        #     import ipdb; ipdb.set_trace(context=21)
-        #     pass
-
+    def run(self, *, file: FileProxy) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
-        # if source is not None and self.source_family is not None:
-        #     new_meta.setdefault(self.source_family, {})
-        #     new_meta[self.source_family]['source'] = source.id
-
-        _deep_update(target.metadata, new_meta)
-        target.upload()  # TODO: for quetzal, we are going to need a .upload_metadata method
-                         #       so we don't download the file for nothing
-
-        # return file
-        # if 'data_2017-06-15.18.13.12' in source.id:
-        #     import ipdb; ipdb.set_trace(context=21)
-        #     pass
-        # new_meta = copy.deepcopy(self.new_meta)
-        # new_meta.setdefault(self.src_family, {})
-        # new_meta[self.src_family]['source'] = source.id
-        # _deep_update(file.metadata, new_meta)
-        # return file
-
-    # def default_metadata(self, exception, *, file, source):
-    #     # metadata = super().default_metadata(exception, file=file, source=source)
-    #     # metadata.pop('iguazu')
-    #     # metadata.pop('base')
-    #     # # if self.verify_status and isinstance(exception, GracefulFailWithResults):
-    #     # #     metadata['iguazu']['status'] = 'FAILED'
-    #     # return metadata
-    #     if 'data_2017-06-15.18.13.12' in source.id:
-    #         import ipdb; ipdb.set_trace(context=21)
-    #         pass
-    #     new_meta = copy.deepcopy(self.new_meta)
-    #     new_meta.setdefault(self.src_family, {})
-    #     new_meta[self.src_family]['source'] = source.id
-    #     _deep_update(file.metadata, new_meta)
-    #     return file.metadata
+        _deep_update(file.metadata, new_meta)
+        # TODO: for quetzal, we are going to need a .upload_metadata method
+        #       so we don't download the file for nothing
+        file.upload()
 
 
 class SlackTask(prefect.tasks.notifications.SlackTask):
@@ -342,3 +304,62 @@ class SlackTask(prefect.tasks.notifications.SlackTask):
         except Exception as ex:
             logger.info('Could not send slack notification: %s', ex)
             raise GRACEFULFAIL('Could not send notification') from None
+
+
+class LoadDataframe(iguazu.Task):
+    """Generic task that reads a HDF5 group and returns its dataframe"""
+
+    def __init__(self, *, key: str, **kwargs):
+        super().__init__(**kwargs)
+        self.key = key
+
+    def run(self, *, file: FileProxy) -> pd.DataFrame:
+        with pd.HDFStore(file.file, 'r') as store:
+            contents = pd.read_hdf(store, key=self.key)
+            assert isinstance(contents, pd.DataFrame)
+            return contents
+
+    def preconditions(self, *, file: FileProxy, **inputs):
+        super().preconditions(file=file, **inputs)
+        if file.empty:
+            raise SoftPreconditionFailed('Input file was empty')
+
+    def default_outputs(self, **inputs):
+        return None
+
+
+class MergeDataframes(iguazu.Task):
+    """Generic task that merges dataframes into a single CSV file"""
+
+    def __init__(self, *, filename: str, path: str, **kwargs):
+        super().__init__(**kwargs)
+        self.filename = filename
+        self.path = path
+
+    def run(self, *,
+            parents: List[FileProxy],
+            dataframes: List[pd.DataFrame]) -> FileProxy:
+
+        output = self.default_outputs()
+
+        merged = pd.concat([d for d in dataframes if d is not None],
+                           axis='index', ignore_index=True, sort=False)
+        self.logger.info('Merged dataframe to a shape of %s to %s', merged.shape, output)
+
+        merged.to_csv(output.file, index=False)
+        return output
+
+    def default_outputs(self, **kwargs):
+        original_kws = prefect.context.run_kwargs
+        parents = original_kws['parents']
+        dummy_reference = parents[0]
+        # TODO remove metadata propagation
+        output = dummy_reference.make_child(
+            filename=self.filename, path=self.path, temporary=False)
+        return output
+
+    def preconditions(self, **kwargs) -> NoReturn:
+        super().preconditions(**kwargs)
+        parents = kwargs['parents']
+        if len(parents) == 0:
+            raise PreconditionFailed('Cannot summarize an empty dataset')
