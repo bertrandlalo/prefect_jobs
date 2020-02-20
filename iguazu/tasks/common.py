@@ -9,7 +9,7 @@ import prefect
 
 import iguazu
 from iguazu import __version__
-from iguazu.core.exceptions import PreconditionFailed, GracefulFailWithResults
+from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
 from iguazu.helpers.files import FileProxy, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
@@ -319,6 +319,14 @@ class LoadDataframe(iguazu.Task):
             assert isinstance(contents, pd.DataFrame)
             return contents
 
+    def preconditions(self, *, file: FileProxy, **inputs):
+        super().preconditions(file=file, **inputs)
+        if file.empty:
+            raise SoftPreconditionFailed('Input file was empty')
+
+    def default_outputs(self, **inputs):
+        return None
+
 
 class MergeDataframes(iguazu.Task):
     """Generic task that merges dataframes into a single CSV file"""
@@ -334,7 +342,8 @@ class MergeDataframes(iguazu.Task):
 
         output = self.default_outputs()
 
-        merged = pd.concat(dataframes, axis='index', ignore_index=True, sort=False)
+        merged = pd.concat([d for d in dataframes if d is not None],
+                           axis='index', ignore_index=True, sort=False)
         self.logger.info('Merged dataframe to a shape of %s to %s', merged.shape, output)
 
         merged.to_csv(output.file, index=False)
