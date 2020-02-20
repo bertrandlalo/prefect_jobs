@@ -21,7 +21,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
                    omi->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
             FROM   metadata
             WHERE  base->>'state' = 'READY'                -- No temporary files
-            AND    base->>'filename' LIKE '%standard_events.hdf5'         -- Only HDF5 files # todo: fix this ugly query
+            AND    base->>'filename' LIKE '%standard.hdf5'         -- Only HDF5 files # todo: fix this ugly query
             AND    (standard->'standardized')::bool        -- Only standardized files
             AND    standard->'groups' ? '/iguazu/events/standard' -- with standardized events
             AND    iguazu->>'status' = 'SUCCESS'
@@ -59,7 +59,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
         )
 
         report = Report()
-        notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
+        notify = SlackTask(preamble='Behavior feature extraction flow status finished.\n'
                                     'Task report:')
 
         # Build flow
