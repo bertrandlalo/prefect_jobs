@@ -91,11 +91,11 @@ Name            Description                                          Examples
 ``task``         | Fully qualified name of the Iguazu task that       | ``iguazu.tasks.foo.BarTask``.
                  | generated this file.
 --------------- ---------------------------------------------------- --------------------------------------------------
-``version``      | Version of Iguazu (or from the task) in            | ``1.0.2``.
+``version``      | Version of Iguazu (or from the task) in            | ``"1.0.2"``.
                  | SemVer_ format.
 --------------- ---------------------------------------------------- --------------------------------------------------
-``parents``      | A list of identifiers representing the files that  | A UUID4 string.
-                 | were used to generate this file. If Iguazu did     | ``00000000-0000-4000-8000-000000000000``
+``parents``      | A list of identifiers representing the files that  | A list with a UUID4 string.
+                 | were used to generate this file. If Iguazu did     | ``["00000000-0000-4000-8000-000000000000"]``
                  | not generate this file or this file is not the
                  | derived data of another one, then this field is
                  | ``null``.
@@ -136,6 +136,79 @@ An example metadata entry for a file with id
       }
     }
   }
+
+Other metadata families
+-----------------------
+
+We have designed the following metadata families to organize a set of metadata
+keys that are important for an easier definition of datasets in Iguazu and
+Quetzal.
+
+standard
+^^^^^^^^
+
+The standard family, named ``"standard"`` contains metadata that inform on the
+adherence of the file data to our :ref:`signal <signal_specs>`,
+:ref:`event <event_specs>` or :ref:`feature <feature_specs>` specifications. It
+contains the following keys:
+
+=============== ==================================================== ==================================================
+Name            Description                                          Examples
+=============== ==================================================== ==================================================
+``signals``      | List of HDF5 groups that follow the signal         | ``["/iguazu/signal/ppg/standard", ...]``
+                 | standard
+--------------- ---------------------------------------------------- --------------------------------------------------
+``events``       | List of HDF5 groups that follow the events         | ``["/iguazu/events/standard", ...]``
+                 | standard
+--------------- ---------------------------------------------------- --------------------------------------------------
+``features``     | List of HDF5 groups that follow the feature        | ``["/iguazu/features/ppg/sequence", ...]``
+                 | standard
+=============== ==================================================== ==================================================
+
+protocol
+^^^^^^^^
+
+The protocol family, named ``"protocol"`` contains information on what program
+and context was used to acquire the data of the file. It contains the following
+keys:
+
+=============== ==================================================== ==================================================
+Name            Description                                          Examples
+=============== ==================================================== ==================================================
+``name``         | Name of the protocol associated with this file.    | ``"vr"``, ``"typeform-vr"``, ``"c4h"``, ...
+--------------- ---------------------------------------------------- --------------------------------------------------
+``program``      | Name of the computer program used to acquire       | ``"timeflux"``, ``"quack"``, ...
+                 | this file
+--------------- ---------------------------------------------------- --------------------------------------------------
+``version``      | Version of computer program used to acquire        | ``"1.0.2"``
+                 | this file, preferably in SemVer_ format.
+--------------- ---------------------------------------------------- --------------------------------------------------
+``date``         | Date when the data on this file was acquired.      | ``"2019-09-03 16:58:49.438645+00:00"``
+=============== ==================================================== ==================================================
+
+flows
+^^^^^
+
+The flow family,  named ``"flows"`` contains log-like entries to mark when a
+file has been processed by a flow. The keys of this family are flow names.
+For example, ``"ppg"``, ``"behavior"``, etc. The values are either
+``"SUCCESS"``, ``"IN_PROGRESS"`` or ``"FAILED"`` to inform that the file has
+been successfully processed by the key-named flow, when it is in progress or
+when the flow failed for that particular file.
+
+An example metadata object on this family would be:
+
+.. code-block:: json
+
+  {
+    "flows": {
+       "id": "00000000-0000-4000-8000-000000000000",
+       "cardiac": "SUCCESS",
+       "galvanic": "FAILED",
+       "behavior": "IN_PROGRESS"
+    }
+  }
+
 
 Failures
 ========

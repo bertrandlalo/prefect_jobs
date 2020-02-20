@@ -25,7 +25,7 @@ AND    (standard->'standardized')::bool        -- Only standardized files
 AND    standard->'groups' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
 AND    standard->'groups' ? '/iguazu/events/standard'     -- containing standardized events
 AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-AND    iguazu->>'version' <= '{__version__}'    -- by this iguazu version or earlier
+AND    iguazu->>'version' <= '{__version__}'   -- by this iguazu version or earlier
 ORDER BY id                                    -- always in the same order
 """
 
