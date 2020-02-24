@@ -414,3 +414,8 @@ class MergeDataframes(iguazu.Task):
         parents = kwargs['parents']
         if len(parents) == 0:
             raise PreconditionFailed('Cannot summarize an empty dataset')
+
+
+@prefect.task
+def identity(x):
+    return x

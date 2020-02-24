@@ -22,6 +22,7 @@ dependencies:
   - pytables>=3.5,<4.0
   - tzlocal>=2.0,<3.0
   - dsu>=0.4.0,<0.5
+  - requests>=2.22,<2.23
   # Requirements for plot-related tasks
   - Jinja2>=2.10.1,<2.11
   - plotly>=4.1.1,<4.2
