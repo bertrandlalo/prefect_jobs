@@ -9,7 +9,7 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.tasks.common import AddSourceMetadata, identity
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
-from iguazu.tasks.typeform import FetchResponses, Save
+from iguazu.tasks.typeform import FetchResponses, GetUserHash, Save
 
 
 class ExtractTypeform(PreparedFlow):
@@ -26,6 +26,16 @@ class ExtractTypeform(PreparedFlow):
                workspace_name=None,
                families=None,
                **kwargs):
+
+        required_families = dict(
+            iguazu=None,
+            protocol=None,
+            omi=None,
+        )
+        families = kwargs.get('families', {}) or {}  # Could be None by default args
+        for name in required_families:
+            families.setdefault(name, required_families[name])
+
         fetch = FetchResponses(base_url=base_url, form_id=form_id)
         save = Save(form_id=form_id)
         create_or_retrieve = CreateWorkspace(
@@ -46,6 +56,7 @@ class ExtractTypeform(PreparedFlow):
             cache_validator=never_use,
         )
         get_token = GetItem()
+        get_user_hash = GetUserHash()
         add_metadata = AddSourceMetadata(
             new_meta={
                 'protocol': {
@@ -73,13 +84,17 @@ class ExtractTypeform(PreparedFlow):
             merged_dir = merge(local_dir, dir_none)
 
             # data retrieval branch and merge
+            user_hash_key = identity(Parameter('user_hash_key', default=[('omi', 'user_hash')], required=False))
             responses = fetch()
             response_id = get_token.map(task_result=responses, key=unmapped('token'))
+            user_hash = get_user_hash.map(response=responses)
             files = save.map(response=responses,
                              response_id=response_id,
                              workspace_id=unmapped(merged_wid),
                              base_dir=unmapped(merged_dir))
-            add_metadata.map(file=files)
+            add_metadata.map(file=files,
+                             extra_keys=unmapped(user_hash_key),
+                             extra_values=user_hash)
 
 
 

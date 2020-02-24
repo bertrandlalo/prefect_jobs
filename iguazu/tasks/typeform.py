@@ -46,6 +46,16 @@ class FetchResponses(iguazu.Task):
             raise PreconditionFailed('base_url must be a https address')
 
 
+class GetUserHash(iguazu.Task):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def run(self, *, response: Dict) -> str:
+        hidden_field = response.get('hidden', {})
+        user_hash = hidden_field.get('id', None)
+        return user_hash
+
+
 class Save(iguazu.Task):
 
     def __init__(self, form_id: str, **kwargs):
