@@ -126,7 +126,11 @@ intersphinx_mapping = {
         None
     ),
     'pandas': (
-        'http://pandas.pydata.org/pandas-docs/stable',
-        None,
+        'https://pandas.pydata.org/pandas-docs/stable',
+         None,
     ),
+    'click': (
+        'https://click.palletsprojects.com/en/7.x',
+        None,
+    )
 }

@@ -1,16 +1,15 @@
 import click
-from prefect import Parameter, task, unmapped
+from prefect import Parameter, unmapped
 from prefect.engine.cache_validators import never_use
-from prefect.tasks.core.operators import Equal, GetItem
 from prefect.tasks.control_flow import ifelse, merge
-from prefect.tasks.control_flow.conditional import Merge
+from prefect.tasks.core.operators import GetItem
 from quetzal.client.cli import FamilyVersionListType
 
 from iguazu.core.flows import PreparedFlow
-from iguazu.tasks.common import identity, AddSourceMetadata
+from iguazu.tasks.common import AddSourceMetadata, identity
 from iguazu.tasks.handlers import logging_handler
-from iguazu.tasks.typeform import FetchResponses, Save
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
+from iguazu.tasks.typeform import FetchResponses, Save
 
 
 class ExtractTypeform(PreparedFlow):
