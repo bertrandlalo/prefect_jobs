@@ -1,6 +1,6 @@
 import json
 import pathlib
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from prefect.client import Secret
@@ -8,42 +8,61 @@ from prefect.client import Secret
 import iguazu
 from iguazu.helpers.files import FileProxy, LocalFile, QuetzalFile
 from iguazu.core.exceptions import PreconditionFailed
-from iguazu.functions.typeform import fetch_responses
+from iguazu.functions.typeform import fetch_form, fetch_responses
 
 
-class FetchResponses(iguazu.Task):
+DEFAULT_BASE_URL = 'https://api.typeform.com'
 
-    DEFAULT_BASE_URL = 'https://api.typeform.com'
+
+class _BaseTypeformAPITask(iguazu.Task):
 
     def __init__(self, *,
                  form_id: str,
                  base_url: str = DEFAULT_BASE_URL,
                  token_secret: str = 'TYPEFORM_TOKEN',
                  **kwargs):
-        # import ipdb; ipdb.set_trace(context=21)
         super().__init__(**kwargs)
-        self.form_id = form_id
-        self.base_url = base_url
-        self.token_secret = token_secret
+        self._form_id = form_id
+        self._base_url = base_url
+        self._token_secret = token_secret
 
     def run(self, **kwargs):
-        self.logger.info('Requesting typeform responses of form %s at address %s',
-                         self.form_id, self.base_url)
-
-        token = str(Secret(self.token_secret).get())
-        responses = fetch_responses(self.base_url, self.form_id, token)
-        return responses
+        raise NotImplementedError('Do not use this class directly, '
+                                  'extend it and implement its run method')
 
     def preconditions(self, **inputs):
-        # import ipdb; ipdb.set_trace(context=21)
-        if self.base_url is None:
+        super().preconditions(**inputs)
+        if self._base_url is None:
             raise PreconditionFailed('base_url must not be None')
-        if self.form_id is None:
+        if self._form_id is None:
             raise PreconditionFailed('form_id must not be None')
 
-        url = urlparse(self.base_url)
+        url = urlparse(self._base_url)
         if url.scheme != 'https':
             raise PreconditionFailed('base_url must be a https address')
+
+    @property
+    def token(self):
+        return str(Secret(self._token_secret).get())
+
+
+class FetchResponses(_BaseTypeformAPITask):
+
+    def run(self, **kwargs) -> List[Dict]:
+        self.logger.info('Requesting typeform responses of form %s at address %s',
+                         self._form_id, self._base_url)
+        responses = fetch_responses(self._base_url, self._form_id, self.token)
+        return responses
+
+
+class GetForm(_BaseTypeformAPITask):
+
+    def run(self, **kwargs) -> Dict:
+        self.logger.info('Requesting form %s at address %s',
+                         self._form_id, self._base_url)
+
+        form = fetch_form(self._base_url, self._form_id, self.token)
+        return form
 
 
 class GetUserHash(iguazu.Task):
@@ -106,5 +125,3 @@ class Save(iguazu.Task):
             file = LocalFile(str(filename), base_dir)
 
         return file
-
-

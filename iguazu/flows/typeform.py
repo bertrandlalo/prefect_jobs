@@ -9,7 +9,7 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.tasks.common import AddSourceMetadata, identity
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
-from iguazu.tasks.typeform import FetchResponses, GetUserHash, Save
+from iguazu.tasks.typeform import FetchResponses, GetUserHash, Save, DEFAULT_BASE_URL
 
 
 class ExtractTypeform(PreparedFlow):
@@ -18,7 +18,7 @@ class ExtractTypeform(PreparedFlow):
     REGISTRY_NAME = 'download_typeform'
 
     def _build(self, *,
-               base_url=FetchResponses.DEFAULT_BASE_URL,
+               base_url=DEFAULT_BASE_URL,
                form_id=None,
                data_sink='local',
                # data_target='local',
@@ -101,7 +101,7 @@ class ExtractTypeform(PreparedFlow):
     @staticmethod
     def click_options():
         return (
-            click.option('--base-url', required=False, type=click.STRING, default=FetchResponses.DEFAULT_BASE_URL,
+            click.option('--base-url', required=False, type=click.STRING, default=DEFAULT_BASE_URL,
                          help='Base URL for the typeform API.'),
             click.option('--form-id', required=False, type=click.STRING,
                          help='ID of the form (questionnaire) on typeform.'),

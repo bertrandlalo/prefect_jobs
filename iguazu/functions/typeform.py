@@ -7,17 +7,25 @@ from requests import codes, request
 logger = logging.getLogger(__name__)
 
 
-def fetch_responses(url: str, form_id: str, token: str, page_size: int = 1000) -> List[Dict]:
-    page_size = max(100, min(page_size, 1000))  # clip between 100 and 1000
-    url = f'{url}/forms/{form_id}/responses'
-    params = dict(page_size=page_size)
-    payload = {}
-    headers = {
+def _clip_page_size(size, min_value, max_value):
+    return max(min_value, min(size, max_value))
+
+
+def _get_default_header(token):
+    return {
         'Content-Type': 'text/plain',
         'Accept': 'application/json',
         'Cache-Control': 'no-cache',
         'Authorization': f'Bearer {token}',
     }
+
+
+def fetch_responses(url: str, form_id: str, token: str, page_size: int = 1000) -> List[Dict]:
+    page_size = _clip_page_size(page_size, 100, 1000)
+    url = f'{url}/forms/{form_id}/responses'
+    params = dict(page_size=page_size)
+    payload = {}
+    headers = _get_default_header(token)
 
     before = None
     by_token = dict()
@@ -54,3 +62,19 @@ def fetch_responses(url: str, form_id: str, token: str, page_size: int = 1000) -
 
     logger.info('Retrieved %d valid  responses', len(by_token))
     return list(by_token.values())
+
+
+def fetch_form(url: str, form_id: str, token: str) -> Dict:
+    url = f'{url}/forms/{form_id}'
+    params = {}
+    payload = {}
+    headers = _get_default_header(token)
+
+    logger.debug('Requesting form %s details', form_id)
+    response = request('GET', url=url, params=params, headers=headers, data=payload)
+    if response.status_code != codes.ok:
+        logger.warning('Request to fetch form details failed with code %d: %s',
+                       response.status_code, response.text)
+        raise RuntimeError('Failed to communicate with typeform server')
+
+    return response.json()
