@@ -6,13 +6,14 @@ from prefect.tasks.core.operators import GetItem
 from quetzal.client.cli import FamilyVersionListType
 
 from iguazu.core.flows import PreparedFlow
-from iguazu.tasks.common import AddSourceMetadata, identity
+from iguazu.flows.datasets import GenericDatasetFlow
+from iguazu.tasks.common import AddSourceMetadata, LoadJSON, identity
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
-from iguazu.tasks.typeform import FetchResponses, GetUserHash, Save, DEFAULT_BASE_URL
+from iguazu.tasks.typeform import ExtractAnswers, FetchResponses, GetUserHash, Save, DEFAULT_BASE_URL
 
 
-class ExtractTypeform(PreparedFlow):
+class DownloadTypeform(PreparedFlow):
     """Download typeform responses"""
 
     REGISTRY_NAME = 'download_typeform'
@@ -96,8 +97,6 @@ class ExtractTypeform(PreparedFlow):
                              extra_keys=unmapped(user_hash_key),
                              extra_values=user_hash)
 
-
-
     @staticmethod
     def click_options():
         return (
@@ -121,3 +120,49 @@ class ExtractTypeform(PreparedFlow):
                               'the workspace should use the most recent version of the '
                               '"base" family, and the version 10 of the "xdf" family.'),
         )
+
+
+class ExtractTypeformFeatures(PreparedFlow):
+
+    REGISTRY_NAME = 'extract_typeform'
+    DEFAULT_QUERY = None
+
+    def _build(self, *, form_id=None, **kwargs):
+        required_families = dict(
+            iguazu=None,
+            omi=None,
+            standard=None,
+            protocol=None,
+        )
+        families = kwargs.get('families', {}) or {}  # Could be None by default args
+        for name in required_families:
+            families.setdefault(name, required_families[name])
+        kwargs['families'] = families
+
+        # When the query is set by kwargs, leave the query and dialect as they
+        # come. Otherwise, set to the default defined just above
+        if not kwargs.get('query', None):
+            kwargs['query'] = self.DEFAULT_QUERY
+            kwargs['dialect'] = 'postgresql_json'
+
+        # First part of this flow: obtain a dataset of files
+        dataset_flow = GenericDatasetFlow(**kwargs)
+
+        json_files = dataset_flow.terminal_tasks().pop()
+        self.update(dataset_flow)
+
+        read_json = LoadJSON()
+        extract_answers = ExtractAnswers()
+
+        with self:
+            form_id_param = Parameter('form_id', required=False, default=form_id)
+            responses = read_json.map(file=json_files)
+            answers = extract_answers.map(response=responses, form_id=unmapped(form_id_param))
+
+    @staticmethod
+    def click_options():
+        return GenericDatasetFlow.click_options() + (
+            click.option('--form-id', required=False, type=click.STRING,
+                         help='ID of the form (questionnaire) on typeform.'),
+        )
+

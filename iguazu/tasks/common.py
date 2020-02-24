@@ -1,8 +1,9 @@
 import copy
+import json
 import logging
 import os
 import pathlib
-from typing import Any, Dict, Iterable, NoReturn, Optional, List, Tuple
+from typing import Any, Dict, Iterable, NoReturn, Optional, List, Tuple, Union
 
 import pandas as pd
 import prefect
@@ -33,24 +34,31 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_file_adapter: bool = False, **kwargs):
+    def __init__(self, *,
+                 as_file_adapter: bool = False,
+                 pattern: str = '**/*.hdf5',
+                 limit: Optional[int] = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self._as_file_adapter = as_file_adapter
+        self._pattern = pattern
+        self._limit = limit
 
-    def run(self, basedir, pattern='**/*.hdf5'):
+    def run(self, basedir: str) -> Union[List[str], List[FileProxy]]:
         if not basedir:
             return []
         path = pathlib.Path(basedir)
         # regex = re.compile(regex)
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
-        files = [file for file in path.glob(pattern)]
+        files = [file for file in path.glob(self._pattern)]
+        if self._limit is not None:
+            files = files[:self._limit]
         # files.sort()
         self.logger.info('list_files on basedir %s found %d files to process',
                          basedir, len(files))
 
         if self._as_file_adapter:
-            adapters = [LocalFile.retrieve(file_id=str(f), root=basedir) for f in files]  # todo: handle `temporary`
-            return adapters
+            files = [LocalFile.retrieve(file_id=str(f), root=basedir) for f in files]  # todo: handle `temporary`
 
         return files
 
@@ -430,6 +438,11 @@ class MergeDataframes(iguazu.Task):
         if len(parents) == 0:
             raise PreconditionFailed('Cannot summarize an empty dataset')
 
+
+class LoadJSON(iguazu.Task):
+    def run(self, *, file: FileProxy) -> Dict:
+        with open(file.filename, 'r') as f:
+            return json.load(f)
 
 @prefect.task
 def identity(x):

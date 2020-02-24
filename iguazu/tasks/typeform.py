@@ -4,11 +4,12 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from prefect.client import Secret
+import pandas as pd
 
 import iguazu
 from iguazu.helpers.files import FileProxy, LocalFile, QuetzalFile
 from iguazu.core.exceptions import PreconditionFailed
-from iguazu.functions.typeform import fetch_form, fetch_responses
+from iguazu.functions.typeform import add_form_config, answers_to_dataframe, fetch_form, fetch_responses
 
 
 DEFAULT_BASE_URL = 'https://api.typeform.com'
@@ -125,3 +126,12 @@ class Save(iguazu.Task):
             file = LocalFile(str(filename), base_dir)
 
         return file
+
+
+class ExtractAnswers(iguazu.Task):
+
+    def run(self, *, response: Dict, form_id: str):
+        df_answers = answers_to_dataframe(response)
+        dataframe = add_form_config(df_answers, form_id)
+        self.logger.info('Extracted typeform answers:\n%s', dataframe.to_string())
+        return dataframe
