@@ -27,7 +27,7 @@ class LocalDatasetFlow(PreparedFlow):
         # ... not needed for this flow ...
 
         # Instantiate tasks
-        list_files = ListFiles(as_proxy=True)
+        list_files = ListFiles(as_file_adapter=True)
 
         with self:
             directory = Parameter('base_dir', default=base_dir, required=False)
@@ -97,7 +97,7 @@ class QuetzalDatasetFlow(PreparedFlow):
         )
         query = Query(
             # Iguazu task constructor arguments
-            as_proxy=True,
+            as_file_adapter=True,
             limit=limit,
             shuffle=shuffle,
             # Prefect task arguments

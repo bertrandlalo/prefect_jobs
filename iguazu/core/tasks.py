@@ -17,7 +17,7 @@ from prefect.utilities.exceptions import PrefectError
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
-from iguazu.core.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import GracefulFail, SkippedResult
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.utils import fullname
@@ -165,7 +165,7 @@ class ManagedTask(prefect.Task):
             kwargs = prefect.context.get('run_kwargs', {})
             outputs = self.default_outputs(**kwargs)
             for output in _iterate(outputs):
-                if isinstance(output, FileProxy):
+                if isinstance(output, FileAdapter):
                     output.delete()
         except:
             logger.warning('Encountered an exception during hard fail',
@@ -236,7 +236,7 @@ class Task(ManagedTask):
         from :py:class:`PreconditionFailed`.
 
         Note that the inputs are received without any automatic transformation
-        like the file proxy to dataframe transformation.
+        like the file adapter to dataframe transformation.
 
         Parameters
         ----------
@@ -254,7 +254,7 @@ class Task(ManagedTask):
         # Previous output does not exist or task is forced
         default_output = self.default_outputs(**inputs)
         family = self.meta.metadata_journal_family
-        if isinstance(default_output, FileProxy):
+        if isinstance(default_output, FileAdapter):
             default_output_meta = default_output.metadata.get(family, {})
             if not self.forced and default_output_meta.get('status', None) is not None:
                 raise PreviousResultsExist('Previous results already exist')
@@ -262,7 +262,7 @@ class Task(ManagedTask):
         # Precondition 2:
         # Inputs are *not* marked as a failed result from a previous task
         for input_name, input_value in inputs.items():
-            if not isinstance(input_value, FileProxy):
+            if not isinstance(input_value, FileAdapter):
                 continue
             input_meta = input_value.metadata.get(family, {})
             if input_meta.get('status', None) == 'FAILURE':
@@ -295,14 +295,14 @@ class Task(ManagedTask):
                 continue
 
             # Read the file
-            if isinstance(input_value, FileProxy):
+            if isinstance(input_value, FileAdapter):
                 file = input_value.file
             elif isinstance(input_value, (str, bytes, os.PathLike)):
                 file = input_value
             else:
                 raise ValueError(f'Input {k} (type {k.__class__.__name__}) '
                                  f'cannot be auto converted to dataframe, '
-                                 f'it must be a FileProxy, str, bytes or os.PathLike')
+                                 f'it must be a FileAdapter, str, bytes or os.PathLike')
 
             if not file.exists() and exc_class is not None:
                 raise exc_class(f'Input file {file} does not exist')
@@ -358,15 +358,15 @@ class Task(ManagedTask):
         return inputs
 
     def handle_outputs(self, outputs) -> Any:
-        # Set the metadata to the outputs that are file proxies.
+        # Set the metadata to the outputs that are file adapters.
         meta = self.default_metadata(None, **prefect.context.run_kwargs)
         for output in _iterate(outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 # If the underlying task did not generate anything,
                 # create an empty file
                 file = output.file
                 if not file.exists():
-                    self.logger.debug('Task did not generate a FileProxy output '
+                    self.logger.debug('Task did not generate a FileAdapter output '
                                       'with contents, creating an empty file')
                     open(str(file.resolve()), 'w').close()
                 # TODO: update or replace?
@@ -375,16 +375,16 @@ class Task(ManagedTask):
         # Verify postconditions
         self.postconditions(outputs)
 
-        # Upload outputs that are file proxies
+        # Upload outputs that are file adapters
         for output in _iterate(outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 output.upload()
 
         # Note: I tried to design and implement a mechanism here similar to
         #       prepare_inputs: It would use the .meta configuration to
         #       automatically convert any output dataframe into a hdf5 file.
         #       I could not manage to find an elegant way of creating a
-        #       FileProxy: this is usually done inside the user task run method,
+        #       FileAdapter: this is usually done inside the user task run method,
         #       so I do not know how to do it here unless we add another new
         #       abstract method to create it.
 
@@ -417,7 +417,7 @@ class Task(ManagedTask):
 
         parents = []
         for value in inputs.values():
-            if isinstance(value, FileProxy):
+            if isinstance(value, FileAdapter):
                 parents.append(value.id)
 
         # TODO: it would be useful to add the inputs to the journal.
@@ -502,13 +502,13 @@ class Task(ManagedTask):
         except ENDRUN as signal:
             endrun = signal
 
-        # Set the metadata to the outputs that are file proxies
+        # Set the metadata to the outputs that are file adapters
         # Note: we need to do this again (graceful_fail already calls
         # prepare_outputs which uploads and updates metadata), because
         # the metadata of a graceful fail is different (it's the default one)
         prepared_outputs = endrun.state.result
         for output in _iterate(prepared_outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 # TODO: update or replace?
                 output.metadata.update(meta)
                 output.upload()

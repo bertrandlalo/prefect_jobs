@@ -4,7 +4,7 @@ import pandas as pd
 import prefect
 
 from iguazu.functions.unity import extract_sequences
-from iguazu.core.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 
@@ -24,7 +24,7 @@ class ExtractSequences(prefect.Task):
         self.force = force
 
     def run(self,
-            events: FileProxy) -> FileProxy:
+            events: FileAdapter) -> FileAdapter:
         output = events.make_child(suffix='_sequences')
         self.logger.info('Reporting sequences for events=%s -> %s',
                          events, output)

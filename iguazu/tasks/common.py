@@ -10,7 +10,7 @@ import prefect
 import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
-from iguazu.core.files import FileProxy, LocalFile, _deep_update
+from iguazu.core.files import FileAdapter, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
 
@@ -32,9 +32,9 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_proxy: bool = False, **kwargs):
+    def __init__(self, as_file_adapter: bool = False, **kwargs):
         super().__init__(**kwargs)
-        self._as_proxy = as_proxy
+        self._as_file_adapter = as_file_adapter
 
     def run(self, basedir, pattern='**/*.hdf5'):
         logger = prefect.context.get("logger")
@@ -48,9 +48,9 @@ class ListFiles(prefect.Task):
         logger.info('list_files on basedir %s found %d files to process',
                     basedir, len(files))
 
-        if self._as_proxy:
-            proxies = [LocalFile(f, base_dir=basedir) for f in files]
-            return proxies
+        if self._as_file_adapter:
+            adapters = [LocalFile(f, base_dir=basedir) for f in files]
+            return adapters
 
         return files
 
@@ -97,24 +97,24 @@ class MergeFilesFromGroups(prefect.Task):
 
         kwargs:
             Keywords arguments with keys are hdf5 group to read and merge and
-            values are hdf5 file proxy.
+            values are hdf5 file adapter.
         """
         super().__init__(**kwargs)
         self.suffix = suffix or "_merged"
         self.status_key = status_metadata_key
 
-    def run(self, parent, **kwargs) -> FileProxy:
+    def run(self, parent, **kwargs) -> FileAdapter:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
         try:
             with pd.option_context('mode.chained_assignment', None), \
                  pd.HDFStore(output.file, "a") as output_store:
-                for output_group, file_proxy in kwargs.items():
+                for output_group, file_adapter in kwargs.items():
                     # Inherit the contents of the "task" family only for this input
                     output.metadata['iguazu'].setdefault(output_group, {})
-                    output.metadata['iguazu'][output_group].update(file_proxy.metadata.get('iguazu', {}))
+                    output.metadata['iguazu'][output_group].update(file_adapter.metadata.get('iguazu', {}))
                     output_group = output_group.replace("_", "/")
-                    with pd.HDFStore(file_proxy.file, "r") as input_store:
+                    with pd.HDFStore(file_adapter.file, "r") as input_store:
                         groups = input_store.keys()
                         if len(groups) > 1:
                             # multiple groups in the HDF5, then get rid of the common path and
@@ -179,7 +179,7 @@ class MergeHDF5(iguazu.Task):
         self.hdf5_family = hdf5_family
         self.meta_keys = tuple(meta_keys or [])
 
-    def run(self, *, parent: FileProxy, **kwargs) -> FileProxy:
+    def run(self, *, parent: FileAdapter, **kwargs) -> FileAdapter:
         output_file = self.default_outputs(parent=parent, **kwargs)
         soft_fail = False
         journal_family = self.meta.metadata_journal_family
@@ -245,7 +245,7 @@ class MergeHDF5(iguazu.Task):
 
         # Precondition: All inputs are files
         for name, value in inputs.items():
-            if not isinstance(value, FileProxy):
+            if not isinstance(value, FileAdapter):
                 raise ValueError(f'Received a non file for parameter {name}')
 
         # Precondition: there are no repeated groups
@@ -280,7 +280,7 @@ class AddSourceMetadata(prefect.Task):
         super().__init__(**kwargs)
         self.new_meta = new_meta
 
-    def run(self, *, file: FileProxy) -> NoReturn:
+    def run(self, *, file: FileAdapter) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
         _deep_update(file.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
@@ -313,13 +313,13 @@ class LoadDataframe(iguazu.Task):
         super().__init__(**kwargs)
         self.key = key
 
-    def run(self, *, file: FileProxy) -> pd.DataFrame:
+    def run(self, *, file: FileAdapter) -> pd.DataFrame:
         with pd.HDFStore(file.file, 'r') as store:
             contents = pd.read_hdf(store, key=self.key)
             assert isinstance(contents, pd.DataFrame)
             return contents
 
-    def preconditions(self, *, file: FileProxy, **inputs):
+    def preconditions(self, *, file: FileAdapter, **inputs):
         super().preconditions(file=file, **inputs)
         if file.empty:
             raise SoftPreconditionFailed('Input file was empty')
@@ -337,8 +337,8 @@ class MergeDataframes(iguazu.Task):
         self.path = path
 
     def run(self, *,
-            parents: List[FileProxy],
-            dataframes: List[pd.DataFrame]) -> FileProxy:
+            parents: List[FileAdapter],
+            dataframes: List[pd.DataFrame]) -> FileAdapter:
 
         output = self.default_outputs()
 

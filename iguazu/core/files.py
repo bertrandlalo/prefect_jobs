@@ -13,7 +13,7 @@ from quetzal.client.utils import get_data_dir
 logger = logging.getLogger(__name__)
 
 
-class FileProxy(abc.ABC):
+class FileAdapter(abc.ABC):
     """Abstract class for accessing files
 
     This class provides a key abstraction of Iguazu to simplify file
@@ -57,19 +57,19 @@ class FileProxy(abc.ABC):
         Using this property to write the contents of the
         :py:class:`pathlib.Path` does not guarantee that the file is saved on
         its associated backend. This is only guaranteed after calling the
-        :py:func:`~FileProxy.upload` method.
+        :py:func:`~FileAdapter.upload` method.
 
         """
         pass
 
     @property
     def filename(self) -> str:
-        """String representation of the :py:attr:`~FileProxy.file` property
+        """String representation of the :py:attr:`~FileAdapter.file` property
 
         This string representation is the absolute path of the
-        :py:class:`pathlib.Path` returned by :py:attr:`~FileProxy.file`
+        :py:class:`pathlib.Path` returned by :py:attr:`~FileAdapter.file`
         property. Consequently, using this property has the same side-effects as
-        using the :py:attr:`~FileProxy.file` property.
+        using the :py:attr:`~FileAdapter.file` property.
 
         Use this property when a string is required, such as the pesky
         :py:class:`pandas.HDFStore`, which requires a string.
@@ -94,7 +94,7 @@ class FileProxy(abc.ABC):
 
         Using this property to set or change the contents of the metadata does
         not guarantee that the file metadata is saved. This is only guaranteed
-        after calling the :py:func:`~FileProxy.upload` method.
+        after calling the :py:func:`~FileAdapter.upload` method.
 
         """
         pass
@@ -133,11 +133,11 @@ class FileProxy(abc.ABC):
                    path: Optional[str] = None,
                    suffix: Optional[str] = None,
                    extension: Optional[str] = None,
-                   temporary: bool = True) -> 'FileProxy':
-        """Create a new :py:class:`FileProxy` instance based on this instance
+                   temporary: bool = True) -> 'FileAdapter':
+        """Create a new :py:class:`FileAdapter` instance based on this instance
 
         This method provides a single implementation to create new files from
-        existing ones. It will create or retrieve a :py:class:`FileProxy`
+        existing ones. It will create or retrieve a :py:class:`FileAdapter`
         instance that inherits the same filename, path and extension as its
         parent (i.e. this instance), except where the parameters of this
         functions are set.
@@ -164,7 +164,7 @@ class FileProxy(abc.ABC):
 
         Returns
         =======
-        FileProxy
+        FileAdapter
             A file instance, either completely new because it did not exist on
             the underlying backend, or an instance associated to the existing
             file.
@@ -197,11 +197,11 @@ class FileProxy(abc.ABC):
         pass
 
 
-class QuetzalFile(FileProxy):
+class QuetzalFile(FileAdapter):
 
     def __init__(self, file_id=None, workspace_id=None, **client_kwargs):
         # if id_key not in metadata:
-        #     raise ValueError('Cannot create Quetzal file proxy without id')
+        #     raise ValueError('Cannot create Quetzal file adapter without id')
         super().__init__()
         self._file_id = file_id
         self._metadata = collections.defaultdict(dict)
@@ -286,7 +286,7 @@ class QuetzalFile(FileProxy):
             child._wid = self._wid
             return child
 
-        # Create new child proxy class and propagate metadata
+        # Create new child adapter class and propagate metadata
         child = QuetzalFile(file_id=None,
                             workspace_id=self._wid,
                             **self._client_kwargs)
@@ -404,8 +404,8 @@ class QuetzalFile(FileProxy):
         return (self._file_id, self._wid) == (other._file_id, other._wid)
 
 
-class LocalFile(FileProxy):
-    """File proxy implementation that uses local files
+class LocalFile(FileAdapter):
+    """File adapter implementation that uses local files
 
     This class is provided for local development of Iguazu tasks and flows.
     Local files use a :py:class:`pathlib.Path` as its underlying data backend,
@@ -463,16 +463,16 @@ class LocalFile(FileProxy):
         return str(self._file)
 
     def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'LocalFile':
-        """ Creates a child FileProxy that inherits from its parent's metadata.
+        """ Creates a child FileAdapter that inherits from its parent's metadata.
 
         Parameters
         ----------
-        filename: name of the FileProxy to create. If None, the a suffix is added to the parent's FileProxy
+        filename: name of the FileAdapter to create. If None, the a suffix is added to the parent's FileAdapter
         and the direction is given in the context by 'temp_dir'.
-        path: path relative to temp_dir where the child FileProxy is created (eg. "/preprocessed/galvanic") . If None, the relative path is the same
+        path: path relative to temp_dir where the child FileAdapter is created (eg. "/preprocessed/galvanic") . If None, the relative path is the same
         as it's parent relative to base_dir.
         suffix: suffix to add at the end of the filename (eg. "_clean"). If None, nothing is added.
-        extension: extension of the child FileProxy (eg. "hdf5", "csv", "png", ... ) . If None, the extension is the same as it's parent.
+        extension: extension of the child FileAdapter (eg. "hdf5", "csv", "png", ... ) . If None, the extension is the same as it's parent.
         temporary: not implemented yet.
 
         Returns
