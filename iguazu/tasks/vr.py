@@ -18,8 +18,7 @@ from iguazu.functions.specs import (
     check_event_specification, check_signal_specification, EventSpecificationError
 )
 from iguazu.functions.unity import extract_standardized_events
-from iguazu.helpers.files import FileProxy
-
+from iguazu.core.files import FileProxy
 
 logger = logging.getLogger(__name__)
 

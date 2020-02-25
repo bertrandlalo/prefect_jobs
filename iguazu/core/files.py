@@ -4,7 +4,7 @@ import copy
 import json
 import logging
 import pathlib
-from typing import Any, Dict, Optional
+from typing import Dict, Any, Optional
 
 from prefect import context
 from quetzal.client import helpers

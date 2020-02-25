@@ -9,8 +9,7 @@ from prefect import context, Task
 from prefect.engine import signals
 from quetzal.client import QuetzalAPIException, helpers
 
-from iguazu.helpers.files import QuetzalFile
-
+from iguazu.core.files import QuetzalFile
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 

@@ -17,7 +17,7 @@ from prefect.utilities.exceptions import PrefectError
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.helpers.states import GracefulFail, SkippedResult
 from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
 from iguazu.utils import fullname

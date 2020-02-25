@@ -6,7 +6,7 @@ from prefect.utilities.tasks import unmapped
 from quetzal.client.helpers import get_client
 import prefect
 
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.tasks.quetzal import CreateWorkspace, ConvertToFileProxy, DeleteWorkspace, Query, ScanWorkspace
 
 

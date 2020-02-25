@@ -4,7 +4,7 @@ import pandas as pd
 import prefect
 
 from iguazu.functions.unity import extract_sequences
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 

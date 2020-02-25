@@ -6,7 +6,7 @@ from prefect import Flow
 from prefect.utilities.debug import raise_on_exception
 
 from iguazu import Task
-from iguazu.helpers.files import LocalFile
+from iguazu.core.files import LocalFile
 
 
 class BadTask(Task):

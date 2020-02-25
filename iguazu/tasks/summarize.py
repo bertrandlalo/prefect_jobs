@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta
 

@@ -7,7 +7,7 @@ from dsu.pandas_helpers import estimate_rate
 
 from iguazu import Task
 from iguazu.core.exceptions import SoftPreconditionFailed
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.functions.cardiac import extract_all_peaks  # todo: move out of cardiac
 
 

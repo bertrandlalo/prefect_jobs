@@ -16,7 +16,7 @@ from prefect.utilities.debug import raise_on_exception
 
 import iguazu
 from iguazu import Task
-from iguazu.helpers.files import LocalFile
+from iguazu.core.files import LocalFile
 
 
 def test_unknown_init_kwarg():

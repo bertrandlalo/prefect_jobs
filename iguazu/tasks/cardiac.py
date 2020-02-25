@@ -12,7 +12,7 @@ from iguazu.functions.ppg_report import render_ppg_report
 from iguazu.functions.specs import (
     check_feature_specification, check_signal_specification
 )
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 
 
 class CleanPPGSignal(Task):

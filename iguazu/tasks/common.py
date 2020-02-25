@@ -10,7 +10,7 @@ import prefect
 import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
-from iguazu.helpers.files import FileProxy, LocalFile, _deep_update
+from iguazu.core.files import FileProxy, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
 

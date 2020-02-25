@@ -5,7 +5,7 @@ import prefect
 
 from iguazu.functions.behavior import extract_space_stress_spawns_stimulations, \
     extract_space_stress_participant_actions, extract_space_stress_scores
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 from iguazu.core.exceptions import IguazuError
