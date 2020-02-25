@@ -90,7 +90,6 @@ ORDER BY id                                    -- always in the same order
             meta_keys=['standard'],
             propagate_families=['omind', 'protocol'],
         )
-
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
         notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
