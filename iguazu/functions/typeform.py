@@ -1,9 +1,11 @@
+from collections import deque
 from functools import partial
 from typing import Dict, List
 import logging
 import pkg_resources
 
 from requests import codes, request
+import numpy as np
 import pandas as pd
 import pendulum
 
@@ -123,24 +125,62 @@ def answers_to_dataframe(response: Dict) -> pd.DataFrame:
     return dataframe
 
 
-def add_form_config(dataframe: pd.DataFrame, form_id: str) -> pd.DataFrame:
+def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
+    # Process form information from API response
+    fields = []
+    fields_queue = deque(form['fields'])
+    while fields_queue:
+        f = fields_queue.popleft()
+        fdict = {'field_ref': f['ref']}
+        properties = f.get('properties', {})
+        if f['type'] == 'opinion_scale':
+            fdict['steps'] = properties['steps']
+            fdict['start_at_one'] = properties['start_at_one']
+        fields.append(fdict)
+
+        if f['type'] == 'group':
+            fields_queue.extend(properties['fields'])
+
+    df_fields = pd.DataFrame.from_records(fields)
+
+    # Obtain manual config from resources CSV file
+    form_id = form['id']
     resource_name = f'forms/{form_id}.csv'
     logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
-
-    stream = None
+    form_config = dataframe[['field_ref']]  # dummy dataframe that would join without problems
     try:
         stream = pkg_resources.resource_stream(__name__, resource_name)
+        form_config = pd.read_csv(stream)
+        logger.debug('Got form config:\n%s', form_config.to_string())
     except FileNotFoundError:
         logger.warning('Could not find resource %s necessary to obtain the '
                        'configuration of form %s', resource_name, form_id,
                        exc_info=True)
 
-    if stream is not None:
-        form_config = pd.read_csv(stream)
-        logger.debug('Got form config:\n%s', form_config.to_string())
-        dataframe = dataframe.merge(form_config, on='field_ref', how='left')
+    merged = (
+        dataframe
+        .merge(df_fields, on='field_ref', how='left')
+        .merge(form_config, on='field_ref', how='left')
+    )
 
-    return dataframe
+    return merged
+
+
+def reverse_fields(dataframe: pd.DataFrame) -> pd.DataFrame:
+    df = dataframe.copy()
+    idx_numbers = (df['type'] == 'number') & (~df['domain'].isnull())
+    idx_reversed = df['reversed'].dropna().astype(bool)
+
+    import ipdb; ipdb.set_trace(context=21)
+    df['score'] = np.nan
+    df.loc[idx_numbers, 'score'] = pd.to_numeric(df.loc[idx_numbers, 'value'])
+    df.loc[idx_numbers & idx_reversed, 'score'] = (
+        df.loc[idx_numbers & idx_reversed]
+        # reversed = -x + a + b
+        .apply(lambda row: int(row.start_at_one) + int(row.steps) - row.score, axis='columns')
+    )
+
+    return df
 
 
 def _generic_parse(answer, *, key, func):

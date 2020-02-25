@@ -10,7 +10,9 @@ from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import AddSourceMetadata, LoadJSON, identity
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
-from iguazu.tasks.typeform import ExtractAnswers, FetchResponses, GetUserHash, Save, DEFAULT_BASE_URL
+from iguazu.tasks.typeform import (
+    ExtractAnswers, FetchResponses, GetForm, GetUserHash, Save, DEFAULT_BASE_URL
+)
 
 
 class DownloadTypeform(PreparedFlow):
@@ -127,7 +129,10 @@ class ExtractTypeformFeatures(PreparedFlow):
     REGISTRY_NAME = 'extract_typeform'
     DEFAULT_QUERY = None
 
-    def _build(self, *, form_id=None, **kwargs):
+    def _build(self, *,
+               base_url=DEFAULT_BASE_URL,
+               form_id=None,
+               **kwargs):
         required_families = dict(
             iguazu=None,
             omi=None,
@@ -152,16 +157,19 @@ class ExtractTypeformFeatures(PreparedFlow):
         self.update(dataset_flow)
 
         read_json = LoadJSON()
+        read_form = GetForm(form_id=form_id, base_url=base_url)
         extract_answers = ExtractAnswers()
 
         with self:
-            form_id_param = Parameter('form_id', required=False, default=form_id)
+            form = read_form()
             responses = read_json.map(file=json_files)
-            answers = extract_answers.map(response=responses, form_id=unmapped(form_id_param))
+            answers = extract_answers.map(response=responses, form=unmapped(form))
 
     @staticmethod
     def click_options():
         return GenericDatasetFlow.click_options() + (
+            click.option('--base-url', required=False, type=click.STRING, default=DEFAULT_BASE_URL,
+                         help='Base URL for the typeform API.'),
             click.option('--form-id', required=False, type=click.STRING,
                          help='ID of the form (questionnaire) on typeform.'),
         )
