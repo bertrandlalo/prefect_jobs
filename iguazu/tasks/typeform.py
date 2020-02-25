@@ -3,6 +3,7 @@ import pathlib
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
+import pandas as pd
 from prefect.client import Secret
 
 import iguazu
@@ -130,12 +131,12 @@ class Save(iguazu.Task):
         return file
 
 
-class ExtractAnswers(iguazu.Task):
+class ExtractScores(iguazu.Task):
 
-    def run(self, *, response: Dict, form: Dict):
+    def run(self, *, response: Dict, form: Dict) -> pd.DataFrame:
         df_answers = answers_to_dataframe(response)
-        df_start = add_form_config(df_answers, form)
-        df_scores = calculate_scores(df_start)
+        df_extended, domain_config = add_form_config(df_answers, form)
+        df_scores = calculate_scores(df_extended)
         self.logger.info('Extracted typeform answers and scores:\n%s',
                          df_scores.to_string())
         return df_scores

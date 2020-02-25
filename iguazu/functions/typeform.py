@@ -1,6 +1,6 @@
 from collections import deque
 from functools import partial
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import json
 import logging
 import pkg_resources
@@ -9,6 +9,7 @@ from requests import codes, request
 import numpy as np
 import pandas as pd
 import pendulum
+import yaml
 
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ def answers_to_dataframe(response: Dict) -> pd.DataFrame:
     return dataframe
 
 
-def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
+def add_form_config(dataframe: pd.DataFrame, form: Dict) -> Tuple[pd.DataFrame, Dict]:
     # Process form information from API response
     fields = []
     fields_queue = deque(form['fields'])
@@ -146,17 +147,18 @@ def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
 
     # Obtain manual config from resources CSV file
     form_id = form['id']
-    resource_name = f'typeforms/{form_id}/fields.csv'
-    logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
     form_config = dataframe[['field_ref']]  # dummy dataframe that would join without problems
+    resource_name = f'typeforms/{form_id}/fields.csv'
     try:
+        logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
         stream = pkg_resources.resource_stream(__name__, resource_name)
         form_config = pd.read_csv(stream)
-        logger.debug('Got form config:\n%s', form_config.to_string())
+        # logger.debug('Got form config:\n%s', form_config.to_string())
         form_config['value_map'] = form_config['value_map'].apply(lambda s: json.loads(s) if not pd.isnull(s) else None)
     except FileNotFoundError:
-        logger.warning('Could not find resource %s necessary to obtain the '
-                       'configuration of form %s', resource_name, form_id,
+        logger.warning('Could not find the fields configuration of form %s '
+                       '(there is no file %s)',
+                       form_id, resource_name,
                        exc_info=True)
 
     merged = (
@@ -165,7 +167,20 @@ def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
         .merge(form_config, on='field_ref', how='left')
     )
 
-    return merged
+    # Obtain domain scoring system
+    domain_config = {}
+    resource_name = f'typeforms/{form_id}/domains.yaml'
+    try:
+        logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
+        stream = pkg_resources.resource_stream(__name__, resource_name)
+        domain_config = yaml.safe_load(stream)
+    except FileNotFoundError:
+        logger.warning('Could not find the domains configuration of form %s '
+                       '(there is no file %s)',
+                       form_id, resource_name,
+                       exc_info=True)
+
+    return merged, domain_config
 
 
 def calculate_scores(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -201,7 +216,6 @@ def calculate_scores(dataframe: pd.DataFrame) -> pd.DataFrame:
         ~df.domain.isnull(),  # Values without domain are not useful
         ['id', 'field_ref', 'domain', 'dimension', 'value', 'score']
     ]
-
     return df
 
 

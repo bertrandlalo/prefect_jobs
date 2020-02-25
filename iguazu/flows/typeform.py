@@ -11,7 +11,7 @@ from iguazu.tasks.common import AddSourceMetadata, LoadJSON, identity
 from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
 from iguazu.tasks.typeform import (
-    ExtractAnswers, FetchResponses, GetForm, GetUserHash, Save, DEFAULT_BASE_URL
+    ExtractScores, FetchResponses, GetForm, GetUserHash, Save, DEFAULT_BASE_URL
 )
 
 
@@ -158,12 +158,12 @@ class ExtractTypeformFeatures(PreparedFlow):
 
         read_json = LoadJSON()
         read_form = GetForm(form_id=form_id, base_url=base_url)
-        extract_answers = ExtractAnswers()
+        extract_scores = ExtractScores()
 
         with self:
             form = read_form()
             responses = read_json.map(file=json_files)
-            answers = extract_answers.map(response=responses, form=unmapped(form))
+            scores = extract_scores.map(response=responses, form=unmapped(form))
 
     @staticmethod
     def click_options():
