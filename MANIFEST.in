@@ -1,2 +1,2 @@
 recursive-include iguazu/functions/templates *
-recursive-include iguazu/functions/forms *
+recursive-include iguazu/functions/typeforms *

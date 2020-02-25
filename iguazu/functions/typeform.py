@@ -1,6 +1,7 @@
 from collections import deque
 from functools import partial
 from typing import Dict, List
+import json
 import logging
 import pkg_resources
 
@@ -145,13 +146,14 @@ def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
 
     # Obtain manual config from resources CSV file
     form_id = form['id']
-    resource_name = f'forms/{form_id}.csv'
+    resource_name = f'typeforms/{form_id}/fields.csv'
     logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
     form_config = dataframe[['field_ref']]  # dummy dataframe that would join without problems
     try:
         stream = pkg_resources.resource_stream(__name__, resource_name)
         form_config = pd.read_csv(stream)
         logger.debug('Got form config:\n%s', form_config.to_string())
+        form_config['value_map'] = form_config['value_map'].apply(lambda s: json.loads(s) if not pd.isnull(s) else None)
     except FileNotFoundError:
         logger.warning('Could not find resource %s necessary to obtain the '
                        'configuration of form %s', resource_name, form_id,
@@ -166,19 +168,39 @@ def add_form_config(dataframe: pd.DataFrame, form: Dict) -> pd.DataFrame:
     return merged
 
 
-def reverse_fields(dataframe: pd.DataFrame) -> pd.DataFrame:
-    df = dataframe.copy()
-    idx_numbers = (df['type'] == 'number') & (~df['domain'].isnull())
-    idx_reversed = df['reversed'].dropna().astype(bool)
+def calculate_scores(dataframe: pd.DataFrame) -> pd.DataFrame:
+    df = dataframe.copy()  # type: pd.DataFrame
 
-    import ipdb; ipdb.set_trace(context=21)
+    # Manage values from value maps first
+    idx_with_value_map = ~df['value_map'].isnull()
+    logger.debug('Converting values using a value_map of %d answers',
+                 idx_with_value_map.sum())
+    df.loc[idx_with_value_map, 'value'] = (
+        df.loc[idx_with_value_map, ['value', 'value_map']]
+        .apply(lambda row: row.value_map.get(row.value, np.nan), axis='columns')
+    )
+    df.loc[idx_with_value_map, 'type'] = 'number'  # Now these are regular numbers
+
+    # Manage simple value=score case
+    idx_numbers = (df['type'] == 'number')
     df['score'] = np.nan
     df.loc[idx_numbers, 'score'] = pd.to_numeric(df.loc[idx_numbers, 'value'])
+
+    # Manage reversed scores
+    idx_reversed = df['reversed'].dropna().astype(bool)
+    logger.debug('Reversing scores on %d answers', (idx_numbers & idx_reversed).sum())
     df.loc[idx_numbers & idx_reversed, 'score'] = (
         df.loc[idx_numbers & idx_reversed]
-        # reversed = -x + a + b
+        # reverse range from [a,b] to [b,a] by doing: (a + b) - x
+        # where a is either 0 or 1, and b is the number of steps
         .apply(lambda row: int(row.start_at_one) + int(row.steps) - row.score, axis='columns')
     )
+
+    # Select only the useful columns and rows
+    df = df.loc[
+        ~df.domain.isnull(),  # Values without domain are not useful
+        ['id', 'field_ref', 'domain', 'dimension', 'value', 'score']
+    ]
 
     return df
 

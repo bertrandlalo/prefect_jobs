@@ -10,7 +10,7 @@ from iguazu.helpers.files import FileProxy, LocalFile, QuetzalFile
 from iguazu.core.exceptions import PreconditionFailed
 from iguazu.functions.typeform import (
     add_form_config, answers_to_dataframe, fetch_form, fetch_responses,
-    reverse_fields
+    calculate_scores
 )
 
 
@@ -135,6 +135,7 @@ class ExtractAnswers(iguazu.Task):
     def run(self, *, response: Dict, form: Dict):
         df_answers = answers_to_dataframe(response)
         df_start = add_form_config(df_answers, form)
-        df_reversed = reverse_fields(df_start)
-        self.logger.info('Extracted typeform answers:\n%s', df_reversed.to_string())
-        return df_reversed
+        df_scores = calculate_scores(df_start)
+        self.logger.info('Extracted typeform answers and scores:\n%s',
+                         df_scores.to_string())
+        return df_scores
