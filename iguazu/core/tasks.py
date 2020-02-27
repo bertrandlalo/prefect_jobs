@@ -11,9 +11,10 @@ from typing import (
 
 import pandas as pd
 import prefect
-from prefect.engine.signals import ENDRUN, PrefectStateSignal
+from prefect.engine.signals import ENDRUN
 from prefect.utilities.exceptions import PrefectError
 
+from iguazu import __version__
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
@@ -431,8 +432,9 @@ class Task(ManagedTask):
         metadata = {
             family_name: {
                 'created_by': 'iguazu',
+                'version':  __version__,
                 'task': f'{self.__class__.__module__}.{self.__class__.__name__}',
-                'version': self.version,
+                'task_version': self.version,
                 'status': status,
                 'problem': problem,
                 'parents': parents,
