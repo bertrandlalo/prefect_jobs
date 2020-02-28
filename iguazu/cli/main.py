@@ -14,16 +14,8 @@ from iguazu.cli.flows import flows_group
               required=False, default=None, help='Python logging level (for the console).')
 @click.option('--colored-logs', is_flag=True, default=False,
               help='Put colors on the logs')
-@click.option('--quetzal-logs', default=None, type=click.STRING,
-              required=False, help='Quetzal workspace name to upload logs.')
-@click.pass_context
-def cli(ctx, log_level, colored_logs, quetzal_logs):
+def cli(log_level, colored_logs):
     """Command-line utility for Iguazu operations"""
-
-    if quetzal_logs and not ctx.resilient_parsing:
-        ctx.obj = ctx.obj or {}
-        ctx.obj['quetzal_logs'] = quetzal_logs
-
     init_logging(log_level, colored_logs)
 
 

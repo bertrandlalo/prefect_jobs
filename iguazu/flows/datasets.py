@@ -10,7 +10,7 @@ from quetzal.client.cli import FamilyVersionListType
 
 from iguazu.core.flows import PreparedFlow
 from iguazu.tasks.common import AlwaysSucceed, Log, ListFiles
-from iguazu.tasks.handlers import logging_handler
+from iguazu.core.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, Query, ScanWorkspace
 
 logger = logging.getLogger(__name__)

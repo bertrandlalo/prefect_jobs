@@ -4,6 +4,7 @@ import functools
 import inspect
 import logging
 import os
+import pathlib
 from typing import (
     Any, Callable, Container, ContextManager, Iterable, Mapping, NoReturn,
     Optional,
@@ -18,9 +19,9 @@ from iguazu import __version__
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
-from iguazu.core.files import FileAdapter
+from iguazu.core.files import FileAdapter, LocalFile, QuetzalFile
 from iguazu.helpers.states import GracefulFail, SkippedResult
-from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
+from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.utils import fullname
 
 logger = logging.getLogger(__name__)
@@ -251,14 +252,17 @@ class Task(ManagedTask):
             When the input does not meet a required condition but the task can
             continue with its default outputs.
         """
+        family = self.meta.metadata_journal_family
         # Precondition 1:
         # Previous output does not exist or task is forced
-        default_output = self.default_outputs(**inputs)
-        family = self.meta.metadata_journal_family
-        if isinstance(default_output, FileAdapter):
-            default_output_meta = default_output.metadata.get(family, {})
-            if not self.forced and default_output_meta.get('status', None) is not None:
-                raise PreviousResultsExist('Previous results already exist')
+        if not self.forced:
+            default_output = self.default_outputs(**inputs)
+            if isinstance(default_output, FileAdapter):
+                default_output_meta = default_output.metadata.get(family, {})
+                default_base_meta = default_output.metadata['base']
+                if default_base_meta.get('state', None) != 'DELETED' and \
+                   default_output_meta.get('status', None) is not None:
+                    raise PreviousResultsExist('Previous results already exist')
 
         # Precondition 2:
         # Inputs are *not* marked as a failed result from a previous task
@@ -459,16 +463,74 @@ class Task(ManagedTask):
                     extension: Optional[str] = None,
                     temporary: bool = True) -> FileAdapter:
 
-        # import pathlib
-        # if filename is None:
-        #     if parent is None:
-        #         raise ValueError('Cannot create a file without name and without parent')
-        #     # filename = parent.filename
-        #     tmp_path = pathlib.Path(parent.filename)
-        #
-        # if suffix is not None:
-        #     pass
-        pass
+        # Determine backend
+        data_backend = prefect.context.get('data_backend', None)
+        workspace_id = prefect.context.get('data_backend_workspace_id', None)
+        if data_backend is None:
+            self.logger.warning('data_backend is not set. Set it with the '
+                                '--data-backend option of the iguazu flow command')
+            if parent is None:
+                raise RuntimeError('Cannot create new files when the data_backend is '
+                                   'not set')
+            data_backend = 'quetzal' if isinstance(parent, QuetzalFile) else 'quetzal'
+            self.logger.debug('Guessing data backend to be %s due to type of its '
+                              'parent %s', data_backend, parent)
+
+        init_kwargs = {}
+        if data_backend == 'local':
+            file_class = LocalFile
+        else:
+            file_class = QuetzalFile
+            init_kwargs = {'workspace_id': workspace_id}
+            if workspace_id is None:
+                if parent is not None and isinstance(parent, QuetzalFile):
+                    init_kwargs['workspace_id'] = parent.workspace_id
+                else:
+                    self.logger.warning('No workspace_id has been set, it will '
+                                        'not be possible to create new files...')
+
+        # Handle filenames, path, prefixes, etc
+        parent_meta = {}
+        parent_ids = []
+        journal_family = self.meta.metadata_journal_family
+        if parent is not None:
+            path = path or parent.dirname
+            tmp = pathlib.Path(filename or parent.basename)
+            filename = tmp.stem
+            extension = extension or tmp.suffix
+            important_keys = ('created_by', 'version', 'task', 'task_version')
+            for k in important_keys:
+                if k in parent.metadata[journal_family]:
+                    parent_meta[journal_family][k] = parent.metadata[journal_family]
+            parent_ids = [parent.id]
+        filename = ''.join([filename, suffix or '', extension])
+
+        new_file = file_class.find(filename=filename,
+                                   path=path,
+                                   metadata=parent_meta,
+                                   **init_kwargs)
+        if self.forced:
+            if new_file is not None:
+                # When task is forced but there was a previous result, we delete
+                # it to avoid confusion
+                self.logger.debug('Deleting previous existing file %s because '
+                                  'this task is forced', new_file)
+                new_file.delete()
+            new_file = file_class(filename=filename, path=path,
+                                  temporary=temporary,
+                                  **init_kwargs)
+        else:
+            new_file = file_class.find(filename=filename,
+                                       path=path,
+                                       metadata=parent_meta,
+                                       **init_kwargs)
+            if new_file is None:
+                new_file = file_class(filename=filename, path=path,
+                                      temporary=temporary,
+                                      **init_kwargs)
+
+        new_file.metadata[journal_family]['parents'] = parent_ids
+        return new_file
 
     @property
     def version(self):

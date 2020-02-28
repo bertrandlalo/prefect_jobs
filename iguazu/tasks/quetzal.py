@@ -153,8 +153,8 @@ class Query(QuetzalBaseTask):
             self.logger.info('Query was limited to %d results', total)
 
         if self._as_file_adapter:
-            adapters = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
-            return adapters
+            for i, row in enumerate(rows):
+                rows[i] = QuetzalFile.retrieve(file_id=row['id'], workspace_id=workspace_id)
 
         return rows
 

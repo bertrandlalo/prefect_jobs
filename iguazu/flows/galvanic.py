@@ -8,7 +8,7 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
 from iguazu.tasks.galvanic import ApplyCVX, CleanSignal, DetectSCRPeaks, Downsample
-from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
+from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.spectral import BandPowers
 from iguazu.tasks.summarize import ExtractFeatures, SummarizePopulation
 from iguazu.tasks.unity import ExtractSequences

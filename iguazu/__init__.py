@@ -4,4 +4,4 @@ from . import utils  # Needed for a circular dependency resolution
 from .core.tasks import Task
 
 
-__all__ = ['Task']
+__all__ = ['__version__', 'Task']

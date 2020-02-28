@@ -69,7 +69,7 @@ class FileAdapter(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def retrieve(*, id, **kwargs) -> Optional['FileAdapter']:
+    def retrieve(*, file_id, **kwargs) -> Optional['FileAdapter']:
         pass
 
     @property
@@ -190,9 +190,9 @@ class FileAdapter(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     def download(self):
-        pass
+        self.download_data()
+        self.download_metadata()
 
     @abc.abstractmethod
     def download_data(self):
@@ -247,7 +247,6 @@ class FileAdapter(abc.ABC):
     #     """
     #     pass
 
-    @abc.abstractmethod
     def upload(self):
         """Save the file data and metadata on the underlying backend
 
@@ -256,7 +255,8 @@ class FileAdapter(abc.ABC):
         contents of the file stored, then no change is applied.
 
         """
-        pass
+        self.upload_data()
+        self.upload_metadata()
 
     @abc.abstractmethod
     def upload_data(self):
@@ -298,18 +298,18 @@ class FileAdapter(abc.ABC):
 
 
 class QuetzalFile(FileAdapter):
-    """
-
-    Attributes
-    ----------
-    _client
-        Reusable Quetzal client object. Will be initialized from a Prefect
-        secret using :ref:`quetzal_client_from_secret`.
-    _file_id
-        Quetzal file identifier. When this member is ``None``, it means that
-        this file is not known to Quetzal yet.
-
-    """
+    # """
+    #
+    # Attributes
+    # ----------
+    # _client
+    #     Reusable Quetzal client object. Will be initialized from a Prefect
+    #     secret using :ref:`quetzal_client_from_secret`.
+    # _file_id
+    #     Quetzal file identifier. When this member is ``None``, it means that
+    #     this file is not known to Quetzal yet.
+    #
+    # """
 
     def __init__(self, *,
                  filename: str,
@@ -346,20 +346,21 @@ class QuetzalFile(FileAdapter):
                                        filename=filename, path=path)
 
         if candidates:
-            logger.debug('File by name and path gave %d candidates. '
-                         'Only the most recent one will be considered', len(candidates))
             most_recent_detail = max(candidates, key=lambda d: d.date)
-            instance = QuetzalFile.retrieve(id=most_recent_detail.id, workspace_id=workspace_id)
+            logger.debug('File by name and path gave %d candidates. '
+                         'Only the most recent one will be considered: %s',
+                         len(candidates), most_recent_detail)
+            if most_recent_detail.state == 'DELETED':
+                logger.debug('Candidate is a deleted file, discarding')
+                return None
+
+            instance = QuetzalFile.retrieve(file_id=most_recent_detail.id, workspace_id=workspace_id)
             if instance is None:
                 logger.error('Something is wrong: could not have found an instance '
                              'that does not exist!')
                 raise RuntimeError('Found candidate but could not retrieve it')
 
             meta = instance.metadata
-            state = meta['base'].get('state', 'DELETED')
-            if state == 'DELETED':
-                logger.debug('Candidate is a deleted file, discarding', state)
-                return None
             if not mapping_issubset(metadata, meta):
                 logger.debug('Candidate does not match requested metadata')
                 return None
@@ -372,9 +373,9 @@ class QuetzalFile(FileAdapter):
         return None
 
     @staticmethod
-    def retrieve(*, id, workspace_id=None) -> Optional['QuetzalFile']:
+    def retrieve(*, file_id, workspace_id=None) -> Optional['QuetzalFile']:
         client = quetzal_client_from_secret()
-        meta = helpers.file.metadata(client, id, wid=workspace_id)
+        meta = helpers.file.metadata(client, file_id, wid=workspace_id)
         filename = meta['base']['filename']
         path = meta['base']['path']
         state = meta['base']['state']
@@ -386,8 +387,8 @@ class QuetzalFile(FileAdapter):
         instance = QuetzalFile(filename=filename, path=path,
                                workspace_id=workspace_id, temporary=temporary)
         # ...and then complete its file_id and metadata
-        instance._file_id = id
-        # instance.metadata.update(meta)
+        instance._file_id = file_id
+        instance._metadata.update(meta)  # Re-use previous results to avoid an extra request
 
         # ...finally, just check that the instance _local_path is not pointing
         # to old data to avoid confusion
@@ -400,7 +401,7 @@ class QuetzalFile(FileAdapter):
             if (size, checksum) != (f_size, f_checksum):
                 logger.debug('File %s already exists locally in %s,'
                              'but its size and checksum differ from Quetzal '
-                             'metadata. Erasing local file...', id, instance.file)
+                             'metadata. Erasing local file...', file_id, instance.file)
                 instance._local_path.unlink()
         return instance
 
@@ -443,6 +444,10 @@ class QuetzalFile(FileAdapter):
         if self._client is None:
             self._client = quetzal_client_from_secret()
         return self._client
+
+    @property
+    def workspace_id(self):
+        return self._workspace_id
 
     # def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'QuetzalFile':
     #     # TODO: define what metadata gets inherited!
@@ -532,10 +537,6 @@ class QuetzalFile(FileAdapter):
     #     logger.info('No candidate matches')
     #     return None
 
-    def upload(self):
-        self.upload_data()
-        self.upload_metadata()
-
     def upload_data(self):
         if self._file_id is not None:
             logger.debug('File already has an id, no need to upload to Quetzal')
@@ -544,11 +545,13 @@ class QuetzalFile(FileAdapter):
             logger.error('Something is wrong: uploading a file that does not exist')
             raise RuntimeError('Cannot upload if file does not exist')
         else:
+            logger.debug('Uploading file %s to Quetzal', self._local_path)
             with self._local_path.open('rb') as fd:
                 details = helpers.workspace.upload(self.client, self._workspace_id, fd,
                                                    path=self.dirname,
                                                    temporary=self._temporary)
             self._file_id = details.id
+            logger.debug('File was successfully uploaded and now is id=%s', self._file_id)
 
     def upload_metadata(self):
         metadata = copy.deepcopy(self.metadata)
@@ -566,17 +569,14 @@ class QuetzalFile(FileAdapter):
     def delete(self):
         logger.debug('Deleting file %s from Quetzal', self)
         if self._local_path.exists():
-            logger.debug('Underlying data file exists at %s. Deleting it', self._local_path)
+            logger.debug('Local copy of data file exists at %s. Deleting it as well',
+                         self._local_path)
             self._local_path.unlink()
         if self._file_id is not None:
-            logger.debug('Sending request delete %s at workspace %s', self._file_id, self._workspace_id)
+            logger.debug('Sending request to delete to workspace %s', self._workspace_id)
             helpers.file.delete(self.client, self._file_id, self._workspace_id)
             self._file_id = None
         self._metadata.clear()
-
-    def download(self):
-        self.download_data()
-        self.download_metadata()
 
     def download_data(self):
         if self._file_id is not None and not self._local_path.exists():
@@ -598,13 +598,6 @@ class QuetzalFile(FileAdapter):
             self._metadata.clear()
             self._metadata.update(quetzal_metadata)
 
-    # def _build_path(self, *, filename, path=None, temporary=False):
-    #     if temporary:
-    #         root = context.temp_dir
-    #     else:
-    #         root = context.output_dir
-    #     return pathlib.Path(root) / (path or '') / filename
-
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['_client']
@@ -613,7 +606,6 @@ class QuetzalFile(FileAdapter):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self._local_path = None
         self._client = None
         self._metadata = collections.defaultdict(dict)
 
@@ -626,7 +618,7 @@ class QuetzalFile(FileAdapter):
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        return (self._file_id, self._workspace_id) == (other._file_id, other._wid)
+        return (self._file_id, self._workspace_id) == (other._file_id, other._workspace_id)
 
 
 class LocalFile(FileAdapter):
@@ -801,10 +793,10 @@ def quetzal_client_from_secret():
     try:
         quetzal_kws = Secret('QUETZAL_CLIENT_KWARGS').get()
     except ValueError as ex:
-        logger.warning('Could not retrieve prefect secret '
-                       'QUETZAL_CLIENT_KWARGS: %s. Falling back to environment '
-                       'variable-based client',
-                       ex)
+        logger.debug('Could not retrieve prefect secret '
+                     'QUETZAL_CLIENT_KWARGS due to the following exception: %s. '
+                     'Falling back to environment variable-based client',
+                      ex)
         quetzal_kws = {}
 
     return helpers.get_client(**quetzal_kws)
