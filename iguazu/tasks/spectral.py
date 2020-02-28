@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 import prefect
 
+import iguazu
 from iguazu.helpers.files import FileProxy
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
@@ -11,7 +12,7 @@ from iguazu.core.exceptions import IguazuError
 from iguazu.functions.spectral import bandpower
 
 
-class BandPowers(prefect.Task):
+class BandPowers(iguazu.Task):
 
     def __init__(self,
                  epoch_size: int,
