@@ -13,6 +13,7 @@ from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, 
 from iguazu.core.files import FileAdapter, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
+from iguazu.functions import specs
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,7 @@ class MergeHDF5(iguazu.Task):
                  verify_status: bool = True,
                  hdf5_family: Optional[str] = None,
                  meta_keys: Optional[Iterable[str]] = None,
+                 propagate_families: Optional[List[str]] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.suffix = suffix
@@ -178,6 +180,7 @@ class MergeHDF5(iguazu.Task):
         self.verify_status = verify_status
         self.hdf5_family = hdf5_family
         self.meta_keys = tuple(meta_keys or [])
+        self.propagate_families = propagate_families or {}
 
     def run(self, *, parent: FileAdapter, **kwargs) -> FileAdapter:
         output_file = self.default_outputs(parent=parent, **kwargs)
@@ -208,22 +211,66 @@ class MergeHDF5(iguazu.Task):
                         assert isinstance(dataframe, pd.DataFrame)  # Protect from hdf that store something else
                         dataframe.to_hdf(output_store, key=g)
 
-                        # Propagate HDF5 metadata
-                        output_node = output_store.get_node(g)
-                        for meta_name in self.meta_keys:
-                            if meta_name not in input_node._v_attrs:
-                                logger.info('HDF5 metadata key "%s" was not present on group %s '
-                                            'for file %s: no HDF5 metadata propagation',
-                                            meta_name, g, value)
-                                continue
-                            output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
+                        # # Propagate HDF5 metadata
+                        # output_node = output_store.get_node(g)
+                        # for meta_name in self.meta_keys:
+                        #     if meta_name not in input_node._v_attrs:
+                        #         logger.info('HDF5 metadata key "%s" was not present on group %s '
+                        #                     'for file %s: no HDF5 metadata propagation',
+                        #                     meta_name, g, value)
+                        #         continue
+                        #     output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
 
         # Set the hdf5 group metadata
         if self.hdf5_family:
+            self.logger.debug('Automatic detection of HDF5 groups that meet the standard...')
+            output_file.metadata.setdefault(self.hdf5_family, {})
             with pd.HDFStore(output_file.file, 'r') as store:
                 groups = list(store)
-                output_file.metadata.setdefault(self.hdf5_family, {})
-                output_file.metadata[self.hdf5_family]['groups'] = groups
+                for g in groups:
+
+                    if g.endswith('/annotations'):
+                        self.logger.debug('Ignoring group %s due to naming', g)
+                        continue
+
+                    # Check signals specs
+                    try:
+                        specs.check_signal_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the signal specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('signals', [])
+                        output_file.metadata[self.hdf5_family]['signals'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard signals dataframe due to  %s',
+                                          g, ex)
+
+                    # Check event specs
+                    try:
+                        specs.check_event_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the event specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('events', [])
+                        output_file.metadata[self.hdf5_family]['events'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard events dataframe due to  %s',
+                                          g, ex)
+
+                    # Check feature specs
+                    try:
+                        specs.check_feature_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the features specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('features', [])
+                        output_file.metadata[self.hdf5_family]['features'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard features dataframe due to  %s',
+                                          g, ex)
+
+        # Propagate metadata
+        for k in self.propagate_families:
+            parent_meta = parent.metadata.get(k, {})
+            parent_meta.pop('id', None)
+            output_file.metadata[k].update(parent_meta)
 
         # Handle status with a partial result
         # This is a bit hacky because I had never thought of the use-case:
@@ -269,8 +316,13 @@ class MergeHDF5(iguazu.Task):
             groups |= gi  # set union
 
     def default_outputs(self, *, parent, **inputs):
-        output = parent.make_child(temporary=self.temporary,
-                                   suffix=self.suffix)
+        # output = parent.make_child(temporary=self.temporary,
+        #                            suffix=self.suffix)
+        output = self.create_file(
+            parent=parent,
+            suffix=self.suffix,
+            temporary=self.temporary,
+        )
         return output
 
 

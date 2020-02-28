@@ -168,7 +168,11 @@ class ExtractStandardEvents(iguazu.Task):
         """
         original_kws = prefect.context.run_kwargs
         events = original_kws['events']
-        output = events.make_child(suffix='_standard_events')
+        # output = events.make_child(suffix='_standard_events')
+        output = self.create_file(
+            parent=events,
+            suffix='_standard_events',
+        )
         return output
 
     def postconditions(self, results):
@@ -410,7 +414,11 @@ class ExtractNexusSignal(iguazu.Task):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
         names = '_'.join([self.source_column, self.target_column])
-        output = signals.make_child(suffix=f'_standard_{names}')
+        # output = signals.make_child(suffix=f'_standard_{names}')
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_standard_{names}'
+        )
         return output
 
     def preconditions(self, *, signals, **kwargs):
