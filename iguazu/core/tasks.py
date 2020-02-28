@@ -451,6 +451,25 @@ class Task(ManagedTask):
         opt_dict['managed_inputs'][name] = (args, kwargs)
         self._meta = TaskOptions(**opt_dict)
 
+    def create_file(self, *,
+                    parent: Optional[FileAdapter] = None,
+                    filename: Optional[str] = None,
+                    path: Optional[str] = None,
+                    suffix: Optional[str] = None,
+                    extension: Optional[str] = None,
+                    temporary: bool = True) -> FileAdapter:
+
+        # import pathlib
+        # if filename is None:
+        #     if parent is None:
+        #         raise ValueError('Cannot create a file without name and without parent')
+        #     # filename = parent.filename
+        #     tmp_path = pathlib.Path(parent.filename)
+        #
+        # if suffix is not None:
+        #     pass
+        pass
+
     @property
     def version(self):
         """ Version of this task
@@ -473,6 +492,10 @@ class Task(ManagedTask):
             forced_tasks = prefect.context.forced_tasks
             return self.name in forced_tasks or 'all' in forced_tasks
         return False
+
+    @property
+    def run_kwargs(self) -> Mapping:
+        return prefect.context.get('run_kwargs', {})
 
     def _safe_prepare_inputs(self, safe_excs, **kws):
         safe_excs = safe_excs or ()

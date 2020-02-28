@@ -2,7 +2,7 @@
 Utility functions used on iguazu that do not belong anywhere else.
 """
 
-from typing import Any
+from typing import Any, Mapping
 import functools
 import importlib
 import pathlib
@@ -92,3 +92,17 @@ def load_pickle(fname, default=None):
         return obj
     except (OSError, IOError):
         return default
+
+
+def mapping_issubset(d1: Mapping, d2: Mapping) -> bool:
+    for k in d1:
+        if k not in d2:
+            return False
+        v1 = d1[k]
+        v2 = d2[k]
+        if isinstance(v1, Mapping) and isinstance(v2, Mapping):
+            if not mapping_issubset(v1, v2):
+                return False
+        elif v1 != v2:
+            return False
+    return True

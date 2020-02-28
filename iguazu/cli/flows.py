@@ -168,6 +168,7 @@ def run_flow(flow_class, **kwargs):
 
     # Prepare context arguments
     context_args = dict(
+        # data_dir=ctx.obj.get('data_dir', None) or get_data_dir(), # TODO: consider this
         temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
         output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
         quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
@@ -182,20 +183,19 @@ def run_flow(flow_class, **kwargs):
         else:
             context_args['forced_tasks'] = forced_tasks
 
-    # TODO: this could be set in a context secret
-    if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
-        # At least one of these keys exist in the environment
-        quetzal_kws = dict(
-            url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-            username=os.getenv('QUETZAL_USER', 'admin'),
-            password=os.getenv('QUETZAL_PASSWORD', 'password'),
-            insecure=str2bool(os.getenv('QUETZAL_INSECURE', 0))
-        )
-        context_args['quetzal_client'] = quetzal_kws
-
+    # Handle secrets
     context_args.setdefault('secrets', {})
     if 'SLACK_WEBHOOK_URL' in os.environ:
         context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+
+    quetzal_kws = {}
+    for var in {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD', 'QUETZAL_API_KEY'}:
+        if var in os.environ:
+            name = var[len('QUETZAL_'):].lower()
+            quetzal_kws[name] = os.environ[var]
+
+    if quetzal_kws:
+        context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
     ###
     # Flow execution
