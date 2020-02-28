@@ -280,8 +280,9 @@ class QuetzalFile(FileProxy):
             for family in parent_metadata:
                 parent_metadata[family].pop('id', None)
             parent_metadata.pop('base', None)
-            if 'iguazu' in parent_metadata:
-                parent_metadata['iguazu'].pop('parents', None)
+            parent_metadata.pop('iguazu', None)
+            # if 'iguazu' in parent_metadata:
+            #     parent_metadata['iguazu'].pop('parents', None)
             child._metadata = _deep_update(child._metadata, parent_metadata)
             child._wid = self._wid
             return child
@@ -291,6 +292,7 @@ class QuetzalFile(FileProxy):
                             workspace_id=self._wid,
                             **self._client_kwargs)
         child._metadata = copy.deepcopy(self._metadata)
+        child._metadata.pop('iguazu', None)
         if not isinstance(child._metadata, collections.defaultdict):
             tmp = collections.defaultdict(dict)
             tmp.update(child._metadata)
