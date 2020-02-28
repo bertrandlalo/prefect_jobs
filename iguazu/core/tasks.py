@@ -256,6 +256,10 @@ class Task(ManagedTask):
         # Precondition 1:
         # Previous output does not exist or task is forced
         if not self.forced:
+            # Here, it is important to generate the default_outputs only when
+            # the task is not forced, because when the task IS forced, then
+            # any call to create_file in default_outputs will delete any
+            # pre-existing file
             default_output = self.default_outputs(**inputs)
             if isinstance(default_output, FileAdapter):
                 default_output_meta = default_output.metadata.get(family, {})
@@ -422,7 +426,7 @@ class Task(ManagedTask):
 
         parents = []
         for value in inputs.values():
-            if isinstance(value, FileAdapter):
+            if isinstance(value, FileAdapter) and value.id is not None:
                 parents.append(value.id)
 
         # TODO: it would be useful to add the inputs to the journal.
@@ -490,24 +494,26 @@ class Task(ManagedTask):
                                         'not be possible to create new files...')
 
         # Handle filenames, path, prefixes, etc
-        parent_meta = {}
         parent_ids = []
-        journal_family = self.meta.metadata_journal_family
         if parent is not None:
             path = path or parent.dirname
             tmp = pathlib.Path(filename or parent.basename)
             filename = tmp.stem
             extension = extension or tmp.suffix
-            important_keys = ('created_by', 'version', 'task', 'task_version')
-            for k in important_keys:
-                if k in parent.metadata[journal_family]:
-                    parent_meta[journal_family][k] = parent.metadata[journal_family]
             parent_ids = [parent.id]
         filename = ''.join([filename, suffix or '', extension])
 
+        journal_family = self.meta.metadata_journal_family
+        default_meta = self.default_metadata(None, **self.run_kwargs)
+        match_meta = {journal_family: {}}
+        important_keys = ('created_by', 'version', 'task', 'task_version')
+        for k in important_keys:
+            if k in default_meta[journal_family]:
+                match_meta[journal_family][k] = default_meta[journal_family][k]
+
         new_file = file_class.find(filename=filename,
                                    path=path,
-                                   metadata=parent_meta,
+                                   metadata=match_meta,
                                    **init_kwargs)
         if self.forced:
             if new_file is not None:
@@ -522,7 +528,7 @@ class Task(ManagedTask):
         else:
             new_file = file_class.find(filename=filename,
                                        path=path,
-                                       metadata=parent_meta,
+                                       metadata=match_meta,
                                        **init_kwargs)
             if new_file is None:
                 new_file = file_class(filename=filename, path=path,

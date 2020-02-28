@@ -362,7 +362,7 @@ class QuetzalFile(FileAdapter):
 
             meta = instance.metadata
             if not mapping_issubset(metadata, meta):
-                logger.debug('Candidate does not match requested metadata')
+                logger.debug('Candidate does not match requested metadata, discarding')
                 return None
 
             logger.debug('Candidate matches state, metadata, file and path: %s',
