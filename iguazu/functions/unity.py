@@ -5,6 +5,7 @@ import pandas as pd
 from datascience_utils.unity import fix_unity_events
 from dsu.unity import extract_marker_version, extract_complete_sequences, \
     extract_complete_sequence_times
+
 from iguazu.functions.specs import empty_events, sort_standard_events
 
 logger = logging.getLogger(__name__)
@@ -107,10 +108,10 @@ def extract_sequences(events: pd.DataFrame, sequences: List[str] = None) -> pd.D
     ToDo: This function only works for post-legacy events.
     """
 
-    if extract_marker_version(events) == 'legacy':
-        # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
-        logger.warning('Sequences report for legacy events not yet implemented')
-        return pd.DataFrame()
+    # if extract_marker_version(events) == 'legacy':
+    #     # TODO: commit, push and PR for the small fix on this function in datascience_utils (dsu?)
+    #     logger.warning('Sequences report for legacy events not yet implemented')
+    #     return pd.DataFrame()
 
     if 'xdf_timestamps' in events:
         events.drop('xdf_timestamps', axis=1, inplace=True)
