@@ -7,107 +7,15 @@ from dsu.dsp.filters import filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
 from dsu.epoch import sliding_window
 from dsu.pandas_helpers import estimate_rate
+from sklearn.metrics import auc
 from sklearn.preprocessing import RobustScaler
 
-from iguazu.core.exceptions import IguazuError
-from iguazu.functions.common import verify_monotonic
+from iguazu.core.features import dataclass_to_dataframe
 
 logger = logging.getLogger(__name__)
 
 
-# TODO: delete this function that's no relevance now that we 'standardize' the signals/events before.
-# def galvanic_prepare(data, events, input_column, output_column, session_labels, warmup_duration,
-#                      sampling_rate, up, down, quality_kwargs, corrupted_maxratio=1, unit='ohm'):
-#     """
-#      Prepare the galvanic data to standardize data across devices.
-#      This function renames the columns, truncate the data based on the first and last event timestamps
-#      and detect bad quality samples.
-#
-#      It should be noted that the parameters chosen for this function are particularly
-#      specific to the device we use, ie. Nexus from MindMedia.
-#      Eg. When the amplifier saturates (ie. Voltage above 2V, ie. resistance too low), Nexus will return 0.0, but other
-#      devices might have different behaviors. Same for the so-called 'glitches' those may appear only in some devices.
-#
-#     The pipeline will:
-#         - resample signal at uniform rate (`sampling_rate`*`up`/`down`) using a polyphase filtering.
-#         - detect bad samples calling :py:func:dsu.quality.detect_bad_from_amplitude with `glitch_kwargs`
-#         - evaluate the corruption ratio. If too high, then raise an error.
-#
-#     Parameters
-#     ----------
-#     data: pd.DataFrame
-#         Dataframe containing the raw GSR in channel given by `input_column`.
-#     events: pd.DataFrame
-#         Dataframe with 2 columns: [label, data], containing string labels and serialized meta giving the context of the labels.
-#     session_labels: list|None
-#        Labels of first and last events, to truncate the data. If None, the first and last timestamp of the events dataframe are considered.
-#     input_column: str
-#         Name of column where the data of interest are located.
-#     output_column: str
-#         Name of column to rename the data of interest.
-#     warmup_duration: float
-#         Duration (in s) to select before and after the vr session (to avoid side effects in the future
-#     processing steps, ie. that we can then set to bad ).
-#     sampling_rate: float
-#         Sampling rate of the input signal, to resample it to (sampling_rate * up / down) using polyphase filtering.
-#     up : int
-#         The up-sampling factor.
-#     down : int
-#         The down-sampling factor.
-#     quality_kwargs:
-#         Keywords arguments to detect bad samples. This parameter depends on the device specifications.
-#     corrupted_maxratio: float
-#         Maximum acceptable ratio of corrupted (bad) samples.
-#
-#     Returns
-#     -------
-#     data: pd.DataFrame
-#           Dataframe with columns 'gsr', 'gsr_clean', 'gsr_clean_inversed', 'gsr_clean_inversed_lowpassed',
-#           'gsr_clean_inversed_lowpassed_zscored', 'bad'
-#
-#     """
-#     # select and rename galvanic column
-#     data = data.loc[:, [input_column]].rename(columns={input_column: output_column})
-#
-#     if not events.index.is_monotonic:
-#         raise Exception('Events index should be monotonic. ')
-#     warmup_timedelta = np.timedelta64(1, 's') * warmup_duration
-#     if session_labels is None:
-#         begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
-#         ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
-#     else:
-#         if session_labels[0] not in events.label.values or session_labels[1] not in events.label.values:
-#             raise IguazuError(f'Could not find labels {session_labels} in the events ')
-#         begins = events[events.label == session_labels[0]].index[
-#                      0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
-#         ends = events[events.label == session_labels[1]].index[
-#                    -1] + warmup_timedelta  # begin 30 seconds before the beginning of the session
-#     # truncate dataframe on session times
-#     data = data[begins:ends]
-#
-#     # resample uniformly the data using a polyphase filtering
-#     logger.debug('Uniform resampling to %d Hz', sampling_rate)
-#
-#     data = poly_uniform_sampling(data, sampling_rate, up, down)
-#     # add a column "bad" with rejection boolean on Amplifier and HF (glitches) criteria
-#     logger.debug('Detecting amplifier saturation and glitches')
-#     data = quality_gsr(data, column=output_column,
-#                        **quality_kwargs)  # /!\ before, we had: column=column + '_filtered'  /!\
-#     # estimate the corrupted ratio
-#     # if too many samples were dropped, raise an error
-#     corrupted_ratio = data.bad.mean()
-#     if corrupted_ratio > corrupted_maxratio:
-#         raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
-#                           f'exceeds {corrupted_maxratio * 100:.0f}%')
-#     if unit == 'ohm':
-#         # take inverse to have the SKIN CONDUCTANCE G = 1/R = I/U
-#         logger.debug('Inverting signals')
-#         data = inverse_signal(data, columns=['gsr'], suffix='')
-#
-#     return data
-#
-
-def galvanic_clean(data, events, annotations, column, warmup_duration, corrupted_maxratio,
+def galvanic_clean(signals, events, annotations, column, warmup_duration, corrupted_maxratio,
                    interpolation_kwargs, filter_kwargs, scaling_kwargs):
     """
      Preprocess the galvanic data.
@@ -124,9 +32,6 @@ def galvanic_clean(data, events, annotations, column, warmup_duration, corrupted
 
     Parameters
     ----------
-    data: pd.DataFrame
-        Dataframe containing the raw GSR samples (in channel given by column_name) and
-        their rejection status (in column named 'bad' ) .
     column: str  #TODO: since it's now standardized, should we fix this to 'GSR'?
         Name of column where the data of interest are located.
     processing steps, ie. that we can then set to bad ).
@@ -150,20 +55,18 @@ def galvanic_clean(data, events, annotations, column, warmup_duration, corrupted
 
     """
 
-    verify_monotonic(events, 'events')
     warmup_timedelta = np.timedelta64(1, 's') * warmup_duration
     begins = events.index[0] - warmup_timedelta  # begin 30 seconds before the beginning of the session
     ends = events.index[-1] + warmup_timedelta  # end 30 seconds after the beginning of the session
 
     # truncate dataframe on session times
-    data = data.loc[:, [column]]
+    signals = signals.loc[:, [column]]
 
-    data.loc[:begins] = np.NaN
-    data.loc[ends:] = np.NaN
+    signals.loc[:begins] = np.NaN
+    signals.loc[ends:] = np.NaN
 
     annotations.loc[:begins, [column]] = 'outside_session'
     annotations.loc[ends:, [column]] = 'outside_session'
-
 
     # estimate the corrupted ratio
     # if too many samples were dropped, raise an error
@@ -174,51 +77,51 @@ def galvanic_clean(data, events, annotations, column, warmup_duration, corrupted
                           f'exceeds {corrupted_maxratio * 100:.0f}%')
 
     # set as 'bad' samples that are more than 5  standard deviations from mean
-    outliers = data[((data[column] - data[column].mean()) / data[column].std()).abs() > 5].dropna().index
+    outliers = signals[((signals[column] - signals[column].mean()) / signals[column].std()).abs() > 5].dropna().index
     annotations.loc[outliers, column] = 'outliers'
-    data.loc[outliers, column] = np.NaN
+    signals.loc[outliers, column] = np.NaN
 
     # lowpass filter signal
     logger.debug('Filter with %s to %s Hz', filter_kwargs.get('filter_type', 'bandpass'),
                  filter_kwargs.get('frequencies', []))
-    data = filtfilt_signal(data, columns=[column],
-                           **filter_kwargs, suffix='_filtered')
+    signals = filtfilt_signal(signals, columns=[column],
+                              **filter_kwargs, suffix='_filtered')
 
     # bad sample interpolation
-    logger.debug('Interpolating %d/%d bad samples', data[column].isna().sum(), data.shape[0])
+    logger.debug('Interpolating %d/%d bad samples', signals[column].isna().sum(), signals.shape[0])
     # make a copy of the signal with suffix "_clean", mask bad samples
-    data_clean = data[[column + '_filtered']].copy().add_suffix('_clean')
+    signals_clean = signals[[column + '_filtered']].copy().add_suffix('_clean')
     # Pandas does not like tz-aware timestamps when interpolating
-    if data_clean.index.tzinfo is None:
+    if signals_clean.index.tzinfo is None:
         # old way: tz-naive
-        data_clean.interpolate(**interpolation_kwargs, inplace=True)
+        signals_clean.interpolate(**interpolation_kwargs, inplace=True)
     else:
         # new way: with timezone. Convert to tz-naive, interpolate, then back to tz-aware
-        data_clean = (
-            data_clean.set_index(data_clean.index.tz_convert(None))
+        signals_clean = (
+            signals_clean.set_index(signals_clean.index.tz_convert(None))
                 .interpolate(**interpolation_kwargs)
-                .set_index(data_clean.index))
+                .set_index(signals_clean.index))
 
     # scale signal on the all session
     logger.debug('Rescaling signals')
-    data_clean = scale_signal(data_clean, columns=[column + '_filtered_clean'], suffix='_zscored',
-                              **scaling_kwargs)
+    signals_clean = scale_signal(signals_clean, columns=[column + '_filtered_clean'], suffix='_zscored',
+                                 **scaling_kwargs)
 
     # return preprocessed data
     logger.debug('Concatenating clean and filtered signals')
-    data = pd.concat([data, data_clean], axis=1)
+    signals = pd.concat([signals, signals_clean], axis=1)
 
-    return data, annotations
+    return signals, annotations
 
 
-def downsample(data, sampling_rate):
+def downsample(signals, sampling_rate):
     # downsample by dropping rows
     # TODO consider if should we decimate? That is, lowpass filter first?
     logger.debug('Downsampling signal to %d Hz', sampling_rate)
-    return drop_rows(data, sampling_rate)
+    return drop_rows(signals, sampling_rate)
 
 
-def galvanic_cvx(data, annotations, column=None, warmup_duration=15, threshold_scr=4.0,
+def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshold_scr=4.0,
                  cvxeda_params=None, epoch_size=None, epoch_overlap=None):
     """ Separate galvanic components using a convex deconvolution.
 
@@ -266,17 +169,15 @@ def galvanic_cvx(data, annotations, column=None, warmup_duration=15, threshold_s
 
     # extract SCR and SCL component using deconvolution toolbox cvxEDA
 
-    bad = ~annotations.replace('', np.NaN).isna()
-
     # if no column is specified, consider the first one
-    column = column or data.columns[-1]
+    column = column or signals.columns[-1]
 
-    n = data.shape[0]
+    n = signals.shape[0]
     idx_epochs = np.arange(n)[np.newaxis, :]
     idx_warmup = slice(0, n)
 
     if epoch_size is not None and epoch_overlap is not None:
-        fs = estimate_rate(data)
+        fs = estimate_rate(signals)
         n_warmup = int(warmup_duration * fs)
         n_epoch = int(epoch_size * fs) + n_warmup
         n_overlap = int(epoch_overlap * fs)
@@ -298,8 +199,8 @@ def galvanic_cvx(data, annotations, column=None, warmup_duration=15, threshold_s
 
     epochs = []
     for i, idx in enumerate(idx_epochs):
-        logger.debug('Epoch %d / %d', i+1, len(idx_epochs))
-        input = data.iloc[idx][[column]].dropna()
+        logger.debug('Epoch %d / %d', i + 1, len(idx_epochs))
+        input = signals.iloc[idx][[column]].dropna()
         if not input.empty:
             chunk = (
                 apply_cvxEDA(input, **cvxeda_params)
@@ -312,30 +213,30 @@ def galvanic_cvx(data, annotations, column=None, warmup_duration=15, threshold_s
     if not epochs:
         return pd.DataFrame(), pd.DataFrame()  # or None?
 
-    data = (
+    signals = (
         pd.concat(epochs, ignore_index=False)
-        .groupby('epoched_index')
-        .mean()
-        .rename_axis(index=data.index.name)
+            .groupby('epoched_index')
+            .mean()
+            .rename_axis(index=signals.index.name)
     )
 
     # add an annotation rejection boolean on amplitude criteria
     # todo: helpers with inputs: data, annotations, and index or bool condition, that sets values in data to NaN and annotate in annotations
-    annotations.loc[data[data[
-                             column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'  # Todo: question: should we add a new column?
+    annotations.loc[signals[signals[
+                                column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'  # Todo: question: should we add a new column?
 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
-    annotations.loc[:data.index[0] + warm_up_timedelta,
+    annotations.loc[:signals.index[0] + warm_up_timedelta,
     'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
-    annotations.loc[data.index[-1] - warm_up_timedelta:,
+    annotations.loc[signals.index[-1] - warm_up_timedelta:,
     'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
     # replace column string name by 'gsr' for lisibility purpose
-    data.columns = data.columns.str.replace(column, 'gsr')
+    signals.columns = signals.columns.str.replace(column, 'GSR')
 
-    return data, annotations
+    return signals, annotations
 
 
-def galvanic_scrpeaks(data, annotations, column=None, warmup_duration=15, peaks_kwargs=None, max_increase_duration=7):
+def galvanic_scrpeaks(signals, annotations, column='GSR_SCR', peaks_kwargs=None, max_increase_duration=7):
     """ Detect peaks of SCR component and estimate their characteristics.
 
     Parameters
@@ -366,25 +267,10 @@ def galvanic_scrpeaks(data, annotations, column=None, warmup_duration=15, peaks_
 
 
     """
-    # convert duration (s) in timedelta
-    warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
-
-    # if 'bad' not in data:
-    #     raise ValueError('Received data without a column named "bad"')
-    #
-    # bad = data.bad
-
-    # if no column is specified, consider the first one
-    column = column or data.columns[-2]
-
-    # Select the data of interest
-    data = data.loc[:, [column]]
-    data = data[data.index[0] + warm_up_timedelta:data.index[-1] - warm_up_timedelta]
-
     # Define the scaler to apply before detecting peaks
     scaler = RobustScaler(with_centering=False, quantile_range=(5, 95.0))
     # Detect peaks and estimate their properties
-    data = detect_peaks(data, column=column, estimate_properties=True, scaler=scaler, **peaks_kwargs)
+    data = detect_peaks(signals, column=column, estimate_properties=True, scaler=scaler, **peaks_kwargs)
 
     data = data[data.label == 'peak'].loc[:,
            ['value', 'left_local', 'left_prominence', 'right_ips']]
@@ -399,133 +285,185 @@ def galvanic_scrpeaks(data, annotations, column=None, warmup_duration=15, peaks_
 
     # Append the 'bad' column from input data
     # data.loc[:, 'bad'] = bad
-    # Update the bad column with this new find of artefact, being false peak detection
+    # Update the bad column with this new kind of artifact, being false peak detection
     # (when thee increase duration is greater than the prominence window,
     # it means no local minima has been found, hence the peak was not significant)
-    data.loc[data[column + '_peaks_increase-duration'] >= max_increase_duration, 'bad'] = True
+    annotations = pd.DataFrame(index=data.index, columns=data.columns)
+    false_detections = (data[column + '_peaks_increase-duration'] >= max_increase_duration).values
+    annotations.loc[false_detections, :] = 'false_peak_detection'
     # To ease the extraction of peak rate, let's add a column with boolean values
     # True if the peak is kept, False if not.
-    data.loc[:, column + '_peaks_detected'] = ~data.bad
+    data.loc[false_detections, :] = np.NaN
 
     return data, annotations
 
 
-def galvanic_baseline_correction(features, sequences, columns=None):
-    """ Estimate basal state for features on pseudo-baseline sequences and remove it.
+from dataclasses import dataclass, field
 
-    Parameters
-    ----------
-    features: pd.DataFrame
-        Dataframe with features where index are periods and columns are feature names.
-    sequences: list
-        List of period names to compute the pseudo baseline.
-    columns: list
-        List of columns where the baseline correction should be applied.
+from iguazu.core.exceptions import IguazuError
 
-    Returns
-    -------
-    features_corrected: pd.DataFrame
-        Dataframe with the same shape as the input `features`, after removal of the
-        basal state.
-    valid_sequences_ratio: Dict
-        Dictionary where keys are the feature names and values are the ratio of
-        valid periods where it (the feature) could be estimated.
 
-    Examples
-    --------
+# Galvanic features
+# -----------------
+@dataclass
+class SCRFeatures:
+    amplitudeSCR: float = field(default=np.nan,
+                                metadata={'doc': 'Mean amplitude of SCR component', 'units': 'au'})
+    increaseSCR: float = field(default=np.nan,
+                               metadata={'doc': 'Increase duration of SCR component', 'units': 's'})
+    decreaseSCR: float = field(default=np.nan,
+                               metadata={'doc': 'Recovery duration of SCR component', 'units': 's'})
+    rateSCR: float = field(default=np.nan,
+                           metadata={'doc': 'Number of SCR peaks divided by duration', 'units': 'peaks/s'})
 
-    >>> features
-    name                                               F_clean_inversed_lowpassed_zscored_SCL_median  ... F_clean_inversed_lowpassed_zscored_SCL_auc
-    physio-sonification_sequence_0                                                               bad  ...                                   -168.801
-    lobby_sequence_0                                                                             bad  ...                                   -7.03184
-    lobby_sequence_1                                                                             bad  ...                                   -18.9236
-    lobby_sequence_2                                                                             bad  ...                                    22.3149
-    space-stress_game_0                                                                          bad  ...                                    208.325
-    space-stress_game_1                                                                          bad  ...                                    157.129
-    common_respiration-calibration_data-accumulation_0                                           bad  ...                                        bad
-    space-stress_game_enemy-wave_0                                                               bad  ...                                   -2.06235
-    space-stress_game_enemy-wave_1                                                               bad  ...                                    19.7417
-    space-stress_game_enemy-wave_2                                                               bad  ...                                    50.4054
-    ...
-    space-stress_intro_0                                                                         bad  ...                                   -20.1367
-    physio-sonification_coherence-feedback_0                                                     bad  ...                                   -24.4899
-    cardiac-coherence_score_0                                                                    bad  ...                                   -27.0506
-    cardiac-coherence_survey_0                                                                   bad  ...                                   -8.21526
-    cardiac-coherence_survey_1                                                                   bad  ...                                   -72.0361
-    cardiac-coherence_data-accumulation_0                                                        bad  ...                                   -177.136
-    intro_calibration_0                                                                          bad  ...                                    10.6846
-    >>> sequences
-        ['lobby_sequence_0', 'lobby_sequence_1', 'physio-sonification_survey_0', 'cardiac-coherence_survey_0', 'cardiac-coherence_survey_1', 'cardiac-coherence_score_0']
-    >>> features_corrected, valid_sequences_ratio = galvanic_baseline_correction(features, sequences, columns=None)
-    >>> features_corrected
-    name                                               F_clean_inversed_lowpassed_zscored_SCL_median  ... F_clean_inversed_lowpassed_zscored_SCL_auc
-    physio-sonification_sequence_0                                                               bad  ...                                   -142.678
-    lobby_sequence_0                                                                             bad  ...                                    19.0911
-    lobby_sequence_1                                                                             bad  ...                                    7.19937
-    lobby_sequence_2                                                                             bad  ...                                    48.4378
-    space-stress_game_0                                                                          bad  ...                                    234.448
-    space-stress_game_1                                                                          bad  ...                                    183.252
-    common_respiration-calibration_data-accumulation_0                                           bad  ...                                        bad
-    space-stress_game_enemy-wave_0                                                               bad  ...                                    24.0606
-    space-stress_game_enemy-wave_1                                                               bad  ...                                    45.8647
-    space-stress_game_enemy-wave_2                                                               bad  ...                                    76.5284
-    ...
-    space-stress_intro_0                                                                         bad  ...                                    5.98628
-    physio-sonification_coherence-feedback_0                                                     bad  ...                                    1.63304
-    cardiac-coherence_score_0                                                                    bad  ...                                   -0.92763
-    cardiac-coherence_survey_0                                                                   bad  ...                                    17.9077
-    cardiac-coherence_survey_1                                                                   bad  ...                                   -45.9132
-    cardiac-coherence_data-accumulation_0                                                        bad  ...                                   -151.013
-    intro_calibration_0                                                                          bad  ...                                    36.8075
-    >>> valid_sequences_ratio
-    {'F_clean_inversed_lowpassed_zscored_SCL_median': 0.0,
-     'F_clean_inversed_lowpassed_zscored_SCL_std': 1.0,
-     'F_clean_inversed_lowpassed_zscored_SCL_ptp': 1.0,
-     'F_clean_inversed_lowpassed_zscored_SCL_linregress_slope': 1.0,
-     'F_clean_inversed_lowpassed_zscored_SCL_linregress_rvalue': 1.0,
-     'F_clean_inversed_lowpassed_zscored_SCL_auc': 1.0}
-    """
-    if not set(sequences).issubset(set(features.index)):
-        logger.warning('Cannot find all pseudo-baseline sequences. Missing: %s',
-                       list(set(sequences) - set(features.index)))
 
-    columns = columns or features.columns
-    if not set(columns).issubset(set(features.columns)):
-        raise ValueError('Cannot find all columns in features. Missing: %s',
-                         list(set(columns) - set(features.columns)))
-    # Intersection between available sequences in the sequences report and the
-    # pseudo-baseline sequences
-    available_pseudo_baselines = list(set(sequences) & set(features.index))
-    # Select the features amongst pseudo-baseline sequences and mask the values
-    # that are not scalars (eg. 'bad' or else)
-    features_baseline = features.loc[available_pseudo_baselines, :]
-    features_baseline = features_baseline.where(
-        features_baseline.applymap(lambda x: isinstance(x, (int, float, np.int64, np.float64))), other=np.NaN)
-    # Compute the ratio of available samples per sequence in the pseudo-baseline
-    # (0 if their were no good samples to estimate the average over the sequence, 1
-    # if all samples could be considered.
-    valid_sequences_ratio = (1 - features_baseline.isna().mean()).to_dict()
-    valid_sequences_ratio = {column: valid_sequences_ratio[column] for column in columns}
-    features_baseline_averaged = features_baseline.mean()
+@dataclass
+class SCLFeatures:
+    meanSCL: float = field(default=np.nan,
+                           metadata={'doc': 'Mean of SCL component', 'units': 'su'})
+    medianSCL: float = field(default=np.nan,
+                             metadata={'doc': 'Median of SCL component', 'units': 'su'})
+    SDSCL: float = field(default=np.nan,
+                         metadata={'doc': 'Standard deviation of SCL component', 'units': 'su'})
+    aucSCL: float = field(default=np.nan,
+                          metadata={'doc': 'Area Under Curve divided by duration of SCL component', 'units': 'su/s'})
+    slopeSCL: float = field(default=np.nan,
+                            metadata={'doc': 'Slope from linear regression on SCL component', 'units': 'su'})
+    interceptSCL: float = field(default=np.nan,
+                                metadata={'doc': 'Intercept from linear regression on SCL component', 'units': 'su'})
+    rSCL: float = field(default=np.nan,
+                        metadata={'doc': 'R coefficient from linear regression on SCL component', 'units': 'su'})
 
-    def safe_substraction(original, value_to_substract):
-        '''Substract a value to an original scalar
-        If `original` is a scalar, then substract the `value_to_substract` ,
-        else return `original`.
 
-        Parameters
-        ----------
-        original: scalar from which the value should be substracted
-        value_to_substract: value to substract
+# @dataclass
+# class HRVFrequencyFeatures:
+#     VLF: float = np.nan
+#     LF: float = np.nan
+#     HF: float = np.nan
+#     VHF: float = np.nan
+#     LFHF: float = np.nan
 
-        '''
-        if isinstance(original, (int, float, np.int64, np.float64)):
-            return original - value_to_substract
-        else:
-            return original
 
-    features_corrected = features.copy()
-    for column in columns:
-        correction = features_baseline_averaged[column]
-        features_corrected[[column]] = features_corrected[[column]].applymap(lambda x: safe_substraction(x, correction))
-    return features_corrected, valid_sequences_ratio
+import statsmodels.api as sm
+
+
+def linear_regression(y, x):
+    y = np.asarray(y)
+    x = np.asarray(x)
+
+    rlm = sm.RLM(y, sm.tools.add_constant(x), M=sm.robust.norms.HuberT())
+    results = rlm.fit(conv='coefs', tol=1e-3)
+    logger.debug('Linear regression results:\n%s', results.summary())
+
+    intercept, slope = results.params
+    _, pvalue = results.pvalues  # p-value Wald test of intercept and slope
+    r = np.corrcoef(x, y)[0, 1]
+    ss_res = np.sum(results.resid ** 2)
+    ss_tot = np.sum((y - y.mean()) ** 2)
+    r2 = 1 - ss_res / ss_tot
+    return slope, intercept, r, r2, pvalue
+
+
+def scl_features(scl: pd.Series) -> SCLFeatures:
+    features = SCLFeatures()
+
+    # drop NaN
+    scl = scl.dropna()
+
+    if scl.empty:
+        logger.warning('Not enough SCL samples to calculate SCL features, '
+                       'returning nan for all features')
+        return features
+
+    period_mins = (scl.index[-1] - scl.index[0]) / np.timedelta64(60, 's')
+    logger.debug('Calculating time features on %.1f minutes of SCL data', period_mins)
+
+    features.meanSCL = np.mean(scl)
+    features.medianSCL = np.median(scl)
+    features.SDSCL = np.std(scl)
+
+    # convert datetime index into floats
+    scl.index -= scl.index[0]
+    scl.index /= np.timedelta64(1, 's')
+
+    x = scl.index
+    y = scl.values.astype(float)
+
+    features.aucSCL = auc(y=y, x=x) / period_mins
+    features.slopeSCL, features.interceptSCL, features.rSCL, _, _ = linear_regression(y, x)
+
+    logger.debug('SCL features: %s', features)
+    return features
+
+
+def scr_features(scr: pd.Series, peaks: pd.DataFrame) -> SCRFeatures:
+    features = SCRFeatures()
+
+    # drop NaN
+    scr = scr.dropna()
+
+    if scr.empty:
+        logger.warning('Not enough SCR samples to calculate SCL features, '
+                       'returning nan for all features')
+        return features
+
+    # drop NaN
+    peaks = peaks.dropna()
+
+    if peaks.empty:
+        # just means that there were no SCR peaks, return 0 to all features
+        features.amplitudeSCR = features.increaseSCR = features.decreaseSCR = features.rateSCR = 0.
+        return features
+
+    period_mins = (scr.index[-1] - scr.index[0]) / np.timedelta64(60, 's')
+    logger.debug('Calculating peak features on %.1f minutes of SCR data', period_mins)
+
+    features.amplitudeSCR = np.mean(peaks['GSR_SCR_peaks_increase-amplitude'])
+    features.increaseSCR = np.mean(peaks['GSR_SCR_peaks_increase-duration'])
+    features.decreaseSCR = np.mean(peaks['GSR_SCR_peaks_recovery-duration'])
+    features.rateSCR = len(peaks) / period_mins
+
+    logger.debug('SCR features: %s', features)
+    return features
+
+
+from iguazu.functions.unity import VALID_SEQUENCE_KEYS
+
+
+def gsr_features(cvx, peaks, events, known_sequences=None):
+    known_sequences = known_sequences or VALID_SEQUENCE_KEYS
+
+    features = []
+    # for name, row in events.T.iterrows():  # transpose due to https://github.com/OpenMindInnovation/iguazu/issues/54
+    for index, row in events.iterrows():
+        logger.debug('Processing sequence %s at %s', row.id, index)
+        if row.id not in known_sequences:
+            continue
+
+        begin = row.begin
+        end = row.end
+        cvx_sequence = cvx.loc[begin:end].copy()
+        peaks_sequence = peaks.loc[begin:end].copy()
+
+        # extract features on sequence
+        scl_features_sequence = scl_features(cvx_sequence.GSR_SCL)
+        scr_features_sequence = scr_features(cvx_sequence.GSR_SCR, peaks_sequence)
+
+        all_features = (
+            pd.concat([dataclass_to_dataframe(scl_features_sequence),
+                       dataclass_to_dataframe(scr_features_sequence)],
+                      axis='index', sort=False)
+                .rename_axis(index='id')
+                .reset_index()
+        )
+        all_features.insert(0, 'reference', row.id)
+        features.append(all_features)
+
+    if len(features) > 0:
+        features = pd.concat(features, axis='index', ignore_index=True, sort=False)
+        logger.info('Generated a feature dataframe of shape %s', features.shape)
+    else:
+        logger.info('No features were generated')
+        features = pd.DataFrame(columns=['id', 'reference', 'value'])
+
+    return features
