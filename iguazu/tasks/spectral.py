@@ -4,7 +4,7 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 import prefect
 
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 from iguazu.core.exceptions import IguazuError
@@ -33,7 +33,7 @@ class BandPowers(prefect.Task):
         self.output_group = output_group
         self.force = force
 
-    def run(self, signal: FileProxy) -> FileProxy:
+    def run(self, signal: FileAdapter) -> FileAdapter:
 
         output = signal.make_child(suffix='_bp' + ('_rel' if self.relative else '_abs'))
         self.logger.info('Band power extraction for signal=%s -> %s', signal, output)

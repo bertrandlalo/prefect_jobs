@@ -10,9 +10,10 @@ import prefect
 import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
-from iguazu.helpers.files import FileProxy, LocalFile, _deep_update
+from iguazu.core.files import FileAdapter, LocalFile, _deep_update
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
+from iguazu.functions import specs
 
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,9 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_proxy: bool = False, **kwargs):
+    def __init__(self, as_file_adapter: bool = False, **kwargs):
         super().__init__(**kwargs)
-        self._as_proxy = as_proxy
+        self._as_file_adapter = as_file_adapter
 
     def run(self, basedir, pattern='**/*.hdf5'):
         logger = prefect.context.get("logger")
@@ -48,9 +49,9 @@ class ListFiles(prefect.Task):
         logger.info('list_files on basedir %s found %d files to process',
                     basedir, len(files))
 
-        if self._as_proxy:
-            proxies = [LocalFile(f, base_dir=basedir) for f in files]
-            return proxies
+        if self._as_file_adapter:
+            adapters = [LocalFile(f, base_dir=basedir) for f in files]
+            return adapters
 
         return files
 
@@ -97,24 +98,24 @@ class MergeFilesFromGroups(prefect.Task):
 
         kwargs:
             Keywords arguments with keys are hdf5 group to read and merge and
-            values are hdf5 file proxy.
+            values are hdf5 file adapter.
         """
         super().__init__(**kwargs)
         self.suffix = suffix or "_merged"
         self.status_key = status_metadata_key
 
-    def run(self, parent, **kwargs) -> FileProxy:
+    def run(self, parent, **kwargs) -> FileAdapter:
 
         output = parent.make_child(temporary=False, suffix=self.suffix)
         try:
             with pd.option_context('mode.chained_assignment', None), \
                  pd.HDFStore(output.file, "a") as output_store:
-                for output_group, file_proxy in kwargs.items():
+                for output_group, file_adapter in kwargs.items():
                     # Inherit the contents of the "task" family only for this input
                     output.metadata['iguazu'].setdefault(output_group, {})
-                    output.metadata['iguazu'][output_group].update(file_proxy.metadata.get('iguazu', {}))
+                    output.metadata['iguazu'][output_group].update(file_adapter.metadata.get('iguazu', {}))
                     output_group = output_group.replace("_", "/")
-                    with pd.HDFStore(file_proxy.file, "r") as input_store:
+                    with pd.HDFStore(file_adapter.file, "r") as input_store:
                         groups = input_store.keys()
                         if len(groups) > 1:
                             # multiple groups in the HDF5, then get rid of the common path and
@@ -171,6 +172,7 @@ class MergeHDF5(iguazu.Task):
                  verify_status: bool = True,
                  hdf5_family: Optional[str] = None,
                  meta_keys: Optional[Iterable[str]] = None,
+                 propagate_families: Optional[List[str]] = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.suffix = suffix
@@ -178,8 +180,9 @@ class MergeHDF5(iguazu.Task):
         self.verify_status = verify_status
         self.hdf5_family = hdf5_family
         self.meta_keys = tuple(meta_keys or [])
+        self.propagate_families = propagate_families or {}
 
-    def run(self, *, parent: FileProxy, **kwargs) -> FileProxy:
+    def run(self, *, parent: FileAdapter, **kwargs) -> FileAdapter:
         output_file = self.default_outputs(parent=parent, **kwargs)
         soft_fail = False
         journal_family = self.meta.metadata_journal_family
@@ -208,22 +211,66 @@ class MergeHDF5(iguazu.Task):
                         assert isinstance(dataframe, pd.DataFrame)  # Protect from hdf that store something else
                         dataframe.to_hdf(output_store, key=g)
 
-                        # Propagate HDF5 metadata
-                        output_node = output_store.get_node(g)
-                        for meta_name in self.meta_keys:
-                            if meta_name not in input_node._v_attrs:
-                                logger.info('HDF5 metadata key "%s" was not present on group %s '
-                                            'for file %s: no HDF5 metadata propagation',
-                                            meta_name, g, value)
-                                continue
-                            output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
+                        # # Propagate HDF5 metadata
+                        # output_node = output_store.get_node(g)
+                        # for meta_name in self.meta_keys:
+                        #     if meta_name not in input_node._v_attrs:
+                        #         logger.info('HDF5 metadata key "%s" was not present on group %s '
+                        #                     'for file %s: no HDF5 metadata propagation',
+                        #                     meta_name, g, value)
+                        #         continue
+                        #     output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
 
         # Set the hdf5 group metadata
         if self.hdf5_family:
+            self.logger.debug('Automatic detection of HDF5 groups that meet the standard...')
+            output_file.metadata.setdefault(self.hdf5_family, {})
             with pd.HDFStore(output_file.file, 'r') as store:
                 groups = list(store)
-                output_file.metadata.setdefault(self.hdf5_family, {})
-                output_file.metadata[self.hdf5_family]['groups'] = groups
+                for g in groups:
+
+                    if g.endswith('/annotations'):
+                        self.logger.debug('Ignoring group %s due to naming', g)
+                        continue
+
+                    # Check signals specs
+                    try:
+                        specs.check_signal_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the signal specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('signals', [])
+                        output_file.metadata[self.hdf5_family]['signals'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard signals dataframe due to  %s',
+                                          g, ex)
+
+                    # Check event specs
+                    try:
+                        specs.check_event_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the event specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('events', [])
+                        output_file.metadata[self.hdf5_family]['events'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard events dataframe due to  %s',
+                                          g, ex)
+
+                    # Check feature specs
+                    try:
+                        specs.check_feature_specification(pd.read_hdf(store, g))
+                        self.logger.debug('Group %s meets the features specification', g)
+                        output_file.metadata[self.hdf5_family].setdefault('features', [])
+                        output_file.metadata[self.hdf5_family]['features'].append(g)
+                    except specs.SpecificationError as ex:
+                        self.logger.debug('Dataframe on HDF5 under key %s is not '
+                                          'a standard features dataframe due to  %s',
+                                          g, ex)
+
+        # Propagate metadata
+        for k in self.propagate_families:
+            parent_meta = parent.metadata.get(k, {})
+            parent_meta.pop('id', None)
+            output_file.metadata[k].update(parent_meta)
 
         # Handle status with a partial result
         # This is a bit hacky because I had never thought of the use-case:
@@ -245,7 +292,7 @@ class MergeHDF5(iguazu.Task):
 
         # Precondition: All inputs are files
         for name, value in inputs.items():
-            if not isinstance(value, FileProxy):
+            if not isinstance(value, FileAdapter):
                 raise ValueError(f'Received a non file for parameter {name}')
 
         # Precondition: there are no repeated groups
@@ -269,8 +316,13 @@ class MergeHDF5(iguazu.Task):
             groups |= gi  # set union
 
     def default_outputs(self, *, parent, **inputs):
-        output = parent.make_child(temporary=self.temporary,
-                                   suffix=self.suffix)
+        # output = parent.make_child(temporary=self.temporary,
+        #                            suffix=self.suffix)
+        output = self.create_file(
+            parent=parent,
+            suffix=self.suffix,
+            temporary=self.temporary,
+        )
         return output
 
 
@@ -280,7 +332,7 @@ class AddSourceMetadata(prefect.Task):
         super().__init__(**kwargs)
         self.new_meta = new_meta
 
-    def run(self, *, file: FileProxy) -> NoReturn:
+    def run(self, *, file: FileAdapter) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
         _deep_update(file.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
@@ -313,13 +365,13 @@ class LoadDataframe(iguazu.Task):
         super().__init__(**kwargs)
         self.key = key
 
-    def run(self, *, file: FileProxy) -> pd.DataFrame:
+    def run(self, *, file: FileAdapter) -> pd.DataFrame:
         with pd.HDFStore(file.file, 'r') as store:
             contents = pd.read_hdf(store, key=self.key)
             assert isinstance(contents, pd.DataFrame)
             return contents
 
-    def preconditions(self, *, file: FileProxy, **inputs):
+    def preconditions(self, *, file: FileAdapter, **inputs):
         super().preconditions(file=file, **inputs)
         if file.empty:
             raise SoftPreconditionFailed('Input file was empty')
@@ -337,8 +389,8 @@ class MergeDataframes(iguazu.Task):
         self.path = path
 
     def run(self, *,
-            parents: List[FileProxy],
-            dataframes: List[pd.DataFrame]) -> FileProxy:
+            parents: List[FileAdapter],
+            dataframes: List[pd.DataFrame]) -> FileAdapter:
 
         output = self.default_outputs()
 

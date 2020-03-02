@@ -9,14 +9,6 @@ iguazu.helpers package
 Submodules
 ----------
 
-iguazu.helpers.files module
----------------------------
-
-.. automodule:: iguazu.helpers.files
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 iguazu.helpers.states module
 ----------------------------
 

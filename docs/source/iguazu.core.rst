@@ -25,6 +25,14 @@ iguazu.core.features module
    :undoc-members:
    :show-inheritance:
 
+iguazu.core.files module
+------------------------
+
+.. automodule:: iguazu.core.files
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 iguazu.core.flows module
 ------------------------
 
