@@ -12,7 +12,7 @@ from iguazu.functions.ppg_report import render_ppg_report
 from iguazu.functions.specs import (
     check_feature_specification, check_signal_specification
 )
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 
 
 class CleanPPGSignal(Task):
@@ -27,7 +27,7 @@ class CleanPPGSignal(Task):
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
 
-    def run(self, *, signals: pd.DataFrame) -> FileProxy:
+    def run(self, *, signals: pd.DataFrame) -> FileAdapter:
 
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
@@ -66,7 +66,7 @@ class CleanPPGSignal(Task):
     def postconditions(self, results):
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -98,7 +98,7 @@ class SSFPeakDetect(Task):
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
 
-    def run(self, *,  signals: pd.DataFrame) -> FileProxy:
+    def run(self, *,  signals: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
         if self.column not in signals.columns:
@@ -140,7 +140,7 @@ class SSFPeakDetect(Task):
     def postconditions(self, results):
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -160,46 +160,7 @@ class SSFPeakDetect(Task):
         #         check_signal_specification(dataframe)
 
 
-# class PPGDetectRR(Task):
-#     def __init__(self, *,
-#                  #fs: int = 512,
-#                  signals_hdf5_key: str = '/iguazu/signal/ppg/clean',
-#                  output_hdf5_key: str = '/iguazu/signal/ppg',  # a /RR or /RRi will be added
-#                  **kwargs):
-#         super().__init__(**kwargs)
-#
-#         #self.fs = fs
-#         #self.column = 'G_filtered'
-#         self.column = 'PPG'
-#         self.output_hdf5_key = output_hdf5_key
-#         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
-#
-#     def run(self, *,
-#             signals: pd.DataFrame) -> FileProxy:
-#         output_file = self.default_outputs()
-#
-#         if self.column not in signals:
-#             raise SoftPreconditionFailed(f'Input dataframe does not have column "{self.column}"')
-#         ppg = signals[self.column]
-#         ppg_fs = estimate_rate(ppg)
-#         peaks = ppg_peak_detection(ppg)
-#         rr = peak_to_rr(ppg, peaks, ppg_fs)
-#         rri = rr_interpolation(rr, ppg_fs)
-#
-#         with pd.HDFStore(output_file.file, 'w') as store:
-#             rr.to_hdf(store, f'{self.output_hdf5_key}/RR')
-#             rri.to_hdf(store, f'{self.output_hdf5_key}/RRi')
-#
-#         return output_file
-#
-#     def default_outputs(self, **kwargs):
-#         original_kws = prefect.context.run_kwargs
-#         signals = original_kws['signals']
-#         output = signals.make_child(suffix='_ppg_peaks')
-#         return output
-
-
-class ExtractHRVFeatures(Task): # TODO: add standard preconditions
+class ExtractHRVFeatures(Task):  # TODO: add standard preconditions
 
     def __init__(self, *,
                  nn_hdf5_key: str = '/iguazu/signal/ppg/NN',
@@ -218,12 +179,12 @@ class ExtractHRVFeatures(Task): # TODO: add standard preconditions
             nn: pd.DataFrame,
             nni: pd.DataFrame,
             events: Optional[pd.DataFrame] = None,
-            parent: Optional[FileProxy] = None) -> FileProxy:
+            parent: Optional[FileAdapter] = None) -> FileAdapter:
 
         output_file = self.default_outputs()
         df_features = hrv_features(nn, nni, events)
 
-        # Reorder for a more human-readable dataframe (this is optional
+        # Reorder for a more human-readable dataframe (this is optional)
         df_features = reorder_columns(df_features, 'reference', 'id', 'value', 'units', 'name', ...)
         if parent is not None:
             df_features['file_id'] = parent.id
@@ -242,7 +203,7 @@ class ExtractHRVFeatures(Task): # TODO: add standard preconditions
     def postconditions(self, results):
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -265,11 +226,11 @@ class PPGReport(Task):
         # self.auto_manage_input_dataframe('rri', '/iguazu/signal/ppg/RRi')
 
     def run(self, *,
-            original: FileProxy,
-            raw: FileProxy,
-            clean: FileProxy,
-            rr: FileProxy,
-            rri: FileProxy) -> FileProxy:
+            original: FileAdapter,
+            raw: FileAdapter,
+            clean: FileAdapter,
+            rr: FileAdapter,
+            rri: FileAdapter) -> FileAdapter:
 
         metadata = original.metadata
 
@@ -306,7 +267,7 @@ class PPGReport(Task):
         output = clean.make_child(path='html_reports/ppg', extension='.html')
         return output
 
-    def get_dataframe(self, file: FileProxy, key: str) -> Tuple[pd.DataFrame, Mapping]:
+    def get_dataframe(self, file: FileAdapter, key: str) -> Tuple[pd.DataFrame, Mapping]:
         metadata = file.metadata
         journal = metadata.get(self.meta.metadata_journal_family, {})
         status = journal.get('status', None)

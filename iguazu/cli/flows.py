@@ -8,10 +8,10 @@ import traceback
 import click
 import pandas as pd
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor, DaskExecutor
+from quetzal.client import helpers
 
 from iguazu.core.flows import execute_flow, REGISTRY
 from iguazu.core.tasks import Task
-from iguazu.utils import str2bool
 
 
 class TaskNameListType(click.ParamType):
@@ -116,9 +116,14 @@ class RunFlowGroup(click.core.Group):
 
 
 @flows_group.group('run', cls=RunFlowGroup, subcommand_metavar='FLOW_NAME [ARGS] ...', no_args_is_help=True)
-@click.option('--temp-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
+@click.option('--data-backend', type=click.Choice(['local', 'quetzal']), required=False,
+              default='local', help='Default data backend when creating new files.')
+@click.option('--default-workspace', required=False,
+              default=None, help='Default quetzal workspace when creating new files and '
+                                 'when using --data-backend quetzal')
+@click.option('--temp-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
               required=False, help='Path where temporary files with processed data are saved. ')
-@click.option('--output-dir', type=click.Path(file_okay=False, dir_okay=True, exists=False),
+@click.option('--output-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
               required=False, help='Path where final files with processed data are saved. ')
 @click.option('--executor-type', type=click.Choice(['local', 'synchronous', 'dask']),
               default='local', help='Type of executor to run the flow. Default is local.')
@@ -137,13 +142,15 @@ class RunFlowGroup(click.core.Group):
                    'not make the program exit with a non-zero exit code. By default, '
                    'flows that are not successful have an exit code of -1.')
 @click.pass_context
-def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report, force, cache, allow_flow_failure):
+def run_group(ctx, data_backend, default_workspace, temp_dir, output_dir, executor_type, executor_address, report, force, cache, allow_flow_failure):
     """Run the flow registered as FLOW_NAME
 
     Use command `iguazu flows run --help` to get a list of all available flows.
     """
     ctx.obj = ctx.obj or {}
     opts = {
+        'data_backend': data_backend,
+        'data_backend_workspace_id': None,
         'temp_dir': temp_dir,
         'output_dir': output_dir,
         'executor_type': executor_type,
@@ -153,6 +160,20 @@ def run_group(ctx, temp_dir, output_dir, executor_type, executor_address, report
         'cache': cache,
         'allow_flow_failure': allow_flow_failure,
     }
+    if data_backend == 'quetzal':
+        click.echo(f'Using Quetzal as data backend for default results, '
+                   f'determining workspace id of workspace "{default_workspace}..."')
+        client = helpers.get_client()
+        details, total = helpers.workspace.list_(client,
+                                                 name=default_workspace,
+                                                 deleted=False)
+        if total == 0:
+            ctx.fail(f'No workspace named "{default_workspace}" was found')
+        elif total > 1:
+            ctx.fail(f'Workspace "{default_workspace}" is not unique, there were '
+                     f'{total} workspaces with the same name')
+        opts['data_backend_workspace_id'] = details[0]['id']
+
     ctx.obj.update(opts)
 
 
@@ -168,10 +189,13 @@ def run_flow(flow_class, **kwargs):
 
     # Prepare context arguments
     context_args = dict(
+        # data_dir=ctx.obj.get('data_dir', None) or get_data_dir(), # TODO: consider this
         temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
         output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
         quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
                                                 kwargs.get('workspace_name', None)),
+        data_backend=ctx.obj.get('data_backend', None),
+        data_backend_workspace_id=ctx.obj.get('data_backend_workspace_id', None),
     )
 
     # Handle --force
@@ -182,20 +206,19 @@ def run_flow(flow_class, **kwargs):
         else:
             context_args['forced_tasks'] = forced_tasks
 
-    # TODO: this could be set in a context secret
-    if {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD'} & set(os.environ):
-        # At least one of these keys exist in the environment
-        quetzal_kws = dict(
-            url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-            username=os.getenv('QUETZAL_USER', 'admin'),
-            password=os.getenv('QUETZAL_PASSWORD', 'password'),
-            insecure=str2bool(os.getenv('QUETZAL_INSECURE', 0))
-        )
-        context_args['quetzal_client'] = quetzal_kws
-
+    # Handle secrets
     context_args.setdefault('secrets', {})
     if 'SLACK_WEBHOOK_URL' in os.environ:
         context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+
+    quetzal_kws = {}
+    for var in {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD', 'QUETZAL_API_KEY'}:
+        if var in os.environ:
+            name = var[len('QUETZAL_'):].lower()
+            quetzal_kws[name] = os.environ[var]
+
+    if quetzal_kws:
+        context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
     ###
     # Flow execution

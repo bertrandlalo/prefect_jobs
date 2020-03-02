@@ -18,8 +18,7 @@ from iguazu.functions.specs import (
     check_event_specification, check_signal_specification, EventSpecificationError
 )
 from iguazu.functions.unity import extract_standardized_events
-from iguazu.helpers.files import FileProxy
-
+from iguazu.core.files import FileAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ class ExtractStandardEvents(iguazu.Task):
         self.output_hdf5_key = output_hdf5_key
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
-    def run(self, events: pd.DataFrame) -> FileProxy:
+    def run(self, events: pd.DataFrame) -> FileAdapter:
         """Extract and standardize unity events from the VR protocol
 
         Most of the logic of this task is expressed in the
@@ -169,7 +168,11 @@ class ExtractStandardEvents(iguazu.Task):
         """
         original_kws = prefect.context.run_kwargs
         events = original_kws['events']
-        output = events.make_child(suffix='_standard_events')
+        # output = events.make_child(suffix='_standard_events')
+        output = self.create_file(
+            parent=events,
+            suffix='_standard_events',
+        )
         return output
 
     def postconditions(self, results):
@@ -180,7 +183,7 @@ class ExtractStandardEvents(iguazu.Task):
         """
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -214,14 +217,14 @@ class FilterVRSequences(iguazu.Task):
         self.input_hdf5_key = input_hdf5_key
         self.auto_manage_input_dataframe('events', input_hdf5_key)
 
-    def run(self, events: pd.DataFrame) -> FileProxy:
+    def run(self, events: pd.DataFrame) -> FileAdapter:
         """ Filter input events to keep sequences
 
         Parameters
         ----------
         events
             Input dataframe (auto-converted from a
-            :py:class:`~iguazu.helpers.files.FileProxy` object using
+            :py:class:`~iguazu.helpers.files.FileAdapter` object using
             :py:func:`~iguazu.core.tasks.Task.auto_manage_input_dataframe`)
 
         Returns
@@ -279,7 +282,7 @@ class FilterVRSequences(iguazu.Task):
 
         Postconditions to this tasks are:
 
-        * The results object is a :py:class:`~iguazu.helpers.files.FileProxy`
+        * The results object is a :py:class:`~iguazu.helpers.files.FileAdapter`
         * One of:
           * Results are empty
           * Results contents adhere to :ref:`event_specs`.
@@ -287,7 +290,7 @@ class FilterVRSequences(iguazu.Task):
         """
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -343,7 +346,7 @@ class ExtractNexusSignal(iguazu.Task):
         self.sampling_rate = sampling_rate
         self.auto_manage_input_dataframe('signals', signals_hfd5_key)
 
-    def run(self, signals: pd.DataFrame) -> FileProxy:
+    def run(self, signals: pd.DataFrame) -> FileAdapter:
         """Extract and pre-process signals"""
         logger.info('Extracting Nexus signal %s -> %s on file %s',
                     self.source_column, self.target_column,
@@ -395,7 +398,7 @@ class ExtractNexusSignal(iguazu.Task):
 
     # Refactored this method out of run so that it can be reused by a child
     # class such as ExtractGSRSignal
-    def save(self, raw: pd.DataFrame, annotations: pd.DataFrame) -> FileProxy:
+    def save(self, raw: pd.DataFrame, annotations: pd.DataFrame) -> FileAdapter:
         output_file = self.default_outputs()
         with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
             raw.to_hdf(store, self.output_hdf5_key)
@@ -411,7 +414,11 @@ class ExtractNexusSignal(iguazu.Task):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
         names = '_'.join([self.source_column, self.target_column])
-        output = signals.make_child(suffix=f'_standard_{names}')
+        # output = signals.make_child(suffix=f'_standard_{names}')
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_standard_{names}'
+        )
         return output
 
     def preconditions(self, *, signals, **kwargs):
@@ -424,7 +431,7 @@ class ExtractNexusSignal(iguazu.Task):
     def postconditions(self, results):
         super().postconditions(results)
 
-        if not isinstance(results, FileProxy):
+        if not isinstance(results, FileAdapter):
             raise PostconditionFailed('Output was not a file')
 
         # Postcondition: file is empty
@@ -460,7 +467,7 @@ class ExtractNexusGSRSignal(ExtractNexusSignal):
         self.b = linear_offset
         self.m = linear_slope
 
-    def run(self, signals: pd.DataFrame) -> FileProxy:
+    def run(self, signals: pd.DataFrame) -> FileAdapter:
         # Call the regular extraction, then annotate known Nexus GSR problems.
         parent_output_file = super().run(signals=signals)
 

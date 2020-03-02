@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from iguazu.functions.common import path_exists_in_hdf5
 from iguazu.functions.summarize import signal_to_feature
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta
 
@@ -29,8 +29,8 @@ class ExtractFeatures(prefect.Task):
         self.force = force
 
     def run(self,
-            signals: FileProxy,
-            report: FileProxy) -> FileProxy:
+            signals: FileAdapter,
+            report: FileAdapter) -> FileAdapter:
 
         output = signals.make_child(suffix='_features')
         # Inherit from iguazu metadata of report also
@@ -94,7 +94,7 @@ class ExtractFeatures(prefect.Task):
         output_file = output.file
         with pd.HDFStore(output_file, 'w') as output_store:
             features.to_hdf(output_store, output_group)
-        # Set meta on FileProxy so that Quetzal knows about this metadata
+        # Set meta on FileAdapter so that Quetzal knows about this metadata
         # output.metadata['task'][self.__class__.__name__] = meta
         # keep trace of parent tasks
         output.metadata['iguazu'].update({self.name: meta})
@@ -112,14 +112,14 @@ class ExtractFeatures(prefect.Task):
 #         super().__init__(**kwargs)
 #         self.groups = groups
 #
-#     def run(self, file: FileProxy) -> pd.DataFrame:
+#     def run(self, file: FileAdapter) -> pd.DataFrame:
 #         self.logger.info('Extracting data from %s', file)
 #
 #         df = pd.DataFrame()
 #         if file.metadata['iguazu']['state'] != 'SUCCESS':
 #             return df
 #
-#         # TODO: make file_id or some abstract id property in FileProxy to
+#         # TODO: make file_id or some abstract id property in FileAdapter to
 #         #       avoid this manual management according to the proxy type
 #         if isinstance(file, QuetzalFile):
 #             file_id = file._file_id
@@ -150,7 +150,7 @@ class ExtractFeatures(prefect.Task):
 #
 #     def run(self,
 #             dataframes: List[pd.DataFrame],
-#             workspace_id: int) -> Optional[FileProxy]:
+#             workspace_id: int) -> Optional[FileAdapter]:
 #
 #         if not dataframes:
 #             self.logger.warning('Cannot summarize population with empty results')
@@ -176,7 +176,7 @@ class SummarizePopulation(prefect.Task):
         self.filename = filename
         self.path = path
 
-    def run(self, files: List[FileProxy]) -> Optional[FileProxy]:
+    def run(self, files: List[FileAdapter]) -> Optional[FileAdapter]:
 
         if not files:
             self.logger.warning("SummarizePopulation received an empty list. ")

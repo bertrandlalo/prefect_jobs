@@ -34,7 +34,7 @@ class BandPowers(iguazu.Task):
         self.output_group = output_group
         self.force = force
 
-    def run(self, signal: FileProxy) -> FileProxy:
+    def run(self, signal: FileAdapter) -> FileAdapter:
 
         output = signal.make_child(suffix='_bp' + ('_rel' if self.relative else '_abs'))
         self.logger.info('Band power extraction for signal=%s -> %s', signal, output)

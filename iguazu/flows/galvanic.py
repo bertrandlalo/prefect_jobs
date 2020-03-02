@@ -1,6 +1,9 @@
+import datetime
+import itertools
 import logging
 
 from iguazu import __version__
+from iguazu.cache_validators import ParametrizedValidator
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
@@ -124,6 +127,11 @@ ORDER BY id                                -- always in the same order
 
     def _build(self,
                **kwargs):
+
+        # Manage parameters
+        kwargs = kwargs.copy()
+        # Propagate workspace name because we captured it on kwargs
+        kwargs['workspace_name'] = workspace_name
         # Force required families: Quetzal workspace must have the following
         # families: (nb: None means "latest" version)
         required_families = dict(

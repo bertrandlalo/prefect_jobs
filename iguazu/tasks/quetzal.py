@@ -9,8 +9,7 @@ from prefect import context, Task
 from prefect.engine import signals
 from quetzal.client import QuetzalAPIException, helpers
 
-from iguazu.helpers.files import QuetzalFile
-
+from iguazu.core.files import QuetzalFile
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 
@@ -98,12 +97,12 @@ class Query(QuetzalBaseTask):
     #           https://quetzal-client.readthedocs.io/en/latest/objects.inv
 
     def __init__(self,
-                 as_proxy: bool = False,
+                 as_file_adapter: bool = False,
                  shuffle: bool = False,
                  limit: Optional[int] = None,
                  **kwargs):
         super().__init__(**kwargs)
-        self._as_proxy = as_proxy
+        self._as_file_adapter = as_file_adapter
         self.limit = limit
         self.shuffle = shuffle
 
@@ -153,14 +152,14 @@ class Query(QuetzalBaseTask):
             total = len(rows)
             self.logger.info('Query was limited to %d results', total)
 
-        if self._as_proxy:
-            proxies = [QuetzalFile(file_id=row['id'], workspace_id=workspace_id) for row in rows]
-            return proxies
+        if self._as_file_adapter:
+            for i, row in enumerate(rows):
+                rows[i] = QuetzalFile.retrieve(file_id=row['id'], workspace_id=workspace_id)
 
         return rows
 
 
-class ConvertToFileProxy(Task):
+class ConvertToFileAdapter(Task):
 
     def __init__(self, id_key: str = 'id', **kwargs):
         super().__init__(**kwargs)
@@ -175,16 +174,16 @@ class ConvertToFileProxy(Task):
         if not is_list:
             rows = [rows]
         id_key = id_key or self.id_key
-        file_proxies = []
+        file_adapters = []
         for row in rows:
             if id_key not in row:
                 raise RuntimeError('Input row does not have expected id key')
             file = QuetzalFile(file_id=row[id_key], workspace_id=workspace_id)
-            file_proxies.append(file)
+            file_adapters.append(file)
 
         if not is_list:
-            return file_proxies[0]
-        return file_proxies
+            return file_adapters[0]
+        return file_adapters
 
 
 class CreateWorkspace(QuetzalBaseTask):

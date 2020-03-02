@@ -7,7 +7,7 @@ from dsu.pandas_helpers import estimate_rate
 
 from iguazu import Task
 from iguazu.core.exceptions import SoftPreconditionFailed
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.functions.cardiac import extract_all_peaks  # todo: move out of cardiac
 
 
@@ -23,7 +23,7 @@ class ExtractPeaks(Task):
         self.output_hdf5_key = output_hdf5_key
         self.auto_manage_input_dataframe('signal', signals_hdf5_key)
 
-    def run(self, *, signal: pd.DataFrame) -> FileProxy:
+    def run(self, *, signal: pd.DataFrame) -> FileAdapter:
         output_file = self.default_outputs()
 
         if self.column not in signal:

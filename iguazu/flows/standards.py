@@ -85,12 +85,13 @@ ORDER BY id                                    -- always in the same order
             verify_status=True,
             hdf5_family='standard',
             meta_keys=['standard'],
+            propagate_families=['omi'],
         )
         update_meta = AddSourceMetadata(
             new_meta={
-                'standard': {
-                    'standardized': True,
-                },
+                # 'standard': {
+                #     'standardized': True,
+                # },
                 # TODO: think about adding this
                 # 'omi': {
                 #     'protocol': 'vr',
