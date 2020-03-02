@@ -14,6 +14,9 @@ from iguazu.core.features import dataclass_to_dataframe
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 
+class NoRespirationPeaks(Exception):
+    pass
+
 # Respiration features
 # --------------------
 @dataclass
@@ -28,18 +31,18 @@ class PZTFeatures:
                          metadata={'doc': 'Standard Deviation respiratory amplitude', 'units': 'au'})
 
     meanPERIOD: float = field(default=np.nan,
-                              metadata={'doc': 'Mean respiratory cycle duration', 'units': 'au'})
+                              metadata={'doc': 'Mean respiratory cycle duration', 'units': 's'})
     sdPERIOD: float = field(default=np.nan,
-                            metadata={'doc': 'Standard Deviation of respiratory cycle duration', 'units': 'au'})
+                            metadata={'doc': 'Standard Deviation of respiratory cycle duration', 'units': 's'})
     meanI: float = field(default=np.nan,
-                         metadata={'doc': 'Mean respiratory inspiration duration', 'units': 'au'})
+                         metadata={'doc': 'Mean respiratory inspiration duration', 'units': 's'})
     meanE: float = field(default=np.nan,
-                         metadata={'doc': 'Mean respiratory expiration duration', 'units': 'au'})
+                         metadata={'doc': 'Mean respiratory expiration duration', 'units': 's'})
     meanIE: float = field(default=np.nan,
                           metadata={'doc': 'Mean ratio between inspiration and expiration durations', 'units': 'au'})
 
 
-def clean_respiration(data, column='PZT'):
+def respiration_clean(data, column='PZT'):
     '''
     # todo: does this function belong to dsu?
     Parameters
@@ -56,7 +59,7 @@ def clean_respiration(data, column='PZT'):
     return data
 
 
-def extract_sequence_features(data, events, column='PZT', known_sequences=None):
+def respiration_sequence_features(data, events, column='PZT', known_sequences=None):
     # nk.rsp_peaks(pzt_signal['PZT'].values, sampling_rate=sampling_rate, method="BioSPPy")
 
     sampling_rate = estimate_rate(data)
@@ -64,10 +67,13 @@ def extract_sequence_features(data, events, column='PZT', known_sequences=None):
     # Extract peak using neurokit BioSPPy method
     _index = data.index
     _, info = nk.rsp_peaks(data[column], sampling_rate=sampling_rate, method="BioSPPy")
-
     # Truncate so that first and last events are troughs
     RSP_Troughs = info['RSP_Troughs']
     RSP_Peaks = info['RSP_Peaks']
+    # at this point, check that there are some peaks/trough
+    if RSP_Troughs.size == 0 or RSP_Peaks.size == 0:
+        raise NoRespirationPeaks('No peaks/trough could be detected in PZT signal. ')
+
     RSP_Peaks = RSP_Peaks[(RSP_Peaks > RSP_Troughs[0]) & (RSP_Peaks <= RSP_Troughs[-1])]
 
     # Estimate Inspiration and Expiration durations, cycle (I+E) durations and amplitude
@@ -100,9 +106,7 @@ def extract_sequence_features(data, events, column='PZT', known_sequences=None):
         cycles_sequence = cycles_df.loc[begin:end].copy()
 
         # extract features on sequence
-        import pdb;
-        pdb.set_trace()
-        sequence_features = dataclass_to_dataframe(extract_features(cycles_sequence)).rename_axis(
+        sequence_features = dataclass_to_dataframe(respiration_features(cycles_sequence)).rename_axis(
             index='id').reset_index()
 
         sequence_features.insert(0, 'reference', row.id)
@@ -118,7 +122,7 @@ def extract_sequence_features(data, events, column='PZT', known_sequences=None):
     return features
 
 
-def extract_features(data):
+def respiration_features(data):
     features = PZTFeatures()
 
     # amplitude characteristics
