@@ -193,6 +193,9 @@ Name            Description                                          Examples
 flows
 ^^^^^
 
+TODO: rename/move to iguazu.flows, remove in_progress,
+add status and version object instead of a simple key: status.
+
 The flow family,  named ``"flows"`` contains log-like entries to mark when a
 file has been processed by a flow. The keys of this family are flow names.
 For example, ``"ppg"``, ``"behavior"``, etc. The values are either
