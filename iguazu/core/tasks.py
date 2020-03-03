@@ -488,9 +488,11 @@ class Task(ManagedTask):
         if isinstance(url_object, QuetzalURL):
             file_class = QuetzalFile
             init_kwargs = {'workspace_id': url_object.workspace_id}
+            find_kwargs = {'workspace_id': url_object.workspace_id}
         else:
             file_class = LocalFile
             init_kwargs = {}
+            find_kwargs = {'temporary': temporary}
 
         # data_backend = prefect.context.get('data_backend', None)
         # workspace_id = prefect.context.get('data_backend_workspace_id', None)
@@ -538,7 +540,7 @@ class Task(ManagedTask):
         new_file = file_class.find(filename=filename,
                                    path=path,
                                    metadata=match_meta,
-                                   **init_kwargs)
+                                   **find_kwargs)
         if self.forced:
             if new_file is not None:
                 # When task is forced but there was a previous result, we delete
@@ -553,7 +555,7 @@ class Task(ManagedTask):
             new_file = file_class.find(filename=filename,
                                        path=path,
                                        metadata=match_meta,
-                                       **init_kwargs)
+                                       **find_kwargs)
             if new_file is None:
                 new_file = file_class(filename=filename, path=path,
                                       temporary=temporary,

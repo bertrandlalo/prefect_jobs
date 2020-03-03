@@ -23,12 +23,14 @@ class LocalURL:
 
 @dataclass
 class QuetzalURL:
+    path: str
     workspace_name: str
     workspace_id: Optional[int]
     backend: str = 'quetzal'
 
     def resolve(self) -> 'QuetzalURL':
-        return QuetzalURL(workspace_name=self.workspace_name,
+        return QuetzalURL(path=self.path,
+                          workspace_name=self.workspace_name,
                           workspace_id=self.workspace_id or resolve_workspace_name(self.workspace_name),
                           backend=self.backend)
 
@@ -37,7 +39,7 @@ def parse_data_url(url: str) -> Union[LocalURL, QuetzalURL]:
     parsed = urllib.parse.urlparse(url)
 
     if parsed.scheme == 'quetzal':
-        tmp = QuetzalURL(workspace_name=parsed.netloc, workspace_id=None)
+        tmp = QuetzalURL(path=parsed.path.lstrip('/'), workspace_name=parsed.netloc, workspace_id=None)
         result = tmp.resolve()
         return result
     elif parsed.scheme == 'file':

@@ -2,6 +2,8 @@ import abc
 import pathlib
 from typing import Optional, Dict, Any
 
+from quetzal.client.utils import get_readable_info
+
 
 class FileAdapter(abc.ABC):
     """Abstract class for accessing files
@@ -204,6 +206,13 @@ class FileAdapter(abc.ABC):
 
         """
         pass
+
+    def checksum(self, stream):
+        """Check if the file metadata match the contents of a stream"""
+        size = self.metadata['base']['size']
+        checksum = self.metadata['base']['checksum']
+        f_checksum, f_size = get_readable_info(stream)
+        return (size, checksum) == (f_size, f_checksum)
 
     @abc.abstractmethod
     def __getstate__(self):
