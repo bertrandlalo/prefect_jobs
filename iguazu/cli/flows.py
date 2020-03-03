@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import functools
+import logging
 import os
 import pathlib
 import tempfile
@@ -8,10 +9,14 @@ import traceback
 import click
 import pandas as pd
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor, DaskExecutor
-from quetzal.client import helpers
 
+from iguazu.core.files import parse_data_url
 from iguazu.core.flows import execute_flow, REGISTRY
 from iguazu.core.tasks import Task
+
+
+
+logger = logging.getLogger(__name__)
 
 
 class TaskNameListType(click.ParamType):
@@ -116,22 +121,33 @@ class RunFlowGroup(click.core.Group):
 
 
 @flows_group.group('run', cls=RunFlowGroup, subcommand_metavar='FLOW_NAME [ARGS] ...', no_args_is_help=True)
-@click.option('--data-backend', type=click.Choice(['local', 'quetzal']), required=False,
-              default='local', help='Default data backend when creating new files.')
-@click.option('--default-workspace', required=False,
-              default=None, help='Default quetzal workspace when creating new files and '
-                                 'when using --data-backend quetzal')
-@click.option('--temp-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=False, help='Path where temporary files with processed data are saved. ')
-@click.option('--output-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
-              required=False, help='Path where final files with processed data are saved. ')
+# @click.option('--default-data-backend', type=click.Choice(['local', 'quetzal']),
+#               required=False, default='local',
+#               help='Default data backend when creating new files without parents.')
+@click.option('--temp-url', default=None, required=False,
+              help='URL where temporary files will be saved. Use a complete url '
+                   'with a scheme, such as file://temp_dir or quetzal://my_workspace/temp_dir')
+@click.option('--output-url', default=None, required=False,
+              help='URL where final files (not temporary) will be saved. Use a complete url '
+                   'with a scheme, such as file://output_dir or quetzal://my_workspace/output_dir')
+@click.option('--temp-dir', default=None, required=False,
+              type=click.Path(file_okay=False, dir_okay=True, exists=False),
+              help='Local directory where Iguazu and Prefect store information unrelated to '
+                   'the data, such as caches.')
+# @click.option('--default-workspace', required=False,
+#               default=None, help='Default quetzal workspace when creating new files and '
+#                                  'when using --data-target-backend quetzal')
+# @click.option('--temp-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
+#               required=False, help='Path where temporary files with processed data are saved. ')
+# @click.option('--output-dir', default=None, #type=click.Path(file_okay=False, dir_okay=True, exists=False),
+#               required=False, help='Path where final files with processed data are saved. ')
 @click.option('--executor-type', type=click.Choice(['local', 'synchronous', 'dask']),
               default='local', help='Type of executor to run the flow. Default is local.')
 @click.option('--executor-address', required=False,
               help='Address for a remote executor. Only used when --executor-type=dask.')
-@click.option('--report', type=click.Path(dir_okay=False),
-              required=False,
-              help='Output CSV report of the execution')
+# @click.option('--report', type=click.Path(dir_okay=False),  # report will now default to temp_dir/report-id.csv
+#               required=False,
+#               help='Output CSV report of the execution')
 @click.option('--force', required=False, type=TaskNameListType(),
               help='Comma-separated list of tasks whose execution should be forced. '
                    'Use "--force all" to force all tasks')
@@ -142,37 +158,43 @@ class RunFlowGroup(click.core.Group):
                    'not make the program exit with a non-zero exit code. By default, '
                    'flows that are not successful have an exit code of -1.')
 @click.pass_context
-def run_group(ctx, data_backend, default_workspace, temp_dir, output_dir, executor_type, executor_address, report, force, cache, allow_flow_failure):
+def run_group(ctx, temp_url, output_url, temp_dir, executor_type, executor_address, force, cache, allow_flow_failure):
     """Run the flow registered as FLOW_NAME
 
     Use command `iguazu flows run --help` to get a list of all available flows.
     """
     ctx.obj = ctx.obj or {}
     opts = {
-        'data_backend': data_backend,
-        'data_backend_workspace_id': None,
+        'temp_url': temp_url,
+        'output_url': output_url,
         'temp_dir': temp_dir,
-        'output_dir': output_dir,
+        # 'data_source_backend': data_source_backend,
+        # 'data_target_backend': data_target_backend,
+        # 'data_target_backend_parameters': data_target_backend_parameters,
+        # 'data_backend': data_backend,
+        # 'data_backend_workspace_id': None,
+        # 'temp_dir': temp_dir,
+        # 'output_dir': output_dir,
         'executor_type': executor_type,
         'executor_address': executor_address,
-        'csv_report': report,
+        # 'csv_report': report,
         'force': force,
         'cache': cache,
         'allow_flow_failure': allow_flow_failure,
     }
-    if data_backend == 'quetzal':
-        click.echo(f'Using Quetzal as data backend for default results, '
-                   f'determining workspace id of workspace "{default_workspace}..."')
-        client = helpers.get_client()
-        details, total = helpers.workspace.list_(client,
-                                                 name=default_workspace,
-                                                 deleted=False)
-        if total == 0:
-            ctx.fail(f'No workspace named "{default_workspace}" was found')
-        elif total > 1:
-            ctx.fail(f'Workspace "{default_workspace}" is not unique, there were '
-                     f'{total} workspaces with the same name')
-        opts['data_backend_workspace_id'] = details[0]['id']
+    # if data_backend == 'quetzal':
+    #     click.echo(f'Using Quetzal as data backend for default results, '
+    #                f'determining workspace id of workspace "{default_workspace}..."')
+    #     client = helpers.get_client()
+    #     details, total = helpers.workspace.list_(client,
+    #                                              name=default_workspace,
+    #                                              deleted=False)
+    #     if total == 0:
+    #         ctx.fail(f'No workspace named "{default_workspace}" was found')
+    #     elif total > 1:
+    #         ctx.fail(f'Workspace "{default_workspace}" is not unique, there were '
+    #                  f'{total} workspaces with the same name')
+    #     opts['data_backend_workspace_id'] = details[0]['id']
 
     ctx.obj.update(opts)
 
@@ -187,15 +209,36 @@ def run_flow(flow_class, **kwargs):
     executor_address = ctx.obj.get('executor_address', None)
     executor = prepare_executor(executor_type, executor_address)
 
+    # Manage non-trivial defaults
+    temp_dir = ctx.obj.get('temp_dir', None)
+    if not temp_dir:
+        temp_dir = tempfile.mkdtemp()
+        logger.info('--temp-dir was not set by command-line, using %s', temp_dir)
+    temp_url = ctx.obj.get('temp_url', None)
+    output_url = ctx.obj.get('output_url', None)
+    if not temp_url or not output_url:
+        tmpdir = pathlib.Path(tempfile.mkdtemp()).resolve()
+        if not temp_url:
+            temp_url = (tmpdir / 'temp').as_uri()
+            logger.info('--temp-url was not set by command-line, using %s', temp_url)
+        if not output_url:
+            output_url = (tmpdir / 'output').as_uri()
+            logger.info('--output-url was not set by command-line, using %s', output_url.path)
+    temp_url = parse_data_url(temp_url)
+    output_url = parse_data_url(output_url)
+
     # Prepare context arguments
     context_args = dict(
+        temp_dir=temp_dir,
+        temp_url=temp_url,
+        output_url=output_url,
         # data_dir=ctx.obj.get('data_dir', None) or get_data_dir(), # TODO: consider this
-        temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
-        output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
-        quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
-                                                kwargs.get('workspace_name', None)),
-        data_backend=ctx.obj.get('data_backend', None),
-        data_backend_workspace_id=ctx.obj.get('data_backend_workspace_id', None),
+        # temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
+        # output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
+        # quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
+        #                                         kwargs.get('workspace_name', None)),
+        # data_backend=ctx.obj.get('data_backend', None),
+        # data_backend_workspace_id=ctx.obj.get('data_backend_workspace_id', None),
     )
 
     # Handle --force

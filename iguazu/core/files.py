@@ -13,10 +13,13 @@ UC3: retrieve file for reading
 import abc
 import collections
 import copy
+import functools
 import json
 import logging
 import pathlib
-from typing import Dict, Any, Optional
+import urllib.parse
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, Union
 
 from prefect import context
 from prefect.client import Secret
@@ -202,51 +205,6 @@ class FileAdapter(abc.ABC):
     def download_metadata(self):
         pass
 
-    # @abc.abstractmethod
-    # def make_child(self, *,
-    #                filename: Optional[str] = None,
-    #                path: Optional[str] = None,
-    #                suffix: Optional[str] = None,
-    #                extension: Optional[str] = None,
-    #                temporary: bool = True) -> 'FileAdapter':
-    #     """Create a new :py:class:`FileAdapter` instance based on this instance
-    #
-    #     This method provides a single implementation to create new files from
-    #     existing ones. It will create or retrieve a :py:class:`FileAdapter`
-    #     instance that inherits the same filename, path and extension as its
-    #     parent (i.e. this instance), except where the parameters of this
-    #     functions are set.
-    #
-    #     Parameters
-    #     ==========
-    #     filename
-    #         Overrides the filename of the new file.
-    #     path
-    #         Overrides the path of the new file.
-    #     suffix
-    #         Extra string added after the filename stem but before its
-    #         extension. Using this parameter overrides the filename of the new
-    #         file. It can be used with the `filename` parameter, but it usually
-    #         makes more sense to use the `suffix` but leaving the `filename`
-    #         untouched.
-    #     extension
-    #         Overrides the file extension of the new file.
-    #     temporary
-    #         When this parameter is set to ``True``, the new file will be marked
-    #         as a temporary file. Temporary files can be erased by the underlying
-    #         backend. When this parameter is set to  ``False``, the file will be
-    #         carefully tracked by the underlying backend.
-    #
-    #     Returns
-    #     =======
-    #     FileAdapter
-    #         A file instance, either completely new because it did not exist on
-    #         the underlying backend, or an instance associated to the existing
-    #         file.
-    #
-    #     """
-    #     pass
-
     def upload(self):
         """Save the file data and metadata on the underlying backend
 
@@ -290,10 +248,12 @@ class FileAdapter(abc.ABC):
 
     @abc.abstractmethod
     def __getstate__(self):
+        """ Serialize this instance (used by pickle) """
         pass
 
     @abc.abstractmethod
     def __setstate__(self, state):
+        """ Create an instance by deserialization (used by pickle) """
         pass
 
 
@@ -322,9 +282,24 @@ class QuetzalFile(FileAdapter):
         if workspace_id is None and temporary:
             raise ValueError('Cannot create a Quetzal temporary file without an '
                              'associated workspace')
+        if temporary:
+            if 'temp_url' not in context:
+                logger.warning('Creating a temporary file, but no temp_url found in '
+                               'context. Are you creating a file outside a prefect '
+                               'task or flow?')
+            if not isinstance(context.temp_url, QuetzalURL):
+                logger.warning('Creating a temporary file, but temp_url is not a '
+                               'Quetzal URL like "quetzal://...", this seems wrong')
+        else:
+            if 'output_url' not in context:
+                logger.warning('Creating a non-temporary file, but no output_url found in '
+                               'context. Are you creating a file outside a prefect '
+                               'task or flow?')
+            if not isinstance(context.output_url, QuetzalURL):
+                logger.warning('Creating a non-temporary file, but output_url is not a '
+                               'Quetzal URL like "quetzal://...", this seems wrong')
 
         super().__init__(filename=filename, path=path, temporary=temporary, **kwargs)
-
         self._client = None
         self._file_id = None
         self._workspace_id = workspace_id
@@ -333,7 +308,7 @@ class QuetzalFile(FileAdapter):
         if temporary:
             self._root = context.temp_dir
         else:
-            self._root = context.output_dir
+            self._root = get_data_dir()
         self._local_path = pathlib.Path(self._root) / (path or '') / filename
 
     @staticmethod
@@ -448,94 +423,6 @@ class QuetzalFile(FileAdapter):
     @property
     def workspace_id(self):
         return self._workspace_id
-
-    # def make_child(self, *, filename=None, path=None, suffix=None, extension=None, temporary=True) -> 'QuetzalFile':
-    #     # TODO: define what metadata gets inherited!
-    #     if 'temp_dir' not in context or context.temp_dir is None:
-    #         raise RuntimeError('Cannot create new file without a "temp_dir" on '
-    #                            'the prefect context')
-    #     temp_dir = pathlib.Path(context.temp_dir)
-    #
-    #     # Create a new file with the help of pathlib
-    #     # First, the path
-    #     base_metadata = self.metadata['base']
-    #     if path is None:
-    #         new = temp_dir / pathlib.PosixPath(base_metadata['path'])
-    #     else:
-    #         new = temp_dir / pathlib.Path(path)
-    #     # Then, the filename
-    #     if filename is None:
-    #         new = new / base_metadata['filename']
-    #     else:
-    #         new = new / filename
-    #     # Adjust the suffix and extension
-    #     suffix = suffix or ''
-    #     extension = extension or new.suffix
-    #     new = new.with_name(new.stem + suffix + extension)
-    #
-    #     # Verify if there already a child with the same name, path and parent
-    #     existing_meta = self._retrieve_child_meta(str(new.relative_to(temp_dir).parent), new.name)
-    #     if existing_meta:
-    #         child = QuetzalFile(file_id=existing_meta['base']['id'],
-    #                             workspace_id=self._workspace_id,
-    #                             **self._client_kwargs)
-    #         child._metadata = existing_meta
-    #         # Propagate parent metadata (drop base metadata, drop all ids)
-    #         parent_metadata = copy.deepcopy(self._metadata)
-    #         for family in parent_metadata:
-    #             parent_metadata[family].pop('id', None)
-    #         parent_metadata.pop('base', None)
-    #         if 'iguazu' in parent_metadata:
-    #             parent_metadata['iguazu'].pop('parents', None)
-    #         child._metadata = _deep_update(child._metadata, parent_metadata)
-    #         child._workspace_id = self._workspace_id
-    #         return child
-    #
-    #     # Create new child adapter class and propagate metadata
-    #     child = QuetzalFile(file_id=None,
-    #                         workspace_id=self._workspace_id,
-    #                         **self._client_kwargs)
-    #     child._metadata = copy.deepcopy(self._metadata)
-    #     if not isinstance(child._metadata, collections.defaultdict):
-    #         tmp = collections.defaultdict(dict)
-    #         tmp.update(child._metadata)
-    #         child._metadata = tmp
-    #     child._metadata.pop('base', None)
-    #     child._metadata['base']['filename'] = new.name
-    #     child._metadata['base']['path'] = str(new.relative_to(temp_dir).parent)
-    #     # unset all id columns
-    #     for family in child._metadata:
-    #         child._metadata[family].pop('id', None)
-    #     # unset iguazu state
-    #     # no longer needed, iguazu.Task sets the default metadata
-    #     #child._metadata['iguazu'].pop('state', None)
-    #     # link child to parent
-    #     # child._metadata['iguazu']['parents'] = base_metadata['id']
-    #
-    #     child._temporary = temporary
-    #     # If we are creating a new child, but there is already a file with that
-    #     # name, we need to clear it to avoid confusion with old results
-    #     if new.exists():
-    #         new.unlink()
-    #     new.parent.mkdir(parents=True, exist_ok=True)  # TODO: consider a better solution
-    #     child._local_path = new
-    #
-    #     return child
-
-    # def _retrieve_child_meta(self, path, filename):
-    #     logger.info('Retrieving possible child')
-    #     parent_id = self._file_id
-    #     candidates = helpers.file.find(self.client, wid=self._workspace_id, path=path, filename=filename)
-    #     logger.info('File by name and path gave %d candidates', len(candidates))
-    #     for file_detail in sorted(candidates, key=lambda d: d.date, reverse=True):
-    #         meta = helpers.file.metadata(self.client, file_detail.id, wid=self._workspace_id)
-    #         state = meta['base'].get('state', None)
-    #         parents = meta.get('iguazu', {}).get('parents', [])
-    #         if parent_id in parents and state != 'DELETED':
-    #             logger.info('Found a match with same parent %s', meta['base'])
-    #             return meta
-    #     logger.info('No candidate matches')
-    #     return None
 
     def upload_data(self):
         if self._file_id is not None:
@@ -794,9 +681,64 @@ def quetzal_client_from_secret():
         quetzal_kws = Secret('QUETZAL_CLIENT_KWARGS').get()
     except ValueError as ex:
         logger.debug('Could not retrieve prefect secret '
-                     'QUETZAL_CLIENT_KWARGS due to the following exception: %s. '
+                     'QUETZAL_CLIENT_KWARGS due to the following exception: %s '
                      'Falling back to environment variable-based client',
-                      ex)
+                     ex)
         quetzal_kws = {}
 
     return helpers.get_client(**quetzal_kws)
+
+
+@dataclass
+class LocalURL:
+    path: pathlib.Path
+    backend: str = 'local'
+
+
+@dataclass
+class QuetzalURL:
+    workspace_name: str
+    workspace_id: Optional[int]
+    backend: str = 'quetzal'
+
+    def resolve(self) -> 'QuetzalURL':
+        return QuetzalURL(workspace_name=self.workspace_name,
+                          workspace_id=self.workspace_id or resolve_workspace_name(self.workspace_name),
+                          backend=self.backend)
+
+
+@functools.lru_cache(maxsize=1024)
+def resolve_workspace_name(name: str) -> Optional[int]:
+    logger.debug('Resolving Quetzal workspace name %s...', name)
+    client = quetzal_client_from_secret()
+    details, total = helpers.workspace.list_(client,
+                                             name=name,
+                                             deleted=False)
+    if total == 0:
+        logger.warning('No workspace named "%s" was found', name)
+    elif total > 1:
+        logger.warning('Workspace "%s" is not unique, there were '
+                       '%d workspaces with the same name...')
+    else:
+        return details[0]['id']
+    return None
+
+
+def parse_data_url(url: str) -> Union[LocalURL, QuetzalURL]:
+    parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme == 'quetzal':
+        tmp = QuetzalURL(workspace_name=parsed.netloc, workspace_id=None)
+        result = tmp.resolve()
+        return result
+    elif parsed.scheme == 'file':
+        if parsed.netloc == '':
+            # This happens with absolute paths like 'file:///Users/...'
+            tmp = pathlib.Path(parsed.path)
+        else:
+            # When netloc is not empty, the path will have a trailing slash
+            tmp = pathlib.Path(parsed.netloc) / pathlib.Path(parsed.path[1:])
+        result = LocalURL(path=tmp.resolve())
+        return result
+    else:
+        raise ValueError(f'Unsupported data URL "{url}" due to unknown scheme "{parsed.scheme}"')

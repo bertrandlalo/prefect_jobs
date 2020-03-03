@@ -19,7 +19,7 @@ from iguazu import __version__
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
-from iguazu.core.files import FileAdapter, LocalFile, QuetzalFile
+from iguazu.core.files import FileAdapter, LocalFile, LocalURL, QuetzalFile, QuetzalURL
 from iguazu.helpers.states import GracefulFail, SkippedResult
 from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.utils import fullname
@@ -467,31 +467,55 @@ class Task(ManagedTask):
                     extension: Optional[str] = None,
                     temporary: bool = True) -> FileAdapter:
 
-        # Determine backend
-        data_backend = prefect.context.get('data_backend', None)
-        workspace_id = prefect.context.get('data_backend_workspace_id', None)
-        if data_backend is None:
-            self.logger.warning('data_backend is not set. Set it with the '
-                                '--data-backend option of the iguazu flow command')
-            if parent is None:
-                raise RuntimeError('Cannot create new files when the data_backend is '
-                                   'not set')
-            data_backend = 'quetzal' if isinstance(parent, QuetzalFile) else 'quetzal'
-            self.logger.debug('Guessing data backend to be %s due to type of its '
-                              'parent %s', data_backend, parent)
-
-        init_kwargs = {}
-        if data_backend == 'local':
-            file_class = LocalFile
+        # Determine where the new file will be stored
+        output_url = prefect.context.get('output_url', None)
+        temp_url = prefect.context.get('temp_url', None)
+        if temporary:
+            if not temp_url:
+                raise RuntimeError('Cannot create new temporary files when the temp_url '
+                                   'context variable is not present')
+            if not isinstance(temp_url, (LocalURL, QuetzalURL)):
+                raise RuntimeError('temp_url context variable has an unsupported type')
+            url_object = temp_url
         else:
+            if not output_url:
+                raise RuntimeError('Cannot create new output files when the output_url '
+                                   'context variable is not present')
+            if not isinstance(output_url, (LocalURL, QuetzalURL)):
+                raise RuntimeError('output_url context variable has an unsupported type')
+            url_object = output_url
+
+        if isinstance(url_object, QuetzalURL):
             file_class = QuetzalFile
-            init_kwargs = {'workspace_id': workspace_id}
-            if workspace_id is None:
-                if parent is not None and isinstance(parent, QuetzalFile):
-                    init_kwargs['workspace_id'] = parent.workspace_id
-                else:
-                    self.logger.warning('No workspace_id has been set, it will '
-                                        'not be possible to create new files...')
+            init_kwargs = {'workspace_id': url_object.workspace_id}
+        else:
+            file_class = LocalFile
+            init_kwargs = {}
+
+        # data_backend = prefect.context.get('data_backend', None)
+        # workspace_id = prefect.context.get('data_backend_workspace_id', None)
+        # if data_backend is None:
+        #     self.logger.warning('data_backend is not set. Set it with the '
+        #                         '--data-backend option of the iguazu flow command')
+        #     if parent is None:
+        #         raise RuntimeError('Cannot create new files when the data_backend is '
+        #                            'not set')
+        #     data_backend = 'quetzal' if isinstance(parent, QuetzalFile) else 'quetzal'
+        #     self.logger.debug('Guessing data backend to be %s due to type of its '
+        #                       'parent %s', data_backend, parent)
+
+        # init_kwargs = {}
+        # if data_backend == 'local':
+        #     file_class = LocalFile
+        # else:
+        #     file_class = QuetzalFile
+        #     init_kwargs = {'workspace_id': workspace_id}
+        #     if workspace_id is None:
+        #         if parent is not None and isinstance(parent, QuetzalFile):
+        #             init_kwargs['workspace_id'] = parent.workspace_id
+        #         else:
+        #             self.logger.warning('No workspace_id has been set, it will '
+        #                                 'not be possible to create new files...')
 
         # Handle filenames, path, prefixes, etc
         parent_ids = []
