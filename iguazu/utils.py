@@ -2,12 +2,12 @@
 Utility functions used on iguazu that do not belong anywhere else.
 """
 
-from typing import Any, Mapping
 import functools
 import importlib
 import pathlib
 import pickle
 import pkgutil
+from typing import Any, Mapping
 
 
 def fullname(obj: Any) -> str:
@@ -95,6 +95,13 @@ def load_pickle(fname, default=None):
 
 
 def mapping_issubset(d1: Mapping, d2: Mapping) -> bool:
+    """Determine if a mapping is a subset of another one
+
+    A mapping `a` is a subset of another mapping `b` when all keys k in `a`
+    are also present in `b`, and all mappings inside `a` are a subset of the
+    corresponding mapping in `b`.
+
+    """
     for k in d1:
         if k not in d2:
             return False
