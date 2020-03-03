@@ -14,8 +14,6 @@ from iguazu.core.files import parse_data_url
 from iguazu.core.flows import execute_flow, REGISTRY
 from iguazu.core.tasks import Task
 
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -254,14 +252,13 @@ def run_flow(flow_class, **kwargs):
     if 'SLACK_WEBHOOK_URL' in os.environ:
         context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
 
-    quetzal_kws = {}
-    for var in {'QUETZAL_URL', 'QUETZAL_USER', 'QUETZAL_PASSWORD', 'QUETZAL_API_KEY'}:
-        if var in os.environ:
-            name = var[len('QUETZAL_'):].lower()
-            quetzal_kws[name] = os.environ[var]
+    quetzal_kws = dict(
+        url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
+        username=os.getenv('QUETZAL_USER', 'admin'),
+        password=os.getenv('QUETZAL_PASSWORD', 'password'),
+        api_key=os.getenv('QUETZAL_API_KEY', None))
 
-    if quetzal_kws:
-        context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
+    context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
     ###
     # Flow execution
