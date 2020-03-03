@@ -5,11 +5,11 @@ import prefect
 
 import iguazu
 from iguazu.core.exceptions import SoftPreconditionFailed
+from iguazu.core.files import FileAdapter
 from iguazu.functions.galvanic import (
     downsample, galvanic_cvx, galvanic_scrpeaks, galvanic_clean, gsr_features
 )
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
-from iguazu.helpers.files import FileProxy
 
 
 class CleanGSRSignal(iguazu.Task):
@@ -78,9 +78,9 @@ class CleanGSRSignal(iguazu.Task):
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self,
-            signals: FileProxy,
-            annotations: FileProxy,
-            events: FileProxy) -> FileProxy:
+            signals: FileAdapter,
+            annotations: FileAdapter,
+            events: FileAdapter) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
         if events.empty:
@@ -127,7 +127,7 @@ class Downsample(iguazu.Task):
 
     def run(self,
             signals: pd.DataFrame,
-            annotations: pd.DataFrame) -> FileProxy:
+            annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
@@ -173,7 +173,7 @@ class ApplyCVX(iguazu.Task):
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
     def run(self, signals: pd.DataFrame,
-            annotations: pd.DataFrame) -> FileProxy:
+            annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
@@ -221,7 +221,7 @@ class DetectSCRPeaks(iguazu.Task):
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
     def run(self, signals: pd.DataFrame,
-            annotations: pd.DataFrame) -> FileProxy:
+            annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
@@ -233,15 +233,30 @@ class DetectSCRPeaks(iguazu.Task):
                                                      peaks_kwargs=self.peaks_kwargs,
                                                      max_increase_duration=self.max_increase_duration)
 
-        with pd.HDFStore(output_file.file, 'w') as store:
+        return self.save(peaks, annotations)
+
+    # Refactored this method out of run so that it can be reused by a child
+    # class such as ExtractGSRSignal
+    def save(self, peaks: pd.DataFrame, annotations: pd.DataFrame) -> FileAdapter:
+        output_file = self.default_outputs()
+        with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
             peaks.to_hdf(store, self.output_hdf5_key)
-            peaks_annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
+            annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
+            node = store.get_node(self.output_hdf5_key)
+            node._v_attrs['standard'] = {
+                'sampling_rate': self.sampling_rate,  # todo!!
+            }
+
         return output_file
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_scrpeaks')
+        # output = signals.make_child(suffix=f'_standard_{names}')
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_scrpeaks'
+        )
         return output
 
 
@@ -264,7 +279,7 @@ class ExtractGSRFeatures(iguazu.Task):
             cvx: pd.DataFrame,
             scrpeaks: pd.DataFrame,
             events: Optional[pd.DataFrame] = None,
-            parent: FileProxy) -> FileProxy:  # TODO: events should be named sequences?
+            parent: FileAdapter) -> FileAdapter:  # TODO: events should be named sequences?
         output_file = self.default_outputs()
         known_sequences = [sequence for sequence in VALID_SEQUENCE_KEYS if
                            not any(excl in sequence for excl in
