@@ -10,10 +10,11 @@ import prefect
 import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
-from iguazu.core.files import FileAdapter, LocalFile, _deep_update
+from iguazu.core.files import FileAdapter, LocalFile
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
 from iguazu.functions import specs
+from iguazu.utils import deep_update
 
 
 logger = logging.getLogger(__name__)
@@ -334,7 +335,7 @@ class AddSourceMetadata(prefect.Task):
 
     def run(self, *, file: FileAdapter) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
-        _deep_update(file.metadata, new_meta)
+        deep_update(file.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
         #       so we don't download the file for nothing
         file.upload()

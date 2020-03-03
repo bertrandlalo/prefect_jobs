@@ -7,7 +7,7 @@ import importlib
 import pathlib
 import pickle
 import pkgutil
-from typing import Any, Mapping
+from typing import Any, Dict, Mapping
 
 
 def fullname(obj: Any) -> str:
@@ -113,3 +113,13 @@ def mapping_issubset(d1: Mapping, d2: Mapping) -> bool:
         elif v1 != v2:
             return False
     return True
+
+
+def deep_update(dest: Dict, src: Dict) -> Dict:
+    """Update a dict with the contents of another one, recursively"""
+    for k, v in src.items():
+        if isinstance(v, dict):
+            dest[k] = deep_update(dest.get(k, {}), v)
+        else:
+            dest[k] = v
+    return dest
