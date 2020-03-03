@@ -3,6 +3,7 @@ import logging
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import MergeHDF5, AddSourceMetadata, SlackTask
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
 from iguazu.tasks.standards import Report
 from iguazu.tasks.vr import (
     ExtractNexusGSRSignal, ExtractNexusSignal,
@@ -51,7 +52,7 @@ ORDER BY id                                    -- always in the same order
 
         raw_files = dataset_flow.terminal_tasks().pop()
         self.update(dataset_flow)
-
+        create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
         standardize_events = ExtractStandardEvents(
             name='UnityToStandardEvents',
             events_hdf5_key='/unity/events/unity_events',
@@ -98,13 +99,15 @@ ORDER BY id                                    -- always in the same order
                 # },
             },
         )
+        update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
         notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
                                     'Task report:')
 
         # Build flow
         with self:
-            standard_events = standardize_events.map(events=raw_files)
+            create_noresult = create_flow_metadata.map(parent=raw_files)
+            standard_events = standardize_events.map(events=raw_files, upstream_tasks=[create_noresult])
             # vr_sequences = filter_vr.map(events=standard_events)
             standard_ppg = standardize_ppg_signals.map(signals=raw_files)
             standard_gsr = standardize_gsr_signals.map(signals=raw_files)
@@ -117,6 +120,7 @@ ORDER BY id                                    -- always in the same order
                 PZT=standard_pzt,
             )
             update_noresult = update_meta.map(file=merged)
+            update_noresult2 = update_flow_metadata.map(parent=raw_files, child=merged)
             message = report(files=merged, upstream_tasks=[update_noresult])
             notify(message=message)
 
