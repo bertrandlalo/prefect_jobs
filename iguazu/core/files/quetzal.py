@@ -5,13 +5,13 @@ import logging
 import pathlib
 from typing import Optional, Dict, Any
 
-from iguazu.core.files import FileAdapter, QuetzalURL
-from iguazu.utils import mapping_issubset
 from prefect import context
 from prefect.client import Secret
 from quetzal.client import helpers
 from quetzal.client.utils import get_data_dir, get_readable_info
 
+from iguazu.core.files import FileAdapter, QuetzalURL
+from iguazu.utils import mapping_issubset
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +66,10 @@ class QuetzalFile(FileAdapter):
         self._metadata = collections.defaultdict(dict, metadata or {})
         if temporary:
             self._root = context.temp_dir
+            self._url = context.temp_url
         else:
             self._root = get_data_dir()
+            self._url = context.output_url
         self._local_path = pathlib.Path(self._root) / (path or '') / filename
 
     @staticmethod
@@ -127,12 +129,9 @@ class QuetzalFile(FileAdapter):
         # ...finally, just check that the instance _local_path is not pointing
         # to old data to avoid confusion
         if instance._local_path.exists():
-            size = instance.metadata['base']['size']
-            checksum = instance.metadata['base']['checksum']
             with instance._local_path.open('rb') as fd:
-                f_checksum, f_size = get_readable_info(fd)
-
-            if (size, checksum) != (f_size, f_checksum):
+                local_is_valid = instance.checksum(fd)
+            if not local_is_valid:
                 logger.debug('File %s already exists locally in %s,'
                              'but its size and checksum differ from Quetzal '
                              'metadata. Erasing local file...', file_id, instance.file)
@@ -181,7 +180,8 @@ class QuetzalFile(FileAdapter):
 
     @property
     def workspace_id(self):
-        return self._workspace_id
+        # return self._workspace_id
+        return self._url.workspace_id
 
     def upload_data(self):
         if self._file_id is not None:
@@ -193,8 +193,9 @@ class QuetzalFile(FileAdapter):
         else:
             logger.debug('Uploading file %s to Quetzal', self._local_path)
             with self._local_path.open('rb') as fd:
-                details = helpers.workspace.upload(self.client, self._workspace_id, fd,
-                                                   path=self.dirname,
+                fullpath = '/'.join([self._url.path, self.dirname])
+                details = helpers.workspace.upload(self.client, self.workspace_id, fd,
+                                                   path=fullpath,
                                                    temporary=self._temporary)
             self._file_id = details.id
             logger.debug('File was successfully uploaded and now is id=%s', self._file_id)
@@ -234,7 +235,7 @@ class QuetzalFile(FileAdapter):
                                   output=self._local_path)
             logger.debug('Downloaded %s -> %s', self._file_id, self._local_path)
         else:
-            # File does not exist in quetzal, it is probable a new file
+            # File does not exist in quetzal, it is probably a new file
             # ... here, just create the directory structure
             self._local_path.parent.mkdir(parents=True, exist_ok=True)
 
