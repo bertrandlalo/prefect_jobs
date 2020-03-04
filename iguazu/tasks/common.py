@@ -39,7 +39,6 @@ class ListFiles(prefect.Task):
         self._as_file_adapter = as_file_adapter
 
     def run(self, basedir, pattern='**/*.hdf5'):
-        logger = prefect.context.get("logger")
         if not basedir:
             return []
         path = pathlib.Path(basedir)
@@ -47,8 +46,8 @@ class ListFiles(prefect.Task):
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
         files = [file for file in path.glob(pattern)]
         # files.sort()
-        logger.info('list_files on basedir %s found %d files to process',
-                    basedir, len(files))
+        self.logger.info('list_files on basedir %s found %d files to process',
+                         basedir, len(files))
 
         if self._as_file_adapter:
             adapters = [LocalFile(f, base_dir=basedir) for f in files]
