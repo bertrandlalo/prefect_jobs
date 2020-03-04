@@ -4,6 +4,7 @@ import functools
 import inspect
 import logging
 import os
+import pathlib
 from typing import (
     Any, Callable, Container, ContextManager, Iterable, Mapping, NoReturn,
     Optional,
@@ -11,21 +12,23 @@ from typing import (
 
 import pandas as pd
 import prefect
-from prefect.engine.signals import ENDRUN, PrefectStateSignal
+from prefect.engine.signals import ENDRUN
 from prefect.utilities.exceptions import PrefectError
 
+from iguazu import __version__
 from iguazu.core.exceptions import PreviousResultsExist, SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.options import TaskOptions, ALL_OPTIONS
 from iguazu.core.validators import GenericValidator
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter, LocalFile, LocalURL, QuetzalFile, QuetzalURL
 from iguazu.helpers.states import GracefulFail, SkippedResult
-from iguazu.tasks.handlers import garbage_collect_handler, logging_handler
+from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.utils import fullname
 
 logger = logging.getLogger(__name__)
 
 
 class ManagedTask(prefect.Task):
+    # This class is not meant to be used directly, use iguazu.Task
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -183,7 +186,7 @@ class ManagedTask(prefect.Task):
             kwargs = prefect.context.get('run_kwargs', {})
             outputs = self.default_outputs(**kwargs)
             for output in _iterate(outputs):
-                if isinstance(output, FileProxy):
+                if isinstance(output, FileAdapter):
                     output.delete()
         except:
             logger.warning('Encountered an exception during hard fail',
@@ -254,7 +257,7 @@ class Task(ManagedTask):
         from :py:class:`PreconditionFailed`.
 
         Note that the inputs are received without any automatic transformation
-        like the file proxy to dataframe transformation.
+        like the file adapter to dataframe transformation.
 
         Parameters
         ----------
@@ -268,19 +271,26 @@ class Task(ManagedTask):
             When the input does not meet a required condition but the task can
             continue with its default outputs.
         """
+        family = self.meta.metadata_journal_family
         # Precondition 1:
         # Previous output does not exist or task is forced
-        default_output = self.default_outputs(**inputs)
-        family = self.meta.metadata_journal_family
-        if isinstance(default_output, FileProxy):
-            default_output_meta = default_output.metadata.get(family, {})
-            if not self.forced and default_output_meta.get('status', None) is not None:
-                raise PreviousResultsExist('Previous results already exist')
+        if not self.forced:
+            # Here, it is important to generate the default_outputs only when
+            # the task is not forced, because when the task IS forced, then
+            # any call to create_file in default_outputs will delete any
+            # pre-existing file
+            default_output = self.default_outputs(**inputs)
+            if isinstance(default_output, FileAdapter):
+                default_output_meta = default_output.metadata.get(family, {})
+                default_base_meta = default_output.metadata['base']
+                if default_base_meta.get('state', None) != 'DELETED' and \
+                   default_output_meta.get('status', None) is not None:
+                    raise PreviousResultsExist('Previous results already exist')
 
         # Precondition 2:
         # Inputs are *not* marked as a failed result from a previous task
         for input_name, input_value in inputs.items():
-            if not isinstance(input_value, FileProxy):
+            if not isinstance(input_value, FileAdapter):
                 continue
             input_meta = input_value.metadata.get(family, {})
             if input_meta.get('status', None) == 'FAILURE':
@@ -313,14 +323,14 @@ class Task(ManagedTask):
                 continue
 
             # Read the file
-            if isinstance(input_value, FileProxy):
+            if isinstance(input_value, FileAdapter):
                 file = input_value.file
             elif isinstance(input_value, (str, bytes, os.PathLike)):
                 file = input_value
             else:
                 raise ValueError(f'Input {k} (type {k.__class__.__name__}) '
                                  f'cannot be auto converted to dataframe, '
-                                 f'it must be a FileProxy, str, bytes or os.PathLike')
+                                 f'it must be a FileAdapter, str, bytes or os.PathLike')
 
             if not file.exists() and exc_class is not None:
                 raise exc_class(f'Input file {file} does not exist')
@@ -349,7 +359,16 @@ class Task(ManagedTask):
                                           'type was configured. Continuing...',
                                           key, file, k)
                 else:
-                    obj = pd.read_hdf(store, key, *args, **kwargs)
+                    # Read the dataframe, but be careful when the key is a group and not a node
+                    try:
+                        obj = pd.read_hdf(store, key, *args, **kwargs)
+                    except TypeError:
+                        self.logger.warning('Could read HDF5 key %s on file %s for input %s, '
+                                            'yet the key does exists on the HDF5. '
+                                            'Did you set a group name instead of a node name?',
+                                            key, file, k, exc_info=True)
+                        obj = None
+                    # Type verification
                     if not isinstance(obj, pd.DataFrame):
                         if exc_class is not None:
                             raise exc_class(f'Input {key} for input {k} '
@@ -359,22 +378,23 @@ class Task(ManagedTask):
                                               'HDF5 file %s for input %s, but no '
                                               'input exception type was configured. '
                                               'Continuing...')
-                    self.logger.debug('Input %s converted to a dataframe of shape %s',
-                                      k, obj.shape)
+                    else:
+                        self.logger.debug('Input %s read into a dataframe of shape %s',
+                                          k, obj.shape)
                     inputs[k] = obj
 
         return inputs
 
     def handle_outputs(self, outputs) -> Any:
-        # Set the metadata to the outputs that are file proxies.
+        # Set the metadata to the outputs that are file adapters.
         meta = self.default_metadata(None, **prefect.context.run_kwargs)
         for output in _iterate(outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 # If the underlying task did not generate anything,
                 # create an empty file
                 file = output.file
                 if not file.exists():
-                    self.logger.debug('Task did not generate a FileProxy output '
+                    self.logger.debug('Task did not generate a FileAdapter output '
                                       'with contents, creating an empty file')
                     open(str(file.resolve()), 'w').close()
                 # TODO: update or replace?
@@ -383,16 +403,16 @@ class Task(ManagedTask):
         # Verify postconditions
         self.postconditions(outputs)
 
-        # Upload outputs that are file proxies
+        # Upload outputs that are file adapters
         for output in _iterate(outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 output.upload()
 
         # Note: I tried to design and implement a mechanism here similar to
         #       prepare_inputs: It would use the .meta configuration to
         #       automatically convert any output dataframe into a hdf5 file.
         #       I could not manage to find an elegant way of creating a
-        #       FileProxy: this is usually done inside the user task run method,
+        #       FileAdapter: this is usually done inside the user task run method,
         #       so I do not know how to do it here unless we add another new
         #       abstract method to create it.
 
@@ -405,6 +425,11 @@ class Task(ManagedTask):
         if exception is None:
             status = 'SUCCESS'
             problem = None
+        elif isinstance(exception, PreviousResultsExist):
+            # When a previous results exceptions is thrown, then do not set any
+            # new metadata
+            return dict()
+
         else:
             # Does it make sense to set this to "GRACEFUL_FAIL"?
             # In my opinion, FAILED tasks should not be saved. Moreover,
@@ -420,7 +445,7 @@ class Task(ManagedTask):
 
         parents = []
         for value in inputs.values():
-            if isinstance(value, FileProxy):
+            if isinstance(value, FileAdapter) and value.id is not None:
                 parents.append(value.id)
 
         # TODO: it would be useful to add the inputs to the journal.
@@ -434,8 +459,9 @@ class Task(ManagedTask):
         metadata = {
             family_name: {
                 'created_by': 'iguazu',
+                'version':  __version__,
                 'task': f'{self.__class__.__module__}.{self.__class__.__name__}',
-                'version': self.version,
+                'task_version': self.version,
                 'status': status,
                 'problem': problem,
                 'parents': parents,
@@ -451,6 +477,111 @@ class Task(ManagedTask):
         opt_dict = self.meta.__dict__
         opt_dict['managed_inputs'][name] = (args, kwargs)
         self._meta = TaskOptions(**opt_dict)
+
+    def create_file(self, *,
+                    parent: Optional[FileAdapter] = None,
+                    filename: Optional[str] = None,
+                    path: Optional[str] = None,
+                    suffix: Optional[str] = None,
+                    extension: Optional[str] = None,
+                    temporary: bool = True) -> FileAdapter:
+
+        # Determine where the new file will be stored
+        output_url = prefect.context.get('output_url', None)
+        temp_url = prefect.context.get('temp_url', None)
+        if temporary:
+            if not temp_url:
+                raise RuntimeError('Cannot create new temporary files when the temp_url '
+                                   'context variable is not present')
+            if not isinstance(temp_url, (LocalURL, QuetzalURL)):
+                raise RuntimeError('temp_url context variable has an unsupported type')
+            url_object = temp_url
+        else:
+            if not output_url:
+                raise RuntimeError('Cannot create new output files when the output_url '
+                                   'context variable is not present')
+            if not isinstance(output_url, (LocalURL, QuetzalURL)):
+                raise RuntimeError('output_url context variable has an unsupported type')
+            url_object = output_url
+
+        if isinstance(url_object, QuetzalURL):
+            file_class = QuetzalFile
+            init_kwargs = {'workspace_id': url_object.workspace_id}
+            find_kwargs = {'workspace_id': url_object.workspace_id}
+        else:
+            file_class = LocalFile
+            init_kwargs = {}
+            find_kwargs = {'temporary': temporary}
+
+        # data_backend = prefect.context.get('data_backend', None)
+        # workspace_id = prefect.context.get('data_backend_workspace_id', None)
+        # if data_backend is None:
+        #     self.logger.warning('data_backend is not set. Set it with the '
+        #                         '--data-backend option of the iguazu flow command')
+        #     if parent is None:
+        #         raise RuntimeError('Cannot create new files when the data_backend is '
+        #                            'not set')
+        #     data_backend = 'quetzal' if isinstance(parent, QuetzalFile) else 'quetzal'
+        #     self.logger.debug('Guessing data backend to be %s due to type of its '
+        #                       'parent %s', data_backend, parent)
+
+        # init_kwargs = {}
+        # if data_backend == 'local':
+        #     file_class = LocalFile
+        # else:
+        #     file_class = QuetzalFile
+        #     init_kwargs = {'workspace_id': workspace_id}
+        #     if workspace_id is None:
+        #         if parent is not None and isinstance(parent, QuetzalFile):
+        #             init_kwargs['workspace_id'] = parent.workspace_id
+        #         else:
+        #             self.logger.warning('No workspace_id has been set, it will '
+        #                                 'not be possible to create new files...')
+
+        # Handle filenames, path, prefixes, etc
+        parent_ids = []
+        if parent is not None:
+            path = path or parent.dirname
+            tmp = pathlib.Path(filename or parent.basename)
+            filename = tmp.stem
+            extension = extension or tmp.suffix
+            parent_ids = [parent.id]
+        filename = ''.join([filename, suffix or '', extension])
+
+        journal_family = self.meta.metadata_journal_family
+        default_meta = self.default_metadata(None, **self.run_kwargs)
+        match_meta = {journal_family: {}}
+        important_keys = ('created_by', 'version', 'task', 'task_version')
+        for k in important_keys:
+            if k in default_meta[journal_family]:
+                match_meta[journal_family][k] = default_meta[journal_family][k]
+
+        new_file = file_class.find(filename=filename,
+                                   path=path,
+                                   metadata=match_meta,
+                                   **find_kwargs)
+        if self.forced:
+            if new_file is not None:
+                # When task is forced but there was a previous result, we delete
+                # it to avoid confusion
+                self.logger.debug('Deleting previous existing file %s because '
+                                  'this task is forced', new_file)
+                new_file.delete()
+            new_file = file_class(filename=filename, path=path,
+                                  temporary=temporary,
+                                  **init_kwargs)
+        else:
+            new_file = file_class.find(filename=filename,
+                                       path=path,
+                                       metadata=match_meta,
+                                       **find_kwargs)
+            if new_file is None:
+                new_file = file_class(filename=filename, path=path,
+                                      temporary=temporary,
+                                      **init_kwargs)
+
+        new_file.metadata[journal_family]['parents'] = parent_ids
+        return new_file
 
     @property
     def version(self):
@@ -474,6 +605,10 @@ class Task(ManagedTask):
             forced_tasks = prefect.context.forced_tasks
             return self.name in forced_tasks or 'all' in forced_tasks
         return False
+
+    @property
+    def run_kwargs(self) -> Mapping:
+        return prefect.context.get('run_kwargs', {})
 
     def _safe_prepare_inputs(self, safe_excs, **kws):
         safe_excs = safe_excs or ()
@@ -505,13 +640,13 @@ class Task(ManagedTask):
         except ENDRUN as signal:
             endrun = signal
 
-        # Set the metadata to the outputs that are file proxies
+        # Set the metadata to the outputs that are file adapters
         # Note: we need to do this again (graceful_fail already calls
         # prepare_outputs which uploads and updates metadata), because
         # the metadata of a graceful fail is different (it's the default one)
         prepared_outputs = endrun.state.result
         for output in _iterate(prepared_outputs):
-            if isinstance(output, FileProxy):
+            if isinstance(output, FileAdapter):
                 # TODO: update or replace?
                 output.metadata.update(meta)
                 output.upload()

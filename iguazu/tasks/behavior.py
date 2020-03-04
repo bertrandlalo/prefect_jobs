@@ -5,7 +5,7 @@ import prefect
 
 from iguazu.functions.behavior import extract_space_stress_spawns_stimulations, \
     extract_space_stress_participant_actions, extract_space_stress_scores
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 from iguazu.core.exceptions import IguazuError
@@ -22,24 +22,24 @@ class SpaceStressSpawnsStimulations(prefect.Task):
         self.output_group = output_group
         self.force = force
 
-    def run(self, events: FileProxy) -> FileProxy:
+    def run(self, events: FileAdapter) -> FileAdapter:
         '''
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is deserialize and interpret data related to spawn events.
         See the documentation of :func:`behavior.extract_space_stress_spawns_events`.
 
         Parameters
         ----------
-        events:  file proxy with input events.
+        events:  file adapter with input events.
 
         Returns
         -------
-        output: file proxy with descriptions of game stimulations
+        output: file adapter with descriptions of game stimulations
 
         '''
         output = events.make_child(suffix='_spawns')
@@ -87,24 +87,24 @@ class SpaceStressParticipantActions(prefect.Task):
         self.output_group = output_group
         self.force = force
 
-    def run(self, events: FileProxy) -> FileProxy:
+    def run(self, events: FileAdapter) -> FileAdapter:
         '''
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is deserialize and interpret data related to participant actions.
         See the documentation of :func:`behavior.extract_space_stress_participant_actions`.
 
         Parameters
         ----------
-        events:  file proxy with input events.
+        events:  file adapter with input events.
 
         Returns
         -------
-        output: file proxy with details on participant actions
+        output: file adapter with details on participant actions
 
         '''
         output = events.make_child(suffix='_actions')
@@ -151,13 +151,13 @@ class SpaceStressScores(prefect.Task):
         self.output_group = output_group
         self.force = force
 
-    def run(self, parent: FileProxy, stimulations: FileProxy, actions: FileProxy) -> FileProxy:
+    def run(self, parent: FileAdapter, stimulations: FileAdapter, actions: FileAdapter) -> FileAdapter:
         '''
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is to interpret the information computed
         from participant actions and game stimulations to get a score on each wave.
@@ -165,13 +165,13 @@ class SpaceStressScores(prefect.Task):
 
         Parameters
         ----------
-        parent: file proxy with parent events ('unity_events' original stream)
-        stimulations:  file proxy with events related to game stimuations
-        actions: file proxy with events related to participant actions
+        parent: file adapter with parent events ('unity_events' original stream)
+        stimulations:  file adapter with events related to game stimuations
+        actions: file adapter with events related to participant actions
 
         Returns
         -------
-        output: file proxy with
+        output: file adapter with
 
         '''
         output = parent.make_child(suffix='_scores')

@@ -24,7 +24,10 @@ jobs:
         git config --global --add url."https://${{ secrets.ACCESS_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
     - name: Install dependencies
+      # Note that there is sed -ie to change from git+ssh to git+https because
+      # our Docker image requires git, but the github workflow requires https
       run: |
+        sed -ie "s/git+ssh:\/\/git@/git+https:\/\//g" requirements.txt
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements-test.txt

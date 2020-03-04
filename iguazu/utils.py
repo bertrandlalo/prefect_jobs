@@ -2,12 +2,12 @@
 Utility functions used on iguazu that do not belong anywhere else.
 """
 
-from typing import Any
 import functools
 import importlib
 import pathlib
 import pickle
 import pkgutil
+from typing import Any, Dict, Mapping
 
 
 def fullname(obj: Any) -> str:
@@ -92,3 +92,34 @@ def load_pickle(fname, default=None):
         return obj
     except (OSError, IOError):
         return default
+
+
+def mapping_issubset(d1: Mapping, d2: Mapping) -> bool:
+    """Determine if a mapping is a subset of another one
+
+    A mapping `a` is a subset of another mapping `b` when all keys k in `a`
+    are also present in `b`, and all mappings inside `a` are a subset of the
+    corresponding mapping in `b`.
+
+    """
+    for k in d1:
+        if k not in d2:
+            return False
+        v1 = d1[k]
+        v2 = d2[k]
+        if isinstance(v1, Mapping) and isinstance(v2, Mapping):
+            if not mapping_issubset(v1, v2):
+                return False
+        elif v1 != v2:
+            return False
+    return True
+
+
+def deep_update(dest: Dict, src: Dict) -> Dict:
+    """Update a dict with the contents of another one, recursively"""
+    for k, v in src.items():
+        if isinstance(v, dict):
+            dest[k] = deep_update(dest.get(k, {}), v)
+        else:
+            dest[k] = v
+    return dest

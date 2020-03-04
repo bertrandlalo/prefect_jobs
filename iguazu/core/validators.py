@@ -19,13 +19,13 @@ class GenericValidator:
     def __call__(self, state: Cached, inputs: Dict[str, Any], parameters: Dict[str, Any]):
         # Never use cache when force is set
         if self.force:
-            logger.debug('Cache miss: task %s is forced', context.task_name)
+            logger.log(5, 'Cache miss: task %s is forced', context.task_name)
             return False
         elif 'forced_tasks' in context:
             forced_tasks = context.forced_tasks
             if context.task_name in forced_tasks or 'all' in forced_tasks:
-                logger.debug('Cache miss: task %s is forced through forced_tasks context',
-                             context.task_name)
+                logger.log(5, 'Cache miss: task %s is forced through forced_tasks context',
+                           context.task_name)
                 return False
 
         # When caching with inputs and outputs, defer to the corresponding
@@ -34,28 +34,28 @@ class GenericValidator:
             input_cache = all_inputs(state, inputs, parameters)
             param_cache = all_parameters(state, inputs, parameters)
             result = input_cache and param_cache
-            logger.debug('Cache %s: inputs was %s, params was %s',
-                         'hit' if result else 'miss',
-                         input_cache, param_cache)
+            logger.log(5, 'Cache %s: inputs was %s, params was %s',
+                       'hit' if result else 'miss',
+                       input_cache, param_cache)
 
         elif self.use_inputs:
             input_cache = all_inputs(state, inputs, parameters)
             result = input_cache
-            logger.debug('Cache %s: inputs was %s',
-                         'hit' if result else 'miss',
-                         input_cache)
+            logger.log(5, 'Cache %s: inputs was %s',
+                       'hit' if result else 'miss',
+                       input_cache)
             return input_cache
 
         elif self.use_parameters:
             param_cache = all_parameters(state, inputs, parameters)
             result = param_cache
-            logger.debug('Cache %s: parameters was %s',
-                         'hit' if result else 'miss',
-                         param_cache)
+            logger.log(5, 'Cache %s: parameters was %s',
+                       'hit' if result else 'miss',
+                       param_cache)
             return param_cache
         else:
             result = False
-            logger.debug('Cache miss: no cache configuration set')
+            logger.log(5, 'Cache miss: no cache configuration set')
 
         if result:
             logger.info('Cache hit!')

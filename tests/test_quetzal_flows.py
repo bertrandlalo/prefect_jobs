@@ -6,8 +6,8 @@ from prefect.utilities.tasks import unmapped
 from quetzal.client.helpers import get_client
 import prefect
 
-from iguazu.helpers.files import FileProxy
-from iguazu.tasks.quetzal import CreateWorkspace, ConvertToFileProxy, DeleteWorkspace, Query, ScanWorkspace
+from iguazu.core.files import FileAdapter
+from iguazu.tasks.quetzal import CreateWorkspace, ConvertToFileAdapter, DeleteWorkspace, Query, ScanWorkspace
 
 
 def test_query_success(mocker):
@@ -59,13 +59,13 @@ def test_query_convert(mocker):
                        username='user',
                        password='password',
                        insecure=True)
-    convert_task = ConvertToFileProxy('id')
+    convert_task = ConvertToFileAdapter('id')
 
     with Flow('test_query_success flow') as flow:
         sql = Parameter('input_sql')
         rows = query_task(query=sql)
-        proxies = convert_task(rows, workspace_id=None)
-        proxies_map = convert_task.map(rows, workspace_id=unmapped(None))
+        adapters = convert_task(rows, workspace_id=None)
+        adapters_map = convert_task.map(rows, workspace_id=unmapped(None))
 
     parameters = dict(
         input_sql='SELECT * FROM base LIMIT 5',
@@ -73,9 +73,9 @@ def test_query_convert(mocker):
     state = flow.run(parameters=parameters)
 
     assert state.is_successful()
-    assert all([isinstance(p, FileProxy) for p in state.result[proxies].result])
-    assert all([isinstance(p, FileProxy) for p in state.result[proxies_map].result])
-    assert {p.id for p in state.result[proxies_map].result} == ids
+    assert all([isinstance(p, FileAdapter) for p in state.result[adapters].result])
+    assert all([isinstance(p, FileAdapter) for p in state.result[adapters_map].result])
+    assert {p.id for p in state.result[adapters_map].result} == ids
 
 
 def test_create_workspace(mocker):

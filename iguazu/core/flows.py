@@ -76,27 +76,16 @@ def execute_flow(func, func_kwargs, executor, context_args):
         previous_cache = load_pickle(cache_filename, None) or {}
         logger.info('Restored cached had %d elements', len(previous_cache))
         context_args['caches'] = previous_cache
-        # flow_kwargs['task_states'] = adapt_task_states(load_pickle(state_filename, default={}),
-        #                                                flow.sorted_tasks())
     except:
         logger.warning('Could not read cache at %s', cache_filename, exc_info=True)
 
     with prefect.context(**context_args) as context:
-        # flow.schedule = prefect.schedules.OneTimeSchedule(start_date=pendulum.now() - datetime.timedelta(days=2))
         flow_state = flow.run(parameters=flow_parameters,
                               executor=executor,
                               run_on_schedule=True)
         cache = context.caches
 
-    # # Save cached states to a local file
-    # if isinstance(flow_state.result, Exception):
-    #     logger.info('No cached saved because the flow result is an exception:\n%s',
-    #                 ''.join(traceback.TracebackException.from_exception(flow_state.result).format()))
-    # else:
-    #     try:
-    #         update_task_states(flow_state.result, state_filename)
-    #     except:
-    #         logger.warning('Could not save cache to %s', state_filename, exc_info=True)
+    # Save cached states to a local file
     try:
         logger.info('Saving cache with %d elements to %s', len(cache), cache_filename)
         dump_pickle(cache, cache_filename)

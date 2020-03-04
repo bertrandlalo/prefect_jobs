@@ -42,3 +42,32 @@ def path_exists_in_hdf5(filename, group):
     with pd.HDFStore(filename, "r") as store:
         return group in store
 
+
+def verify_monotonic(dataframe, name=None):
+    """ Raise an exception when a dataframe's index is not monotonic
+
+    Monotonic indices are a pre-condition for many verifications in
+    our code. Since pandas can have an index that has been reordered
+    (and perhaps the programmer is not aware of this), this function
+    can help us catch and prevent nasty bugs.
+
+    Parameters
+    ----------
+    dataframe
+        Dataframe, Series or an object with an index attribute
+    name
+        Name prepended to the exception when the verification fails
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        When the index is not monotonic
+
+    """
+    name = name or 'dataframe'
+    if not dataframe.index.is_monotonic:
+        raise ValueError(f'{name} index should be monotonic')

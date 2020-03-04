@@ -36,7 +36,7 @@ class TaskOptions:
     managed_inputs: Mapping = field(default_factory=dict)
     """Mapping that has the parameters needed to convert each keyword parameter
     received in the Task run method to convert said parameter directly from
-    a :class:`iguazu.helpers.files.FileProxy` to a :class:`pandas.DataFrame`.
+    a :class:`iguazu.helpers.files.FileAdapter` to a :class:`pandas.DataFrame`.
     """
 
     managed_inputs_exception_type: Optional[Type] = SoftPreconditionFailed

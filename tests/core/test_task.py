@@ -16,7 +16,7 @@ from prefect.utilities.debug import raise_on_exception
 
 import iguazu
 from iguazu import Task
-from iguazu.helpers.files import LocalFile
+from iguazu.core.files import LocalFile
 
 
 def test_unknown_init_kwarg():
@@ -333,7 +333,7 @@ def test_default_meta_many_files_success(tmpdir, filename):
 
 
 def test_handle_outputs_auto_uploads(mocker, tmpdir, filename):
-    upload = mocker.patch('iguazu.helpers.files.LocalFile.upload')
+    upload = mocker.patch('iguazu.core.files.LocalFile.upload')
     task = TaskWithManyOutputFile(temp_dir=tmpdir)
     filename1 = filename
     filename2 = filename[::-1]

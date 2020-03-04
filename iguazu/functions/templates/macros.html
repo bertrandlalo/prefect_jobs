@@ -1,0 +1,18 @@
+{% macro content_or_error(title, content, error) %}
+  {#  Note that none is lowercase due to Jinja's is operator. #}
+  {#  See https://github.com/pallets/jinja/issues/520 #}
+  {% if content is none %}
+    <div class="alert alert-info" role="alert">
+      <h4 class="alert-heading">{{ title }} is unavailable</h4>
+      <p>Something went wrong!</p>
+      {% if 'status' in error %}
+        <p>Iguazu status was {{ error['status'] }}</p>
+      {% endif %}
+      <p>Type: {{ error.get('type', 'Unknown') }} </p>
+      <p>Details: {{ error.get('details', 'No details provided') }}</p>
+    </div>
+  {% else %}
+    <h4>{{ title }}</h4>
+    {{ content | safe }}
+  {% endif %}
+{% endmacro %}

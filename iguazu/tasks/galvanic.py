@@ -7,7 +7,7 @@ from iguazu.functions.galvanic import (
     downsample, galvanic_cvx, galvanic_scrpeaks, galvanic_clean,
     galvanic_baseline_correction
 )
-from iguazu.helpers.files import FileProxy
+from iguazu.core.files import FileAdapter
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 from iguazu.core.exceptions import IguazuError
@@ -77,26 +77,26 @@ class CleanSignal(prefect.Task):
         self.force = force
 
     def run(self,
-            signal: FileProxy,
-            events: FileProxy) -> FileProxy:
+            signal: FileAdapter,
+            events: FileAdapter) -> FileAdapter:
         """
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is a cleaning of the galvanic signal.
         See the documentation of :func:`galvanic.galvanic_clean`.
 
         Parameters
         ----------
-        signal: file proxy with input signals.
-        events:  file proxy with input events.
+        signal: file adapter with input signals.
+        events:  file adapter with input events.
 
         Returns
         -------
-        output: file proxy with transformed signals.
+        output: file adapter with transformed signals.
 
         """
 
@@ -183,7 +183,7 @@ class Downsample(prefect.Task):  # TODO: resample?
         self.output_group = output_group
         self.force = force
 
-    def run(self, signal: FileProxy) -> FileProxy:
+    def run(self, signal: FileAdapter) -> FileAdapter:
         output = signal.make_child(suffix=f'_{self.fs}Hz')
         self.logger.info('Downsampling signal %s to %s GHz -> %s',
                          signal, self.fs, output)
@@ -252,24 +252,24 @@ class ApplyCVX(prefect.Task):
         self.cvxeda_kwargs = cvxeda_kwargs or {}
         self.force = force
 
-    def run(self, signal: FileProxy) -> FileProxy:
+    def run(self, signal: FileAdapter) -> FileAdapter:
         """
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is a deconvolution of the galvanic signal.
         See the documentation of :func:`galvanic.galvanic_cvx`.
 
         Parameters
         ----------
-        signal: file proxy with input signals.
+        signal: file adapter with input signals.
 
         Returns
         -------
-        output: file proxy with transformed signals.
+        output: file adapter with transformed signals.
 
         """
 
@@ -341,13 +341,13 @@ class DetectSCRPeaks(prefect.Task):
         self.peaks_kwargs = peaks_kwargs or {}
         self.force = force
 
-    def run(self, signal: FileProxy) -> FileProxy:
+    def run(self, signal: FileAdapter) -> FileAdapter:
         """
-        This task is a basic ETL where the input and output are HDF5 file proxy
+        This task is a basic ETL where the input and output are HDF5 file adapter
         and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
+        It consists in loading the signals and events from the input file adapters,
         applying some processing (transformations) and
-        saving the result into an output file proxy.
+        saving the result into an output file adapter.
 
         The transformation that is performed is a detection of SCR peaks and the
         estimation of their characteristics.
@@ -355,12 +355,12 @@ class DetectSCRPeaks(prefect.Task):
 
         Parameters
         ----------
-        signal: file proxy with input signals.
-        events:  file proxy with input events.
+        signal: file adapter with input signals.
+        events:  file adapter with input events.
 
         Returns
         -------
-        output: file proxy with transformed signals.
+        output: file adapterq with transformed signals.
 
         """
 
@@ -450,7 +450,7 @@ class RemoveBaseline(prefect.Task):
         self.force = force
 
     def run(self,
-            features: FileProxy) -> FileProxy:
+            features: FileAdapter) -> FileAdapter:
 
         output = features.make_child(suffix='_corrected')
         self.logger.info('Correcting baseline for features %s -> %s',
