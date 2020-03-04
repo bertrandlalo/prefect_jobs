@@ -4,8 +4,8 @@ from typing import Dict, NoReturn
 
 import prefect
 
-from iguazu import __version__ as version
-from iguazu.core.files import FileAdapter, _deep_update
+from iguazu import __version__, FileAdapter
+from iguazu.utils import deep_update
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,18 @@ class CreateFlowMetadata(prefect.Task):
         self.flow_name = flow_name
 
     def run(self, *, parent: FileAdapter) -> NoReturn:
-        new_meta = {'iguazu': {
-            'flows':
-                {self.flow_name:
-                     {'status': None,
-                      'version': version}}
+        new_meta = {
+            'iguazu': {
+                'flows': {
+                    self.flow_name: {
+                        'status': None,
+                        'version': __version__,
+                    }
+                }
+            }
         }
-        }
-        _deep_update(parent.metadata, new_meta)
-        # TODO: for quetzal, we are going to need a .upload_metadata method
-        #       so we don't download the file for nothing
-        parent.upload()
+        deep_update(parent.metadata, new_meta)
+        parent.upload_metadata()
 
 
 class UpdateFlowMetadata(prefect.Task):
@@ -39,16 +40,17 @@ class UpdateFlowMetadata(prefect.Task):
         self.flow_name = flow_name
 
     def run(self, *, parent: FileAdapter, child: FileAdapter) -> NoReturn:
-        new_meta = {'iguazu': {
-            'flows':
-                {self.flow_name:
-                     {'status': child.metadata['iguazu']['status'],  # todo get status from child
-                      'version': version}}
+        new_meta = {
+            'iguazu': {
+                'flows': {
+                    self.flow_name: {
+                        'status': child.metadata['iguazu']['status'],  # todo get status from child
+                        'version': __version__,
+                    }
+                }
+            }
         }
-        }
-        _deep_update(parent.metadata, new_meta)
-        # TODO: for quetzal, we are going to need a .upload_metadata method
-        #       so we don't download the file for nothing
+        deep_update(parent.metadata, new_meta)
         parent.upload_metadata()
 
 
@@ -60,7 +62,5 @@ class AddSourceMetadata(prefect.Task):
 
     def run(self, *, file: FileAdapter) -> NoReturn:
         new_meta = copy.deepcopy(self.new_meta)
-        _deep_update(file.metadata, new_meta)
-        # TODO: for quetzal, we are going to need a .upload_metadata method
-        #       so we don't download the file for nothing
+        deep_update(file.metadata, new_meta)
         file.upload_metadata()
