@@ -1,4 +1,4 @@
-__version__ = '0.2.0-dev-david-001'
+__version__ = '0.3.0-dev'
 
 from . import utils  # Needed for a circular dependency resolution
 from .core.files import FileAdapter
