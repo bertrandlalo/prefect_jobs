@@ -2,7 +2,7 @@ import logging
 
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import MergeHDF5, AddSourceMetadata, SlackTask
+from iguazu.tasks.common import MergeHDF5, SlackTask
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
 from iguazu.tasks.standards import Report
 from iguazu.tasks.vr import (
@@ -88,7 +88,7 @@ ORDER BY id                                    -- always in the same order
             verify_status=True,
             hdf5_family='standard',
             meta_keys=['standard'],
-            propagate_families=['omi'],
+            propagate_families=['omind', 'protocol'],
         )
         update_meta = AddSourceMetadata(
             new_meta={
