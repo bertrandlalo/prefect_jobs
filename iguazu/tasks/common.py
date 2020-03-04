@@ -11,11 +11,10 @@ import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
 from iguazu.core.files import FileAdapter, LocalFile
+from iguazu.functions import specs
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
-from iguazu.functions import specs
 from iguazu.utils import deep_update
-
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class ListFiles(prefect.Task):
                     basedir, len(files))
 
         if self._as_file_adapter:
-            adapters = [LocalFile(f, base_dir=basedir) for f in files]
+            adapters = [LocalFile.retrieve(file_id=str(f), root=basedir) for f in files]  # todo: handle `temporary`
             return adapters
 
         return files
@@ -123,7 +122,8 @@ class MergeFilesFromGroups(prefect.Task):
                             # append it to the output group.
                             common = os.path.commonprefix(input_store.keys())
                             for group in groups:
-                                rel = os.path.relpath(group, common)  # TODO: all of these os.path are unix dependent! it would not work on windows
+                                rel = os.path.relpath(group,
+                                                      common)  # TODO: all of these os.path are unix dependent! it would not work on windows
                                 data = pd.read_hdf(input_store, group)
                                 assert isinstance(data, pd.DataFrame)  # Protect from hdf that store something else
                                 g = '/'.join([output_group, rel])
@@ -392,7 +392,6 @@ class MergeDataframes(iguazu.Task):
     def run(self, *,
             parents: List[FileAdapter],
             dataframes: List[pd.DataFrame]) -> FileAdapter:
-
         output = self.default_outputs()
 
         merged = pd.concat([d for d in dataframes if d is not None],

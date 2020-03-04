@@ -1,18 +1,17 @@
 import collections
-import copy
-import logging
 import json
+import logging
 import pathlib
 from typing import Dict, Any, Optional
 
 from prefect import context
 from quetzal.client.utils import get_data_dir, get_readable_info
-# Notice the quetzal import just above: Even if we are on local file,
-# we want to have the same local directory to "download" files
 
 from iguazu.core.files import FileAdapter, LocalURL
 from iguazu.utils import mapping_issubset
 
+# Notice the quetzal import just above: Even if we are on local file,
+# we want to have the same local directory to "download" files
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ class LocalFile(FileAdapter):
                  path: Optional[str] = None,
                  temporary: bool = False,
                  metadata: Optional[Dict] = None,
+                 root: Optional[str] = None,
                  **kwargs):
         # Some sanity checks
         if temporary:
@@ -59,12 +59,23 @@ class LocalFile(FileAdapter):
         self._temporary = temporary
         self._file_id = None
         self._metadata = collections.defaultdict(dict, metadata or {})
-        if temporary:
-            self._root = context.temp_url.path
-        else:
-            # Note: Even if we are on local file, we want to have the same
-            # local directory as QuetzalFile to "download" files
-            self._root = get_data_dir()
+        self._root = root
+        if self._root is None:
+            if temporary:
+                if context.temp_url.backend == 'local':
+                    self._root = context.temp_url.path
+                else:  # quetzal
+                    # Note: Even if we are on local file, we want to have the same
+                    # local directory as QuetzalFile to "download" files
+                    self._root = get_data_dir()
+            else:
+                if context.output_url.backend == 'local':
+                    self._root = context.output_url.path
+                else:  # quetzal
+                    # Note: Even if we are on local file, we want to have the same
+                    # local directory as QuetzalFile to "download" files
+                    self._root = get_data_dir()
+
         path = path or ''
         self._local_path = pathlib.Path(self._root) / path / filename
         self._local_meta = self._local_path.with_suffix('.json')
@@ -88,7 +99,7 @@ class LocalFile(FileAdapter):
                      'and temporary is %s',
                      filename, path, metadata, temporary)
         path = path or ''
-        root = context.temp_dir if temporary else get_data_dir()
+        root = context.temp_dir if temporary else get_data_dir()  # todo: get_data_dir is quetzal!
         candidate = pathlib.Path(root) / path / filename
         file_id = str(candidate.relative_to(root))
         if candidate.exists():
@@ -108,13 +119,13 @@ class LocalFile(FileAdapter):
         return None
 
     @staticmethod
-    def retrieve(*, file_id, temporary=False) -> Optional['LocalFile']:
+    def retrieve(*, file_id, temporary=False, root=None) -> Optional['LocalFile']:
         tmp = pathlib.Path(file_id)
         path = str(tmp.parent)
         if path == '.':
             path = ''
         # Create a bare Local file...
-        instance = LocalFile(filename=tmp.name, path=path, temporary=temporary)
+        instance = LocalFile(filename=tmp.name, path=path, temporary=temporary, root=root)
         # ... and then complete its file_id
         instance._file_id = file_id
 
