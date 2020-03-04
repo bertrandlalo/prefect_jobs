@@ -21,20 +21,22 @@ class StandardizeVRFlow(PreparedFlow):
     DEFAULT_QUERY = """\
 SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
        base->>'filename' AS filename,  -- this is just to help the human debugging this
-       omi->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
+       omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
 FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
--- TODO: add a filter by protocol? Certainly needed for the VR protocol!
+-- AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
+AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+AND    NOT(coalesce(iguazu->'flows' ? 'standardize_vr', FALSE ))     -- Only file where this flow has not ran
 ORDER BY id                                    -- always in the same order
 """
 
     def _build(self, **kwargs):
         required_families = dict(
             iguazu=None,
-            omi=None,
+            omind=None,
             standard=None,
+            protocol=None,
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
