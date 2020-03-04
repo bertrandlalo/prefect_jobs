@@ -49,7 +49,7 @@ class UpdateFlowMetadata(prefect.Task):
         _deep_update(parent.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
         #       so we don't download the file for nothing
-        parent.upload()
+        parent.upload_metadata()
 
 
 class AddSourceMetadata(prefect.Task):
@@ -63,4 +63,4 @@ class AddSourceMetadata(prefect.Task):
         _deep_update(file.metadata, new_meta)
         # TODO: for quetzal, we are going to need a .upload_metadata method
         #       so we don't download the file for nothing
-        file.upload()
+        file.upload_metadata()
