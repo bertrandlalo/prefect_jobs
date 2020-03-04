@@ -90,17 +90,7 @@ ORDER BY id                                    -- always in the same order
             meta_keys=['standard'],
             propagate_families=['omind', 'protocol'],
         )
-        update_meta = AddSourceMetadata(
-            new_meta={
-                # 'standard': {
-                #     'standardized': True,
-                # },
-                # TODO: think about adding this
-                # 'omi': {
-                #     'protocol': 'vr',
-                # },
-            },
-        )
+
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
         notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
@@ -121,8 +111,7 @@ ORDER BY id                                    -- always in the same order
                 GSR=standard_gsr,
                 PZT=standard_pzt,
             )
-            update_noresult = update_meta.map(file=merged)
-            update_noresult2 = update_flow_metadata.map(parent=raw_files, child=merged)
+            update_noresult = update_flow_metadata.map(parent=raw_files, child=merged)
             message = report(files=merged, upstream_tasks=[update_noresult])
             notify(message=message)
 
