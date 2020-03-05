@@ -55,8 +55,8 @@ def logging_handler(task, old_state, new_state):
 
     elif new_state.is_finished():
         state_name = str(type(new_state).__name__).upper()
-        if state_name in ['MAPPED', ]:
-            return new_state
+        # if state_name in ['MAPPED', ]:
+        #     return new_state
         logger.debug('Closing logs for %s', task)
         root = logging.getLogger()
         for hdlr in root.handlers[:]:  # Note the copy: we need to modify this list while iterating over it
@@ -72,8 +72,8 @@ def logging_handler(task, old_state, new_state):
             hdlr.close()
             if context_backend == 'local':
                 # move from 'RUNNING' folder to final one (given task final status)
+                pathlib.Path(file_adapter.file.parents[1] / state_name).mkdir(parents=True, exist_ok=True)
                 file_adapter.file.rename(file_adapter.file.parents[1] / state_name / file_adapter.basename)
-                file_adapter.upload()
             else:  # quetzal
                 # upload on quetzal
                 try:
