@@ -76,16 +76,13 @@ def logging_handler(task, old_state, new_state):
                 file_adapter.file.rename(file_adapter.file.parents[1] / state_name / file_adapter.basename)
             else:  # quetzal
                 # upload on quetzal
-                try:
-                    file_adapter.upload()
-                    # change path in base metadata and upload them
-                    file_adapter.metadata['base']['path'] = str(
-                        pathlib.Path(file_adapter.metadata['base']['path']).parents[
-                            0] / state_name / file_adapter.basename)
-                    file_adapter.upload_metadata()
-                except RuntimeError:
-                    import ipdb;
-                    ipdb.set_trace()
+                file_adapter.upload()
+                # change path in base metadata and upload them
+                file_adapter.metadata['base']['path'] = str(
+                    pathlib.Path(file_adapter.metadata['base']['path']).parents[
+                        0] / state_name / file_adapter.basename)
+                file_adapter.upload_metadata()
+
     return new_state
 
 
