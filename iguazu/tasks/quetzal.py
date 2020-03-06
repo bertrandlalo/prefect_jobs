@@ -7,9 +7,10 @@ from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
-from quetzal.client import QuetzalAPIException, helpers
+from quetzal.client import helpers
 
 from iguazu.core.files import QuetzalFile
+from iguazu.core.files.quetzal import quetzal_client_from_secret
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 
@@ -63,7 +64,8 @@ class QuetzalBaseTask(Task):
         if 'quetzal_client' in context:  #TODO: change order context < task
             return helpers.get_client(**context.quetzal_client)
         elif self._client is None:
-            self._client = helpers.get_client(**self._client_args)
+            # self._client = helpers.get_client(**self._client_args)
+            self._client = quetzal_client_from_secret()
         return self._client
 
     def run(self) -> None:
