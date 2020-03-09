@@ -44,7 +44,8 @@ COPY setup.cfg setup.py MANIFEST.in ./
 COPY iguazu ./iguazu
 RUN pip install .
 
-RUN useradd --create-home iguazu && chown -R iguazu /code
+RUN useradd --create-home --home-dir /home/iguazu iguazu && chown -R iguazu /code
 USER iguazu
-RUN mkdir -p ${HOME}/.config/dask
-COPY dask-config.yaml ${HOME}/.config/dask/config.yaml
+RUN mkdir -p /home/iguazu/.config/dask
+COPY dask-config.yaml /home/iguazu/.config/dask/distributed.yaml
+
