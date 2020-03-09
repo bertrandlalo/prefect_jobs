@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from prefect import context
 from prefect.client import Secret
 from quetzal.client import helpers
-from quetzal.client.utils import get_data_dir, get_readable_info
+from quetzal.client.utils import get_data_dir
 
 from iguazu.core.files import FileAdapter, QuetzalURL
 from iguazu.utils import mapping_issubset
