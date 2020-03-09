@@ -5,7 +5,7 @@
 iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-  tag: 0.2.0-dev5
+  tag: 0.3.0-dev-raph004
   pullPolicy: Always
 
 
@@ -25,7 +25,7 @@ defaultJob:
     - name: QUETZAL_INSECURE
       value: "0"
     - name: IGUAZU_WORKSPACE
-      value: "iguazu-features-v012"
+      value: "iguazu-standardization"
   envFromSecret:
     - name: QUETZAL_USER
       key: username
@@ -83,6 +83,8 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_standard",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/standard",
            # Flow name
            "standardize_vr",
            # Flow options
@@ -262,7 +264,7 @@ dask_worker:
     # tag: ...        # use to override the default on iguazu.tag
     pullPolicy: Always
   replicas: 1         # Number of MINIMUM dask-workers
-  maxReplicas: 2      # Number of MAXIMUM dask-workers
+  maxReplicas: 4      # Number of MAXIMUM dask-workers
   targetCPU: 10       # How much the Horizontal scaler will target as CPU usage.
                       # When the average CPU is over this value, new workers will be creatd.
                       # Set to a low value (10) to use as much resources as possible.
