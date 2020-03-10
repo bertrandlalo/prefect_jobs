@@ -209,17 +209,7 @@ class MergeHDF5(iguazu.Task):
                         # Copy the HDF5 data
                         dataframe = pd.read_hdf(input_store, key=g)
                         assert isinstance(dataframe, pd.DataFrame)  # Protect from hdf that store something else
-                        dataframe.to_hdf(output_store, key=g)
-
-                        # # Propagate HDF5 metadata
-                        # output_node = output_store.get_node(g)
-                        # for meta_name in self.meta_keys:
-                        #     if meta_name not in input_node._v_attrs:
-                        #         logger.info('HDF5 metadata key "%s" was not present on group %s '
-                        #                     'for file %s: no HDF5 metadata propagation',
-                        #                     meta_name, g, value)
-                        #         continue
-                        #     output_node._v_attrs[meta_name] = input_node._v_attrs[meta_name]
+                        dataframe.to_hdf(output_store, key=g) <
 
         # Set the hdf5 group metadata
         if self.hdf5_family:
