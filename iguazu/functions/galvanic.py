@@ -15,6 +15,11 @@ from iguazu.core.features import dataclass_to_dataframe
 logger = logging.getLogger(__name__)
 
 
+class GSRArtifactCorruption(Exception):
+    """Exception used when an object does not meet the events specification"""
+    pass
+
+
 def galvanic_clean(signals, events, annotations, column, warmup_duration, corrupted_maxratio,
                    interpolation_kwargs, filter_kwargs, scaling_kwargs):
     """
@@ -73,7 +78,7 @@ def galvanic_clean(signals, events, annotations, column, warmup_duration, corrup
     # TODO/Question: do we keep raising an error when corrupted ratio is above a threshold?
     corrupted_ratio = (~annotations[annotations.GSR != 'outside_session'].replace('', np.NaN).isna()).mean()[0]
     if corrupted_ratio > corrupted_maxratio:
-        raise IguazuError(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
+        raise GSRArtifactCorruption(f'Artifact corruption of {corrupted_ratio * 100:.0f}% '
                           f'exceeds {corrupted_maxratio * 100:.0f}%')
 
     # set as 'bad' samples that are more than 5  standard deviations from mean
@@ -299,8 +304,6 @@ def galvanic_scrpeaks(signals, annotations, column='GSR_SCR', peaks_kwargs=None,
 
 
 from dataclasses import dataclass, field
-
-from iguazu.core.exceptions import IguazuError
 
 
 # Galvanic features
