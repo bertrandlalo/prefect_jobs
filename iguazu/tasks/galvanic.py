@@ -9,7 +9,9 @@ from iguazu.core.files import FileAdapter
 from iguazu.functions.galvanic import (
     downsample, galvanic_cvx, galvanic_scrpeaks, galvanic_clean, gsr_features
 )
+from iguazu.functions.specs import infer_standard_groups
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
+from iguazu.utils import deep_update
 
 
 class CleanGSRSignal(iguazu.Task):
@@ -28,7 +30,6 @@ class CleanGSRSignal(iguazu.Task):
 
     def __init__(self,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/standard',
-                 annotations_hdf5_key: Optional[str] = '/iguazu/signal/gsr/standard/annotations',
                  events_hdf5_key: Optional[str] = '/iguazu/events/standard',
                  output_hdf5_key: Optional[str] = 'iguazu/signal/gsr/clean',
                  warmup_duration: int = 30,
@@ -74,7 +75,7 @@ class CleanGSRSignal(iguazu.Task):
         )
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
-        self.auto_manage_input_dataframe('annotations', annotations_hdf5_key)
+        self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self,
@@ -106,7 +107,10 @@ class CleanGSRSignal(iguazu.Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_gsr_clean', temporary=False)
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_gsr_clean'
+        )
         return output
 
 
@@ -144,7 +148,10 @@ class Downsample(iguazu.Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_gsr_downsampled')
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_gsr_downsampled'
+        )
         return output
 
 
@@ -225,8 +232,6 @@ class DetectSCRPeaks(iguazu.Task):
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
-        output_file = self.default_outputs()
-
         peaks, peaks_annotations = galvanic_scrpeaks(signals,
                                                      annotations,
                                                      column=self.column,
@@ -242,17 +247,15 @@ class DetectSCRPeaks(iguazu.Task):
         with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
             peaks.to_hdf(store, self.output_hdf5_key)
             annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-            node = store.get_node(self.output_hdf5_key)
-            node._v_attrs['standard'] = {
-                'sampling_rate': self.sampling_rate,  # todo!!
-            }
-
+            # node = store.get_node(self.output_hdf5_key)
+            # node._v_attrs['standard'] = {
+            #     'sampling_rate': self.sampling_rate,  # todo!!
+            # }
         return output_file
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        # output = signals.make_child(suffix=f'_standard_{names}')
         output = self.create_file(
             parent=signals,
             suffix=f'_scrpeaks'
@@ -280,6 +283,14 @@ class ExtractGSRFeatures(iguazu.Task):
             scrpeaks: pd.DataFrame,
             events: Optional[pd.DataFrame] = None,
             parent: FileAdapter) -> FileAdapter:  # TODO: events should be named sequences?
+
+        if cvx.empty:
+            raise SoftPreconditionFailed('Input cvx signals are empty')
+        if scrpeaks.empty:
+            raise SoftPreconditionFailed('Input scrpeaks signals are empty')
+        if events.empty:
+            raise SoftPreconditionFailed('Input events are empty')
+
         output_file = self.default_outputs()
         known_sequences = [sequence for sequence in VALID_SEQUENCE_KEYS if
                            not any(excl in sequence for excl in
@@ -292,7 +303,7 @@ class ExtractGSRFeatures(iguazu.Task):
 
         with pd.HDFStore(output_file.file, 'w') as store:
             features.to_hdf(store, self.output_hdf5_key)
-
+        deep_update(output_file.metadata, {'standard': infer_standard_groups(output_file.file_str)})
         return output_file
 
     def default_outputs(self, **kwargs):
