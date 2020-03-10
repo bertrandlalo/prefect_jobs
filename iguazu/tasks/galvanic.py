@@ -203,7 +203,10 @@ class ApplyCVX(iguazu.Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         signals = original_kws['signals']
-        output = signals.make_child(suffix='_cvx')
+        output = self.create_file(
+            parent=signals,
+            suffix=f'_cvx'
+        )
         return output
 
 
@@ -247,10 +250,6 @@ class DetectSCRPeaks(iguazu.Task):
         with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
             peaks.to_hdf(store, self.output_hdf5_key)
             annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-            # node = store.get_node(self.output_hdf5_key)
-            # node._v_attrs['standard'] = {
-            #     'sampling_rate': self.sampling_rate,  # todo!!
-            # }
         return output_file
 
     def default_outputs(self, **kwargs):
@@ -309,5 +308,9 @@ class ExtractGSRFeatures(iguazu.Task):
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
         parent = original_kws['parent']
-        output = parent.make_child(suffix='_gsr_features', temporary=False)
+        output = self.create_file(
+            parent=parent,
+            suffix=f'_gsr_features',
+            temporary=False,
+        )
         return output
