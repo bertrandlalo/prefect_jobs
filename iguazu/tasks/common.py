@@ -209,7 +209,7 @@ class MergeHDF5(iguazu.Task):
                         # Copy the HDF5 data
                         dataframe = pd.read_hdf(input_store, key=g)
                         assert isinstance(dataframe, pd.DataFrame)  # Protect from hdf that store something else
-                        dataframe.to_hdf(output_store, key=g) <
+                        dataframe.to_hdf(output_store, key=g)
 
         # Set the hdf5 group metadata
         if self.hdf5_family:
