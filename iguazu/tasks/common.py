@@ -300,6 +300,27 @@ class AddSourceMetadata(prefect.Task):
         file.upload()
 
 
+class PropagateMetadata(prefect.Task):
+
+    def __init__(self, *, propagate_families: Optional[List[str]] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.propagate_families = propagate_families
+
+    def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
+        if child is None:
+            print('oh dear')
+            import ipdb;
+            ipdb.set_trace()
+        # Propagate metadata
+        for k in self.propagate_families:
+            parent_meta = parent.metadata.get(k, {})
+            parent_meta.pop('id', None)
+            child.metadata[k].update(parent_meta)
+        # upload metadata
+        child.upload_metadata()
+        return child
+
+
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
 
