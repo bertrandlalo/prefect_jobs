@@ -11,7 +11,7 @@ import iguazu
 from iguazu import __version__
 from iguazu.core.exceptions import GracefulFailWithResults, PreconditionFailed, SoftPreconditionFailed
 from iguazu.core.files import FileAdapter, LocalFile
-from iguazu.functions import specs
+from iguazu.functions.specs import infer_standard_groups
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
 from iguazu.utils import deep_update
@@ -225,46 +225,7 @@ class MergeHDF5(iguazu.Task):
         if self.hdf5_family:
             self.logger.debug('Automatic detection of HDF5 groups that meet the standard...')
             output_file.metadata.setdefault(self.hdf5_family, {})
-            with pd.HDFStore(output_file.file, 'r') as store:
-                groups = list(store)
-                for g in groups:
-
-                    if g.endswith('/annotations'):
-                        self.logger.debug('Ignoring group %s due to naming', g)
-                        continue
-
-                    # Check signals specs
-                    try:
-                        specs.check_signal_specification(pd.read_hdf(store, g))
-                        self.logger.debug('Group %s meets the signal specification', g)
-                        output_file.metadata[self.hdf5_family].setdefault('signals', [])
-                        output_file.metadata[self.hdf5_family]['signals'].append(g)
-                    except specs.SpecificationError as ex:
-                        self.logger.debug('Dataframe on HDF5 under key %s is not '
-                                          'a standard signals dataframe due to  %s',
-                                          g, ex)
-
-                    # Check event specs
-                    try:
-                        specs.check_event_specification(pd.read_hdf(store, g))
-                        self.logger.debug('Group %s meets the event specification', g)
-                        output_file.metadata[self.hdf5_family].setdefault('events', [])
-                        output_file.metadata[self.hdf5_family]['events'].append(g)
-                    except specs.SpecificationError as ex:
-                        self.logger.debug('Dataframe on HDF5 under key %s is not '
-                                          'a standard events dataframe due to  %s',
-                                          g, ex)
-
-                    # Check feature specs
-                    try:
-                        specs.check_feature_specification(pd.read_hdf(store, g))
-                        self.logger.debug('Group %s meets the features specification', g)
-                        output_file.metadata[self.hdf5_family].setdefault('features', [])
-                        output_file.metadata[self.hdf5_family]['features'].append(g)
-                    except specs.SpecificationError as ex:
-                        self.logger.debug('Dataframe on HDF5 under key %s is not '
-                                          'a standard features dataframe due to  %s',
-                                          g, ex)
+            output_file.metadata[self.hdf5_family] = infer_standard_groups(output_file.file_str)
 
         # Propagate metadata
         for k in self.propagate_families:
@@ -316,8 +277,7 @@ class MergeHDF5(iguazu.Task):
             groups |= gi  # set union
 
     def default_outputs(self, *, parent, **inputs):
-        # output = parent.make_child(temporary=self.temporary,
-        #                            suffix=self.suffix)
+
         output = self.create_file(
             parent=parent,
             suffix=self.suffix,
