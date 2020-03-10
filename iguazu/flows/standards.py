@@ -19,16 +19,16 @@ class StandardizeVRFlow(PreparedFlow):
     REGISTRY_NAME = 'standardize_vr'
 
     DEFAULT_QUERY = """\
-SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-       base->>'filename' AS filename,  -- this is just to help the human debugging this
-       omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
-FROM   metadata
-WHERE  base->>'state' = 'READY'                -- No temporary files
-AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
--- AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
-AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-AND    NOT(coalesce(iguazu->'flows' ? 'standardize_vr', FALSE ))     -- Only file where this flow has not ran
-ORDER BY id                                    -- always in the same order
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    -- AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    NOT(coalesce(iguazu->'flows' ? 'standardize_vr', FALSE ))     -- Only file where this flow has not ran
+    ORDER BY id                                    -- always in the same order
 """
 
     def _build(self, **kwargs):
@@ -101,9 +101,9 @@ ORDER BY id                                    -- always in the same order
             create_noresult = create_flow_metadata.map(parent=raw_files)
             standard_events = standardize_events.map(events=raw_files, upstream_tasks=[create_noresult])
             # vr_sequences = filter_vr.map(events=standard_events)
-            standard_ppg = standardize_ppg_signals.map(signals=raw_files)
-            standard_gsr = standardize_gsr_signals.map(signals=raw_files)
-            standard_pzt = standardize_pzt_signals.map(signals=raw_files)
+            standard_ppg = standardize_ppg_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
+            standard_gsr = standardize_gsr_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
+            standard_pzt = standardize_pzt_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
             merged = merge.map(
                 parent=raw_files,
                 events=standard_events,
