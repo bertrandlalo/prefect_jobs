@@ -1,84 +1,51 @@
 from typing import Optional
 
 import pandas as pd
+import prefect
 
 import iguazu
-from iguazu.core.exceptions import IguazuError
+from iguazu.core.exceptions import SoftPreconditionFailed
+from iguazu.core.files import FileAdapter
 from iguazu.functions.behavior import extract_space_stress_features
-from iguazu.helpers.files import FileProxy
-from iguazu.helpers.states import SKIPRESULT
-from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
+from iguazu.functions.specs import infer_standard_groups
+from iguazu.utils import deep_update
 
 
 class SpaceStressFeatures(iguazu.Task):
     def __init__(self,
                  events_hdf5_key: Optional[str] = None,
                  output_hdf5_key: Optional[str] = None,
-                 force: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
         self.events_hdf5_key = events_hdf5_key
         self.output_hdf5_key = output_hdf5_key
-        self.force = force
+        self.auto_manage_input_dataframe('events', events_hdf5_key)
 
-    def run(self, parent: FileProxy, events: FileProxy, temporary: Optional[bool] = False) -> FileProxy:
-        '''
-        This task is a basic ETL where the input and output are HDF5 file proxy
-        and where the transformation is made on a DataFrame.
-        It consists in loading the signals and events from the input files proxy,
-        applying some processing (transformations) and
-        saving the result into an output file proxy.
+    def run(self,
+            events: pd.DataFrame,
+            parent: FileAdapter) -> FileAdapter:
+        if events.empty:
+            raise SoftPreconditionFailed('Input events are empty')
 
-        The transformation that is performed is to interpret the information computed
-        from participant actions and game stimulations to get a score on each wave.
-        See the documentation of :func:`behavior.extract_space_stress_scores`.
+        output_file = self.default_outputs()
 
-        Parameters
-        ----------
-        parent: file proxy with parent events ('unity_events' original stream)
-        events:  file proxy with standardized events related to player actions and game stimuations
-        temporary: boolean to decide whether or not output file should be temporary
+        self.logger.info('Behavior feature extraction for events=%s -> %s',
+                         events, output_file)
+        features = extract_space_stress_features(events)
+        if not features.empty:
+            features.loc[:, 'file_id'] = parent.id
 
-        Returns
-        -------
-        output: file proxy with
+        with pd.HDFStore(output_file.file, 'w') as store:
+            features.to_hdf(store, self.output_hdf5_key)
+        deep_update(output_file.metadata, {'standard': infer_standard_groups(output_file.file_str)})
+        return output_file
 
-        '''
-
-        output = parent.make_child(suffix='_behavior', temporary=temporary)
-        self.logger.info('Space Stress scores for %s -> %s', parent, output)
-
-        events_group = self.events_hdf5_key or '/iguazu/events/standard'
-        output_group = self.output_hdf5_key or '/iguazu/features/behavior'
-
-        # Our current force detection code
-        if not self.force and output.metadata.get('iguazu', {}).get('state') is not None:
-            self.logger.info('Output already exists, skipping')
-            raise SKIPRESULT('Output already exists', result=output)
-
-        try:
-            # check if previous task succeeded
-            if events.metadata.get('iguazu', {}).get('state') == 'FAILURE' \
-                    or events.metadata.get('iguazu', {}).get('state') == 'FAILURE':
-                # Fail
-                self.logger.info('Previous task failed, propagating failure')
-                raise IguazuError('Previous task failed')
-
-            events_file = events.file
-            with pd.option_context('mode.chained_assignment', None), \
-                 pd.HDFStore(events_file, 'r') as store:
-                df_events = pd.read_hdf(store, events_group)
-                features = extract_space_stress_features(df_events)
-                # add, file_id
-                features['file_id'] = parent._file_id
-                state = 'SUCCESS'
-                meta = get_base_meta(self, state=state)
-                # Manage output, save to file
-                task_upload_result(self, features, meta, state, output, output_group)
-                self.logger.info('Extract space-stress final scores finished successfully, '
-                                 'final dataframe has shape %s', features.shape)
-                return output
-        except Exception as ex:
-            # Manage output, save to file
-            self.logger.warning('SpaceStressFeatures failed with an exception', exc_info=True)
-            task_fail(self, ex, output, output_group)
+    def default_outputs(self, **kwargs):
+        original_kws = prefect.context.run_kwargs
+        parent = original_kws['parent']
+        output = self.create_file(
+            parent=parent,
+            suffix=f'_behavior_features',
+            temporary=False,
+        )
+        return output
