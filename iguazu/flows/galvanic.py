@@ -6,6 +6,7 @@ from iguazu.functions.galvanic import GSRArtifactCorruption
 from iguazu.tasks.common import LoadDataframe, MergeDataframes, PropagateMetadata, SlackTask
 from iguazu.tasks.galvanic import CleanGSRSignal, ApplyCVX, DetectSCRPeaks, Downsample, ExtractGSRFeatures
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.tasks.standards import Report
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
         AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
---         AND    NOT(coalesce(iguazu->'flows' ? 'features_galvanic', FALSE ))     -- Only file where this flow has not ran
+        AND    NOT(coalesce(iguazu->'flows' ? 'features_galvanic', FALSE ))     -- Only file where this flow has not ran
         ORDER BY id                                -- always in the same order
     """
 
@@ -90,7 +91,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
         propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
 
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
-
+        report = Report()
         notify = SlackTask(message='Cardiac feature extraction finished!')
 
         with self:
@@ -118,7 +119,8 @@ class GalvanicFeaturesFlow(PreparedFlow):
             features_with_metadata = propagate_metadata.map(parent=raw_signals, child=features)
             update_noresult = update_flow_metadata.map(parent=raw_signals, child=features_with_metadata)
             # Send slack notification
-            notify(upstream_tasks=[update_noresult])
+            message = report(files=features_with_metadata, upstream_tasks=[update_noresult])
+            notify(message=message)
 
         logger.debug('Built flow %s with tasks %s', self, self.tasks)
 
