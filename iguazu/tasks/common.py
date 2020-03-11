@@ -44,7 +44,7 @@ class ListFiles(prefect.Task):
         self._pattern = pattern
         self._limit = limit
 
-    def run(self, basedir: str) -> Union[List[str], List[FileProxy]]:
+    def run(self, basedir: str) -> Union[List[str], List[FileAdapter]]:
         if not basedir:
             return []
         path = pathlib.Path(basedir)
@@ -440,7 +440,7 @@ class MergeDataframes(iguazu.Task):
 
 
 class LoadJSON(iguazu.Task):
-    def run(self, *, file: FileProxy) -> Dict:
+    def run(self, *, file: FileAdapter) -> Dict:
         with open(file.filename, 'r') as f:
             return json.load(f)
 

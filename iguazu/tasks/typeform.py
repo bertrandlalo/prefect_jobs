@@ -7,8 +7,8 @@ import pandas as pd
 from prefect.client import Secret
 
 import iguazu
-from iguazu.helpers.files import FileProxy, LocalFile, QuetzalFile
 from iguazu.core.exceptions import PreconditionFailed
+from iguazu.core.files import FileAdapter, LocalFile, QuetzalFile
 from iguazu.functions.typeform import (
     add_form_config, answers_to_dataframe, fetch_form, fetch_responses,
     calculate_scores
@@ -89,7 +89,7 @@ class Save(iguazu.Task):
             response: Dict,
             response_id: str,
             workspace_id: Optional[int] = None,
-            base_dir: Optional[str] = None) -> Optional[FileProxy]:
+            base_dir: Optional[str] = None) -> Optional[FileAdapter]:
 
         output = self.default_outputs(workspace_id=workspace_id, base_dir=base_dir, response_id=response_id)
         self.logger.info('Saving response to %s', output)
@@ -114,7 +114,7 @@ class Save(iguazu.Task):
         if response_id is None:
             raise PreconditionFailed('Response identifier is a required input')
 
-    def default_outputs(self, **inputs) -> Optional[FileProxy]:
+    def default_outputs(self, **inputs) -> Optional[FileAdapter]:
         wid = inputs.get('workspace_id', None)
         base_dir = inputs.get('base_dir', None)
         response_id = inputs.get('response_id')

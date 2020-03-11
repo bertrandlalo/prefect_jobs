@@ -6,9 +6,9 @@ from prefect.tasks.core.operators import GetItem
 from quetzal.client.cli import FamilyVersionListType
 
 from iguazu.core.flows import PreparedFlow
+from iguazu.core.handlers import logging_handler
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import AddSourceMetadata, LoadJSON, identity
-from iguazu.tasks.handlers import logging_handler
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
 from iguazu.tasks.typeform import (
     ExtractScores, FetchResponses, GetForm, GetUserHash, Save, DEFAULT_BASE_URL
