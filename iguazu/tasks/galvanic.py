@@ -79,9 +79,9 @@ class CleanGSRSignal(iguazu.Task):
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self,
-            signals: FileAdapter,
-            annotations: FileAdapter,
-            events: FileAdapter) -> FileAdapter:
+            signals: pd.DataFrame,
+            annotations: pd.DataFrame,
+            events: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
         if events.empty:
@@ -295,7 +295,6 @@ class ExtractGSRFeatures(iguazu.Task):
                            not any(excl in sequence for excl in
                                    ['intro', 'outro', 'lobby'])]  # lobby is too short to extract gsr
         # intro is warm up
-
         features = gsr_features(cvx, scrpeaks, events, known_sequences=known_sequences)
         if not features.empty:
             features.loc[:, 'file_id'] = parent.id
