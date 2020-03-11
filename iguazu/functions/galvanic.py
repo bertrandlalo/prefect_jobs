@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class GSRArtifactCorruption(Exception):
-    """Exception used when an object does not meet the events specification"""
+    """Exception used when GSR signal is corrupted"""
     pass
 
 
