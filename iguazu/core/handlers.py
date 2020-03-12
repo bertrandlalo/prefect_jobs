@@ -16,6 +16,15 @@ class CustomFileHandler(logging.FileHandler):
 
 
 def logging_handler(task, old_state, new_state):
+    try:
+        return _logging_handler(task, old_state, new_state)
+    except:
+        logger.warning('Logging handler failed to handle the state change, but '
+                       'the execution will continue', exc_info=True)
+        return new_state
+
+
+def _logging_handler(task, old_state, new_state):
     logger.debug('Managing log due to state change from %s to %s',
                  type(old_state).__name__,
                  type(new_state).__name__)
@@ -43,7 +52,7 @@ def logging_handler(task, old_state, new_state):
         file_adapter = file_class(filename=log_filename, path=target_path, temporary=True, **init_kwargs)
     else:
         logger.debug('Logging handler ignoring state change to %s', new_state)
-        return
+        return new_state
 
     if new_state.is_running():
         # Configurate Log Formatter and Handler
