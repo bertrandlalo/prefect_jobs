@@ -1,6 +1,7 @@
 import logging
 
 from iguazu import __version__
+from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.functions.galvanic import GSRArtifactCorruption
@@ -68,7 +69,8 @@ class GalvanicFeaturesFlow(PreparedFlow):
             signals_hdf5_key='/iguazu/signal/gsr/standard',
             events_hdf5_key='/iguazu/events/standard',
             output_hdf5_key='/iguazu/signal/gsr/clean',
-            graceful_exceptions=(GSRArtifactCorruption,)
+            graceful_exceptions=(GSRArtifactCorruption,
+                                 SoftPreconditionFailed)
         )
         downsample = Downsample(
             signals_hdf5_key='/iguazu/signal/gsr/clean',
