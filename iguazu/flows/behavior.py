@@ -1,5 +1,7 @@
 import logging
 
+from iguazu import __version__
+from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.functions.behavior import SequenceNotFound
@@ -27,7 +29,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
         AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        --AND    NOT(coalesce(iguazu->'flows' ? 'features_behavior', FALSE ))     -- Only file where this flow has not ran
+        AND    COALESCE (iguazu->'flows'->'features_behavior' ->> 'version', '') <  '{__version__}'
         ORDER BY id                                    -- always in the same order
     """
 
@@ -61,7 +63,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
             name='SpaceStressFeatures',
             events_hdf5_key='/iguazu/events/standard',
             output_hdf5_key='/iguazu/features/behavior',
-            graceful_exceptions=(SequenceNotFound,)
+            graceful_exceptions=(SequenceNotFound, SoftPreconditionFailed)
         )
 
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
@@ -98,7 +100,7 @@ class BehaviorSummaryFlow(PreparedFlow):
         WHERE  base->>'state' = 'READY'                -- No temporary files
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/behavior' -- containing the GSR signal
+        AND    standard->'features' ? '/iguazu/features/behavior' -- containing the behavioral features
         ORDER BY id -- always in the same order
     """
 
