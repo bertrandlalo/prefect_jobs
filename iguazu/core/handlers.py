@@ -41,6 +41,9 @@ def logging_handler(task, old_state, new_state):
             init_kwargs = {}
 
         file_adapter = file_class(filename=log_filename, path=target_path, temporary=True, **init_kwargs)
+    else:
+        logger.debug('Logging handler ignoring state change to %s', new_state)
+        return
 
     if new_state.is_running():
         # Configurate Log Formatter and Handler
@@ -72,8 +75,10 @@ def logging_handler(task, old_state, new_state):
             hdlr.close()
             if context_backend == 'local':
                 # move from 'RUNNING' folder to final one (given task final status)
-                pathlib.Path(file_adapter.file.parents[1] / state_name).mkdir(parents=True, exist_ok=True)
-                file_adapter.file.rename(file_adapter.file.parents[1] / state_name / file_adapter.basename)
+                new_path = file_adapter.file.parents[1] / state_name / file_adapter.basename
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                file_adapter.file.rename(new_path)
+                file_adapter._local_path = new_path  # Not really necessary, but to avoid an invalid FileAdapter
             else:  # quetzal
                 # upload on quetzal
                 file_adapter.upload()

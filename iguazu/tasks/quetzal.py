@@ -161,33 +161,6 @@ class Query(QuetzalBaseTask):
         return rows
 
 
-class ConvertToFileAdapter(Task):
-
-    def __init__(self, id_key: str = 'id', **kwargs):
-        super().__init__(**kwargs)
-        self.id_key = id_key
-
-    def run(self,
-            rows: Union[ResultSetType, List[ResultSetType]],
-            workspace_id: Optional[int],  # Note: We do not provide a default, user must set None if they mean it
-            id_key: Optional[str] = None,
-            ) -> Union[QuetzalFile, List[QuetzalFile]]:
-        is_list = isinstance(rows, list)
-        if not is_list:
-            rows = [rows]
-        id_key = id_key or self.id_key
-        file_adapters = []
-        for row in rows:
-            if id_key not in row:
-                raise RuntimeError('Input row does not have expected id key')
-            file = QuetzalFile(file_id=row[id_key], workspace_id=workspace_id)
-            file_adapters.append(file)
-
-        if not is_list:
-            return file_adapters[0]
-        return file_adapters
-
-
 class CreateWorkspace(QuetzalBaseTask):
     """ Create or retrieve a Quetzal workspace
 
