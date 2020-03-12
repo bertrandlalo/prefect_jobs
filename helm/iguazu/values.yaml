@@ -219,7 +219,7 @@ jobs:
            "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_behavior",
            "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/behavior",
            # Flow name
-           "behavior_features",
+           "features_behavior",
            # Flow options
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
