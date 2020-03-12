@@ -545,12 +545,10 @@ class Task(ManagedTask):
             new_file = file_class(filename=filename, path=path,
                                   temporary=temporary,
                                   **init_kwargs)
-        else:
-            new_file = file_class.find(filename=filename,
-                                       path=path,
-                                       metadata=match_meta,
-                                       **find_kwargs)
-            if new_file is None:
+        else:  # not forced
+            if new_file is not None:
+                self.logger.debug('Task is not forced and there is a previous file')
+            else:
                 new_file = file_class(filename=filename, path=path,
                                       temporary=temporary,
                                       **init_kwargs)
