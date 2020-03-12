@@ -1,18 +1,30 @@
 import collections
+import copy
 import uuid
 
-from prefect import Flow, Parameter
-from prefect.utilities.tasks import unmapped
-from quetzal.client.helpers import get_client
 import prefect
+import pytest
+from prefect import Flow, Parameter
+from iguazu.core.files import FileAdapter, LocalURL
+from iguazu.tasks.quetzal import CreateWorkspace, Query
 
-from iguazu.core.files import FileAdapter
-from iguazu.tasks.quetzal import CreateWorkspace, ConvertToFileAdapter, DeleteWorkspace, Query, ScanWorkspace
+
+@pytest.fixture(scope='function')
+def fake_files():
+    files = []
+    for i in range(5):
+        files.append({
+            'id': str(uuid.uuid4()),
+            'filename': f'file{i+1}.bin',
+            'path': 'generated',
+            'state': 'READY',
+        })
+    return files
 
 
-def test_query_success(mocker):
+def test_query_success(mocker, fake_files):
     query_mock = mocker.patch('quetzal.client.helpers.query')
-    query_mock.return_value = [{'id': str(uuid.uuid4())}], 1
+    query_mock.return_value = fake_files, len(fake_files)
 
     query_task = Query(url='https://localhost/api/v1',
                        username='admin',
@@ -50,32 +62,32 @@ def test_query_connect_fail():
     assert state.is_failed()
 
 
-def test_query_convert(mocker):
-    ids = {str(uuid.uuid4()) for _ in range(5)}
+def test_query_convert(mocker, fake_files, tmpdir):
     query_mock = mocker.patch('quetzal.client.helpers.query')
-    query_mock.return_value = [{'id': i} for i in ids], len(ids)
+    query_mock.return_value = copy.deepcopy(fake_files), len(fake_files)
+    metadata_mock = mocker.patch('quetzal.client.helpers.file.metadata')
+    metadata_mock.side_effect = [{'base': copy.deepcopy(f)} for f in fake_files]
 
     query_task = Query(url='https://localhost/api/v1',
                        username='user',
                        password='password',
-                       insecure=True)
-    convert_task = ConvertToFileAdapter('id')
+                       insecure=True,
+                       as_file_adapter=True)
+    url = LocalURL(path=tmpdir)
 
     with Flow('test_query_success flow') as flow:
         sql = Parameter('input_sql')
         rows = query_task(query=sql)
-        adapters = convert_task(rows, workspace_id=None)
-        adapters_map = convert_task.map(rows, workspace_id=unmapped(None))
 
     parameters = dict(
         input_sql='SELECT * FROM base LIMIT 5',
     )
-    state = flow.run(parameters=parameters)
+    with prefect.context(output_url=url):
+        state = flow.run(parameters=parameters)
 
     assert state.is_successful()
-    assert all([isinstance(p, FileAdapter) for p in state.result[adapters].result])
-    assert all([isinstance(p, FileAdapter) for p in state.result[adapters_map].result])
-    assert {p.id for p in state.result[adapters_map].result} == ids
+    assert all([isinstance(p, FileAdapter) for p in state.result[rows].result])
+    assert [p.id for p in state.result[rows].result] == [f['id'] for f in fake_files]
 
 
 def test_create_workspace(mocker):
