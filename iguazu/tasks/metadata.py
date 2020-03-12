@@ -1,13 +1,10 @@
 import copy
-import logging
 from typing import Any, Dict, NoReturn, Tuple
 
 import prefect
 
 from iguazu import __version__, FileAdapter
 from iguazu.utils import deep_update
-
-logger = logging.getLogger(__name__)
 
 
 class CreateFlowMetadata(prefect.Task):
@@ -66,10 +63,11 @@ class AddStaticMetadata(prefect.Task):
         super().__init__(**kwargs)
         self.new_meta = new_meta
 
-    def run(self, *, file: FileAdapter) -> NoReturn:
+    def run(self, *, file: FileAdapter) -> FileAdapter:
         new_meta = copy.deepcopy(self.new_meta)
         deep_update(file.metadata, new_meta)
         file.upload_metadata()
+        return file
 
 
 class AddDynamicMetadata(prefect.Task):
@@ -86,7 +84,7 @@ class AddDynamicMetadata(prefect.Task):
 
     def run(self, *,
             file: FileAdapter,
-            value: Any) -> NoReturn:
+            value: Any) -> FileAdapter:
 
         current_level = file.metadata
         for k in self.key_tuple[:-1]:
@@ -96,3 +94,4 @@ class AddDynamicMetadata(prefect.Task):
         last_key = self.key_tuple[-1]
         current_level[last_key] = value
         file.upload_metadata()
+        return file
