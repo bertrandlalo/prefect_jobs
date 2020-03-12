@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import pandas as pd
+import prefect
 from prefect.client import Secret
 
 import iguazu
@@ -56,6 +57,7 @@ class FetchResponses(_BaseTypeformAPITask):
         self.logger.info('Requesting typeform responses of form %s at address %s',
                          self._form_id, self._base_url)
         responses = fetch_responses(self._base_url, self._form_id, self.token)
+        self.logger.info('Obtained %d responses', len(responses))
         return responses
 
 
@@ -87,47 +89,29 @@ class Save(iguazu.Task):
 
     def run(self, *,
             response: Dict,
-            response_id: str,
-            workspace_id: Optional[int] = None,
-            base_dir: Optional[str] = None) -> Optional[FileAdapter]:
+            response_id: str) -> Optional[FileAdapter]:
 
-        output = self.default_outputs(workspace_id=workspace_id, base_dir=base_dir, response_id=response_id)
+        output = self.default_outputs(response=response, response_id=response_id)
         self.logger.info('Saving response to %s', output)
 
-        with open(output.filename, 'w') as f:
-            json.dump(response, f, indent=2)
+        with output.file.open(mode='w') as f:
+            json.dump(response, f, indent=2, sort_keys=True)
 
         return output
 
     def preconditions(self, **inputs):
+        super().preconditions(**inputs)
         if self.form_id is None:
             raise PreconditionFailed('form_id must not be None')
 
-        wid = inputs.get('workspace_id', None)
-        base_dir = inputs.get('base_dir', None)
-        response_id = inputs.get('response_id', None)
-        if wid is None and base_dir is None:
-            raise PreconditionFailed('Save task needs a workspace_id or base_dir')
-        if wid is not None and base_dir is not None:
-            raise PreconditionFailed('Save task workspace_id and base_dir parameters '
-                                     'are mutually exclusive')
-        if response_id is None:
-            raise PreconditionFailed('Response identifier is a required input')
-
-    def default_outputs(self, **inputs) -> Optional[FileAdapter]:
-        wid = inputs.get('workspace_id', None)
-        base_dir = inputs.get('base_dir', None)
-        response_id = inputs.get('response_id')
-        file = None
-
-        if wid is not None:
-            file = QuetzalFile(workspace_id=wid)
-            # TODO: QuetzalFile needs a way to create new files without parents
-
-        elif base_dir is not None:
-            filename = pathlib.Path(base_dir) / self.form_id / response_id / 'responses.json'
-            file = LocalFile(str(filename), base_dir)
-
+    def default_outputs(self, *, response_id, **kwargs) -> Optional[FileAdapter]:
+        filename = pathlib.Path('typeform') / self.form_id / response_id / 'responses.json'
+        file = self.create_file(
+            parent=None,
+            filename=filename.name,
+            path=str(filename.parent),
+            temporary=False
+        )
         return file
 
 

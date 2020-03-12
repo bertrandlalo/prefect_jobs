@@ -334,35 +334,6 @@ class MergeHDF5(iguazu.Task):
         return output
 
 
-class AddSourceMetadata(prefect.Task):
-
-    def __init__(self, *, new_meta: Dict, **kwargs):
-        super().__init__(**kwargs)
-        self.new_meta = new_meta
-
-    def run(self, *,
-            file: FileAdapter,
-            extra_keys: Optional[List[Tuple[str]]],
-            extra_values: Optional[List[Any]]) -> NoReturn:
-        new_meta = copy.deepcopy(self.new_meta)
-
-        if extra_keys is not None and extra_values is not None:
-            if not isinstance(extra_values, list):
-                extra_values = [extra_values]
-            for k, v in zip(extra_keys, extra_values):
-                d = new_meta
-                path = k[:-1]
-                last = k[-1]
-                for p in path:
-                    d = d.setdefault(p, {})
-                d[last] = v
-
-        deep_update(file.metadata, new_meta)
-        # TODO: for quetzal, we are going to need a .upload_metadata method
-        #       so we don't download the file for nothing
-        file.upload()
-
-
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
 
