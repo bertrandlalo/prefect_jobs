@@ -78,7 +78,7 @@ class LocalFile(FileAdapter):
 
         path = path or ''
         self._local_path = pathlib.Path(self._root) / path / filename
-        self._local_meta = self._local_path.with_suffix('.json')
+        self._local_meta = self._local_path.with_name(self._local_path.name + '.json')
 
     # def __oldinit__(self, file, base_dir):
     #     super().__init__()
@@ -99,7 +99,11 @@ class LocalFile(FileAdapter):
                      'and temporary is %s',
                      filename, path, metadata, temporary)
         path = path or ''
-        root = context.temp_dir if temporary else get_data_dir()  # todo: get_data_dir is quetzal!
+        if temporary:
+            root = context.temp_url.path
+        else:
+            root = context.output_url.path
+        # root = context.temp_dir if temporary else get_data_dir()  # todo: get_data_dir is quetzal!
         candidate = pathlib.Path(root) / path / filename
         file_id = str(candidate.relative_to(root))
         if candidate.exists():
@@ -284,8 +288,9 @@ class LocalFile(FileAdapter):
             logger.error('Something is wrong: uploading a file that does not exist')
             raise RuntimeError('Cannot upload if file does not exist')
         else:
-            logger.debug('Uploading a local file %s is a no-op because it is '
-                         'a LocalFile instance', self._local_path)
+            self._file_id = str(self._local_path.relative_to(self._root))
+        self._metadata.setdefault('base', {})
+        self._metadata['base']['id'] = self._file_id
 
     def upload_metadata(self):
         # Upload on local file dumps the meta in a json
