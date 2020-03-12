@@ -254,9 +254,10 @@ def run_flow(flow_class, **kwargs):
 
     quetzal_kws = dict(
         url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-        username=os.getenv('QUETZAL_USER', 'admin'),
-        password=os.getenv('QUETZAL_PASSWORD', 'password'),
+        username=os.getenv('QUETZAL_USER', None),
+        password=os.getenv('QUETZAL_PASSWORD', None),
         api_key=os.getenv('QUETZAL_API_KEY', None))
+    quetzal_kws = {k: v for (k, v) in quetzal_kws.items() if v is not None}
 
     context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
@@ -359,9 +360,9 @@ def state_report(flow_state, flow=None):
 
     df = (
         pd.DataFrame.from_records(rows)
-        # Show tasks by their topological order, then reset the index
-        .sort_values(by='order')
-        .reset_index(drop=True)
+            # Show tasks by their topological order, then reset the index
+            .sort_values(by='order')
+            .reset_index(drop=True)
     )
     return df
 
