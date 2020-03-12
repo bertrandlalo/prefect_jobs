@@ -1,5 +1,6 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import MergeHDF5, SlackTask
@@ -18,17 +19,16 @@ class StandardizeVRFlow(PreparedFlow):
 
     REGISTRY_NAME = 'standardize_vr'
 
-    DEFAULT_QUERY = """\
-    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-           base->>'filename' AS filename,  -- this is just to help the human debugging this
-           omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
-    FROM   metadata
-    WHERE  base->>'state' = 'READY'                -- No temporary files
-    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-    -- AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
-    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-    AND    NOT(coalesce(iguazu->'flows' ? 'standardize_vr', FALSE ))     -- Only file where this flow has not ran
-    ORDER BY id                                    -- always in the same order
+    DEFAULT_QUERY = f"""\
+SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+       base->>'filename' AS filename,  -- this is just to help the human debugging this
+       omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
+FROM   metadata
+WHERE  base->>'state' = 'READY'                -- No temporary files
+AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+AND    COALESCE (iguazu->'flows'->'standardize_vr' ->> 'version', '') <  '{__version__}'
+ORDER BY id                                    -- always in the same order
 """
 
     def _build(self, **kwargs):

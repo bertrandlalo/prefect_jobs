@@ -6,7 +6,7 @@ from prefect import Flow
 from prefect.utilities.debug import raise_on_exception
 
 from iguazu import Task
-from iguazu.core.files import LocalFile
+from iguazu.core.files import LocalFile, LocalURL
 
 
 class BadTask(Task):
@@ -54,15 +54,18 @@ class TaskWithTwoInputDataFrames(Task):
 
 @pytest.fixture(scope='function')
 def local_file(tmpdir):
-    filename = tmpdir.join('dataframe.hdf5')
+    filename = 'dataframe.hdf5'
+    path = tmpdir / filename
     foo = tm.makeDataFrame()
     bar = tm.makeDataFrame()
 
-    with pd.HDFStore(filename, 'w') as store:
+    with pd.HDFStore(path, 'w') as store:
         foo.to_hdf(store, '/foo')
         bar.to_hdf(store, '/bar')
 
-    return LocalFile(filename, tmpdir)
+    url = LocalURL(path=tmpdir)
+    with prefect.context(temp_url=url):
+        yield LocalFile(filename=filename, path='', temporary=True)
 
 
 def test_auto_manage_dataframe_default(local_file):
@@ -120,14 +123,14 @@ def test_auto_manage_dataframe_default_string(local_file):
     tm.assert_equal(result, df_foo.mean())
 
 
-def test_auto_manage_dataframe_incorrect_type(local_file):
+def test_auto_manage_dataframe_incorrect_type(local_file, caplog):
     task = TaskWithInputDataFrame()
 
     with Flow('test_auto_manage_dataframe_default_string') as flow:
         file = prefect.Parameter('local_file', default=123456)
         task(input_one=file)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError), caplog.at_level('FATAL', logger='prefect'):
         with raise_on_exception(), prefect.context(caches={}):
             flow.run()
 
