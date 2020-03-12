@@ -5,11 +5,11 @@ from prefect.tasks.core.operators import GetItem
 from iguazu import  __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import LoadJSON
+from iguazu.tasks.common import LoadJSON, SlackTask
 from iguazu.tasks.metadata import AddDynamicMetadata, AddStaticMetadata
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
 from iguazu.tasks.typeform import (
-    ExtractScores, FetchResponses, GetForm, GetUserHash, Save, DEFAULT_BASE_URL
+    ExtractScores, FetchResponses, GetForm, GetUserHash, Report, Save, DEFAULT_BASE_URL
 )
 
 
@@ -38,7 +38,7 @@ class DownloadTypeform(PreparedFlow):
                 'protocol': {
                     'name': 'vr-questionnaire',
                     'extra': {
-                        'typeform_form_id': form_id,
+                        'form_id': form_id,
                     },
                 }
             }
@@ -46,6 +46,8 @@ class DownloadTypeform(PreparedFlow):
         add_user_metadata = AddDynamicMetadata(
             key=('omind', 'user_hash'),
         )
+        report = Report()
+        notify = SlackTask(preamble='Download of typeform responses finished.\nTask report:')
 
         with self:
             responses = fetch()
@@ -53,8 +55,10 @@ class DownloadTypeform(PreparedFlow):
             user_hash = get_user_hash.map(response=responses)
             files = save.map(response=responses,
                              response_id=response_id)
-            add_protocol_metadata.map(file=files)
-            add_user_metadata.map(file=files, value=user_hash)
+            files_with_protocol = add_protocol_metadata.map(file=files)
+            files_with_hash = add_user_metadata.map(file=files_with_protocol, value=user_hash)
+            message = report(files=files_with_hash)
+            notify(message=message)
 
     @staticmethod
     def click_options():
@@ -78,6 +82,7 @@ FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
 AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
+AND    protocol->>'extra'->'form_id'
 AND    COALESCE(iguazu->'flows'->'extract_typeform'->>'version', '') 
        < '{__version__}'                       -- That has not already been processed by this flow
 ORDER BY id                                    -- always in the same order

@@ -1,3 +1,4 @@
+import collections
 import json
 import pathlib
 from typing import Dict, List, Optional
@@ -57,6 +58,7 @@ class FetchResponses(_BaseTypeformAPITask):
         self.logger.info('Requesting typeform responses of form %s at address %s',
                          self._form_id, self._base_url)
         responses = fetch_responses(self._base_url, self._form_id, self.token)
+        responses = responses[:3]
         self.logger.info('Obtained %d responses', len(responses))
         return responses
 
@@ -124,3 +126,26 @@ class ExtractScores(iguazu.Task):
         self.logger.info('Extracted typeform answers and scores:\n%s',
                          df_scores.to_string())
         return df_scores
+
+
+class Report(iguazu.Task):
+
+    def run(self, *, files):
+        status = []
+        journal_family = self.meta.metadata_journal_family
+        for f in files:
+            meta = f.metadata.get(journal_family, {})
+            journal_status = meta.get('status', 'No status')
+            problem = meta.get('problem', None)
+            if problem is not None:
+                title = problem.get('title', '')
+                journal_status = ': '.join([journal_status, title])
+            status.append(journal_status)
+
+        counter = collections.Counter(status)
+        msg = []
+        for k, v in counter.most_common():
+            msg.append(f'{v} tasks with status {k}')
+        msg = '\n'.join(msg)
+        self.logger.info('Report is:\n%s', msg)
+        return msg
