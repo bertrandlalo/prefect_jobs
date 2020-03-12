@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 
 from prefect import context
 from prefect.client import Secret
-from quetzal.client import helpers
+from quetzal.client import helpers, Configuration
 from quetzal.client.utils import get_data_dir
 
 from iguazu.core.files import FileAdapter, QuetzalURL
@@ -193,7 +193,10 @@ class QuetzalFile(FileAdapter):
         else:
             logger.debug('Uploading file %s to Quetzal', self._local_path)
             with self._local_path.open('rb') as fd:
-                fullpath = '/'.join([self._url.path, self.dirname])
+                if self._url.path:
+                    fullpath = '/'.join([self._url.path, self.dirname])
+                else:
+                    fullpath = self.dirname
                 details = helpers.workspace.upload(self.client, self.workspace_id, fd,
                                                    path=fullpath,
                                                    temporary=self._temporary)
@@ -273,6 +276,13 @@ class QuetzalFile(FileAdapter):
 
 
 def quetzal_client_from_secret():
+    default_config = Configuration()
+    quetzal_kws = dict(
+        url=default_config.host,
+        username=default_config.username,
+        password=default_config.password,
+        api_key=default_config.api_key.get('X-API-KEY', None)
+    )
     try:
         quetzal_kws = Secret('QUETZAL_CLIENT_KWARGS').get()
     except ValueError as ex:
@@ -280,23 +290,32 @@ def quetzal_client_from_secret():
                      'QUETZAL_CLIENT_KWARGS due to the following exception: %s '
                      'Falling back to environment variable-based client',
                      ex)
-        quetzal_kws = {}
-
-    return helpers.get_client(**quetzal_kws)
+    return _memo_quetzal_client(**quetzal_kws)
 
 
 @functools.lru_cache(maxsize=1024)
-def resolve_workspace_name(name: str) -> Optional[int]:
+def _memo_quetzal_client(**kwargs):
+    """A memorized client from its kwargs
+
+    This re-usability of Quetzal clients is important when one has a flow that
+    uses many tasks that interact with Quetzal. Eventually, the system may run
+    out of available connections (in reality they are socket files) and any
+    Quetzal operation will fail with a weird NewConnectionError exception
+    """
+    return helpers.get_client(**kwargs)
+
+
+@functools.lru_cache(maxsize=1024)
+def resolve_workspace_name(name: str) -> int:
     logger.debug('Resolving Quetzal workspace name %s...', name)
     client = quetzal_client_from_secret()
     details, total = helpers.workspace.list_(client,
                                              name=name,
                                              deleted=False)
     if total == 0:
-        logger.warning('No workspace named "%s" was found', name)
+        raise RuntimeError(f'No workspace named "{name}" was found')
     elif total > 1:
-        logger.warning('Workspace "%s" is not unique, there were '
-                       '%d workspaces with the same name...')
-    else:
-        return details[0]['id']
-    return None
+        raise RuntimeError(f'Workspace "{name}" is not unique, there were '
+                           f'{len(total)} workspaces with the same name...')
+
+    return details[0]['id']
