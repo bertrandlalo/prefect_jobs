@@ -5,7 +5,7 @@
 iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-  tag: 0.2.0-dev5
+  tag: 0.3.0-dev-raph-005
   pullPolicy: Always
 
 
@@ -21,18 +21,22 @@ defaultJob:
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: QUETZAL_URL
-      value: "https://quetzal.omind.me/api/v1"
+      value: "https://dev.omind.quetz.al/api/v1" # "https://quetzal.omind.me/api/v1"
     - name: QUETZAL_INSECURE
       value: "0"
     - name: IGUAZU_WORKSPACE
-      value: "iguazu-features-v012"
+      value: "iguazu-vr-v1"
   envFromSecret:
     - name: QUETZAL_USER
       key: username
     - name: QUETZAL_PASSWORD
       key: password
+    - name: QUETZAL_API_KEY
+      key: api_key
     - name: SLACK_WEBHOOK_URL
       key: slack_url
+
+
   resources:
     limits:
       cpu: 50m
@@ -67,6 +71,13 @@ jobs:
   #          "45 23 * * 6" is every saturday at 23:45
   #
   ##############################################################################
+  - name: debug-sleep
+    schedule: "0 21 * * *"      # In human: every day at exactly 9 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["sleep",
+      # General iguazu options
+           "3600",
+    ]
   # VR protocol standardization
   - name: standardize-vr
     # imageRepository: ...      # Use to override the default on iguazu.repository
@@ -83,12 +94,14 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_standard",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/standard",
            # Flow name
            "standardize_vr",
            # Flow options
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
-           #"--limit", "100", "--shuffle",
+           "--limit", "50", "--shuffle",
     ]
   ##############################################################################
   # Galvanic features
@@ -262,7 +275,7 @@ dask_worker:
     # tag: ...        # use to override the default on iguazu.tag
     pullPolicy: Always
   replicas: 1         # Number of MINIMUM dask-workers
-  maxReplicas: 2      # Number of MAXIMUM dask-workers
+  maxReplicas: 4      # Number of MAXIMUM dask-workers
   targetCPU: 10       # How much the Horizontal scaler will target as CPU usage.
                       # When the average CPU is over this value, new workers will be creatd.
                       # Set to a low value (10) to use as much resources as possible.

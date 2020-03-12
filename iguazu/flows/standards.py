@@ -1,5 +1,6 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import MergeHDF5, SlackTask
@@ -26,7 +27,7 @@ FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
 AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-AND    COALESCE (iguazu->'flows'->'standardize_vr' ->> 'version', '') <  ____version__
+AND    COALESCE (iguazu->'flows'->'standardize_vr' ->> 'version', '') <  '{__version__}'
 ORDER BY id                                    -- always in the same order
 """
 
