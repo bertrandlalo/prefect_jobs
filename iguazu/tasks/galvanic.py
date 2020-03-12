@@ -79,9 +79,9 @@ class CleanGSRSignal(iguazu.Task):
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
     def run(self,
-            signals: FileAdapter,
-            annotations: FileAdapter,
-            events: FileAdapter) -> FileAdapter:
+            signals: pd.DataFrame,
+            annotations: pd.DataFrame,
+            events: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
         if events.empty:
