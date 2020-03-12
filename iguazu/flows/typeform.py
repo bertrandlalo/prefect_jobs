@@ -1,14 +1,11 @@
 import click
-from prefect import Parameter, unmapped
-from prefect.engine.cache_validators import never_use
-from prefect.tasks.control_flow import ifelse, merge
+from prefect import unmapped
 from prefect.tasks.core.operators import GetItem
-from quetzal.client.cli import FamilyVersionListType
 
+from iguazu import  __version__
 from iguazu.core.flows import PreparedFlow
-from iguazu.core.handlers import logging_handler
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import LoadJSON, identity
+from iguazu.tasks.common import LoadJSON
 from iguazu.tasks.metadata import AddDynamicMetadata, AddStaticMetadata
 from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
 from iguazu.tasks.typeform import (
@@ -72,7 +69,19 @@ class DownloadTypeform(PreparedFlow):
 class ExtractTypeformFeatures(PreparedFlow):
 
     REGISTRY_NAME = 'extract_typeform'
-    DEFAULT_QUERY = None
+    DEFAULT_QUERY = """
+SELECT base->>'id'         AS id,        -- id is the bare minimum needed for the query task to work
+       base->>'filename'   AS filename,  -- this is just to help the human debugging this
+       omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+       iguazu->>'version'  AS version    -- this is just to help the openmind human debugging this
+FROM   metadata
+WHERE  base->>'state' = 'READY'                -- No temporary files
+AND    base->>'filename' LIKE '%.json'         -- Only JSON files
+AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
+AND    COALESCE(iguazu->'flows'->'extract_typeform'->>'version', '') 
+       < '{__version__}'                       -- That has not already been processed by this flow
+ORDER BY id                                    -- always in the same order
+"""
 
     def _build(self, *,
                base_url=DEFAULT_BASE_URL,

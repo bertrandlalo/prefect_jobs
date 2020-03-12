@@ -59,10 +59,6 @@ class QuetzalDatasetFlow(PreparedFlow):
 
     REGISTRY_NAME = 'dataset_quetzal'
 
-    # def __init__(self, **kwargs):
-    #     kwargs.setdefault('name', 'quetzal_dataset_flow')
-    #     super().__init__(**kwargs)
-
     def _build(self, *,
                families=None,
                query=None,
@@ -155,10 +151,6 @@ class GenericDatasetFlow(PreparedFlow):
 
     REGISTRY_NAME = 'dataset_generic'
 
-    # def __init__(self, **kwargs):
-    #     kwargs.setdefault('name', 'generic_dataset_flow')
-    #     super().__init__(**kwargs)
-
     def _build(self, *, data_source=None, **kwargs):
         local_flow = LocalDatasetFlow(**kwargs)
         qtzal_flow = QuetzalDatasetFlow(**kwargs)
@@ -212,10 +204,3 @@ class ShowDatasetFlow(PreparedFlow):
     @staticmethod
     def click_options():
         return GenericDatasetFlow.click_options()
-
-#
-# class LocalDataSink(PreparedFlow):
-#     # No REGISTRY_NAME because this flow does not make much sense by itself
-#
-#     def _build(self, **kwargs):
-#
