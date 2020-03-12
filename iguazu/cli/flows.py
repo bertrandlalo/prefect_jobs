@@ -265,7 +265,7 @@ def run_flow(flow_class, **kwargs):
     ###
     # Flow execution
     ###
-    flow, flow_state = execute_flow(flow_class, kwargs, executor, context_args)
+    flow, flow_state = execute_flow(flow_class, kwargs, executor, context_args, ctx.obj.get('cache', False))
 
     ###
     # Flow post-processing: reports et al.
