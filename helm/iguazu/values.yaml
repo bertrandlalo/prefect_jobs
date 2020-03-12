@@ -27,10 +27,6 @@ defaultJob:
     - name: IGUAZU_WORKSPACE
       value: "iguazu-vr-v1"
   envFromSecret:
-    - name: QUETZAL_USER
-      key: username
-    - name: QUETZAL_PASSWORD
-      key: password
     - name: QUETZAL_API_KEY
       key: api_key
     - name: SLACK_WEBHOOK_URL
