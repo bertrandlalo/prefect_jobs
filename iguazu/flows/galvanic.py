@@ -1,5 +1,6 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.functions.galvanic import GSRArtifactCorruption
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class GalvanicFeaturesFlow(PreparedFlow):
-    """Extract all  cardiac features from a file dataset"""
+    """Extract all galvanic features from a file dataset"""
 
     REGISTRY_NAME = 'features_galvanic'
     DEFAULT_QUERY = f"""
@@ -28,7 +29,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
         AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    NOT(coalesce(iguazu->'flows' ? 'features_galvanic', FALSE ))     -- Only file where this flow has not ran
+        AND    COALESCE (iguazu->'flows'->'features_galvanic' ->> 'version', '') <  '{__version__}'
         ORDER BY id                                -- always in the same order
     """
 
