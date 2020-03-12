@@ -70,7 +70,7 @@ class PandasModeSpy(Task):
         return pd.get_option('mode.chained_assignment')
 
 
-def test_pandas_context_none():
+def test_pandas_context_none(temp_url):
     initial_mode = pd.get_option('mode.chained_assignment')
 
     with Flow('test_pandas_context_none') as flow:
@@ -84,7 +84,7 @@ def test_pandas_context_none():
     assert pd.get_option('mode.chained_assignment') == initial_mode
 
 
-def test_pandas_context_warn():
+def test_pandas_context_warn(temp_url):
     initial_mode = pd.get_option('mode.chained_assignment')
 
     with Flow('test_pandas_context_warn') as flow:
@@ -104,7 +104,7 @@ def test_pandas_context_warn():
     assert pd.get_option('mode.chained_assignment') == initial_mode
 
 
-def test_pandas_context_raise():
+def test_pandas_context_raise(temp_url):
     initial_mode = pd.get_option('mode.chained_assignment')
 
     with Flow('test_pandas_context_error') as flow:
@@ -118,7 +118,7 @@ def test_pandas_context_raise():
     assert pd.get_option('mode.chained_assignment') == initial_mode
 
 
-def test_pandas_context_other():
+def test_pandas_context_other(temp_url):
     initial_mode = pd.get_option('mode.chained_assignment')
 
     with Flow('test_pandas_context_disable') as flow:
@@ -147,7 +147,7 @@ class TaskWithException(Task):
         return value
 
 
-def test_graceful_exceptions_fail():
+def test_graceful_exceptions_fail(temp_url):
     task = TaskWithException(graceful_exceptions=())
 
     with Flow('test_graceful_exceptions_fail') as flow:
@@ -157,8 +157,8 @@ def test_graceful_exceptions_fail():
         flow.run()
 
 
-def test_graceful_exceptions_handle_failed(mocker):
-    graceful_fail_task_method = mocker.patch('iguazu.Task._graceful_fail',
+def test_graceful_exceptions_handle_failed(mocker, temp_url):
+    graceful_fail_task_method = mocker.patch('iguazu.core.tasks.Task._graceful_fail',
                                              side_effect=[ENDRUN(state=Finished())])
     task = TaskWithException(graceful_exceptions=(CustomException, ))
 
@@ -171,8 +171,8 @@ def test_graceful_exceptions_handle_failed(mocker):
     graceful_fail_task_method.assert_not_called()
 
 
-def test_graceful_exceptions_handle_graceful(mocker):
-    graceful_fail_task_method = mocker.patch('iguazu.Task._graceful_fail',
+def test_graceful_exceptions_handle_graceful(mocker, temp_url):
+    graceful_fail_task_method = mocker.patch('iguazu.core.tasks.Task._graceful_fail',
                                              side_effect=[ENDRUN(state=Finished())])
     task = TaskWithException(graceful_exceptions=(CustomException, ))
 
@@ -187,8 +187,8 @@ def test_graceful_exceptions_handle_graceful(mocker):
     assert isinstance(call_args[0], CustomException)
 
 
-def test_bad_graceful_implementation(mocker):
-    graceful_fail_task_method = mocker.patch('iguazu.Task._graceful_fail',
+def test_bad_graceful_implementation(mocker, temp_url):
+    graceful_fail_task_method = mocker.patch('iguazu.core.tasks.Task._graceful_fail',
                                              return_value=['something'])
     task = TaskWithException(graceful_exceptions=(CustomException, ))
 
@@ -201,9 +201,9 @@ def test_bad_graceful_implementation(mocker):
     graceful_fail_task_method.assert_called_once()
 
 
-def test_default_outputs(mocker):
+def test_default_outputs(mocker, temp_url):
     return_value = 'hello world'
-    default_outputs_method = mocker.patch('iguazu.Task.default_outputs',
+    default_outputs_method = mocker.patch('iguazu.core.tasks.Task.default_outputs',
                                           return_value=return_value)
 
     task = TaskWithException(graceful_exceptions=(CustomException, ))
@@ -222,20 +222,14 @@ def test_default_outputs(mocker):
 
 class TaskWithOutputFile(Task):
 
-    def __init__(self, temp_dir, **kwargs):
-        self.temp_dir = pathlib.Path(temp_dir)
-        super().__init__(**kwargs)
-
     def run(self, *, name, fail=False):
         if fail:
             raise CustomException('Failed by design')
-        tmp_file = self.temp_dir / name
-        local_file = LocalFile(tmp_file, self.temp_dir)
+        local_file = self.default_outputs(name=name, fail=fail)
         return local_file
 
     def default_outputs(self, **inputs):
-        tmp_file = self.temp_dir / 'default.out'
-        local_file = LocalFile(tmp_file, self.temp_dir)
+        local_file = LocalFile(filename=inputs['name'], path='', temporary=True)
         return local_file
 
 
@@ -244,9 +238,9 @@ def filename():
     return ''.join(random.choices(string.ascii_lowercase, k=6))
 
 
-def test_default_meta_success(tmpdir, filename):
+def test_default_meta_success(temp_url, filename):
     family = 'unit-tests'
-    task = TaskWithOutputFile(temp_dir=tmpdir, metadata_journal_family=family)
+    task = TaskWithOutputFile(metadata_journal_family=family)
 
     with Flow('test_default_meta_success') as flow:
         task(name=filename)
@@ -264,10 +258,9 @@ def test_default_meta_success(tmpdir, filename):
     assert meta[family]['problem'] is None
 
 
-def test_default_meta_graceful_fail(tmpdir):
+def test_default_meta_graceful_fail(temp_url, filename):
     family = 'unit-tests'
-    task = TaskWithOutputFile(temp_dir=tmpdir,
-                              graceful_exceptions=(CustomException,),
+    task = TaskWithOutputFile(graceful_exceptions=(CustomException,),
                               metadata_journal_family=family)
 
     with Flow('test_default_meta_graceful_fail') as flow:
@@ -291,23 +284,29 @@ def test_default_meta_graceful_fail(tmpdir):
 
 class TaskWithManyOutputFile(Task):
 
-    def __init__(self, temp_dir, **kwargs):
-        self.temp_dir = pathlib.Path(temp_dir)
-        super().__init__(**kwargs)
-
     def run(self, *, name1, name2):
-        tmp_file_1 = self.temp_dir / name1
-        local_file_1 = LocalFile(tmp_file_1, self.temp_dir)
-
-        tmp_file_2 = self.temp_dir / name1
-        local_file_2 = LocalFile(tmp_file_2, self.temp_dir)
+        local_file_1 = LocalFile(
+            filename='file1.bin',
+            path='',
+            temporary=True,
+        )
+        local_file_2 = LocalFile(
+            filename='file2.bin',
+            path='',
+            temporary=True,
+        )
+        # tmp_file_1 = self.temp_dir / name1
+        # local_file_1 = LocalFile(tmp_file_1, self.temp_dir)
+        #
+        # tmp_file_2 = self.temp_dir / name1
+        # local_file_2 = LocalFile(tmp_file_2, self.temp_dir)
 
         return local_file_1, local_file_2, 'something else'
 
 
-def test_default_meta_many_files_success(tmpdir, filename):
+def test_default_meta_many_files_success(temp_url, filename):
     family = 'unit-tests'
-    task = TaskWithManyOutputFile(temp_dir=tmpdir, metadata_journal_family=family)
+    task = TaskWithManyOutputFile(metadata_journal_family=family)
     filename1 = filename
     filename2 = filename[::-1]
 
@@ -332,9 +331,9 @@ def test_default_meta_many_files_success(tmpdir, filename):
         assert meta[family]['problem'] is None
 
 
-def test_handle_outputs_auto_uploads(mocker, tmpdir, filename):
-    upload = mocker.patch('iguazu.core.files.LocalFile.upload')
-    task = TaskWithManyOutputFile(temp_dir=tmpdir)
+def test_handle_outputs_auto_uploads(mocker, temp_url, filename):
+    upload = mocker.patch('iguazu.core.files.local.LocalFile.upload')
+    task = TaskWithManyOutputFile()
     filename1 = filename
     filename2 = filename[::-1]
 

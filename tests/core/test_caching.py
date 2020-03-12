@@ -19,7 +19,8 @@ from iguazu import Task
 # entry of the current prefect context, then the cache should be ignored.
 # This is tested on test_forced_from_context
 
-def test_forced_with_prefect_cache(mocker):
+
+def test_forced_with_prefect_cache(mocker, temp_url):
     # Test that even the prefect cache does not prevent a forced task
     run_method = mocker.patch('iguazu.Task.run',
                               side_effect=['result1', 'result2'])
@@ -44,7 +45,7 @@ def test_forced_with_prefect_cache(mocker):
     assert run_method.call_count == 2
 
 
-def test_not_forced_with_prefect_cache(mocker):
+def test_not_forced_with_prefect_cache(mocker, temp_url):
     # Test that the prefect cache is used when force=False
     run_method = mocker.patch('iguazu.Task.run',
                               side_effect=['result1', Exception('should not be called')])
@@ -69,7 +70,7 @@ def test_not_forced_with_prefect_cache(mocker):
     assert run_method.call_count == 1
 
 
-def test_forced_from_context(mocker):
+def test_forced_from_context(mocker, temp_url):
     # Test that tasks can be forced through a prefect context variable
     run_method = mocker.patch('iguazu.Task.run',
                               side_effect=['result1', 'result2'])
