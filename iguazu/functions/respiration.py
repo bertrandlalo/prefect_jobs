@@ -1,18 +1,15 @@
 import logging
+from dataclasses import dataclass, field
 
+import neurokit2 as nk  # todo: add this dependency
 import numpy as np
 import pandas as pd
-
-logger = logging.getLogger(__name__)
-
 from dsu.pandas_helpers import estimate_rate
-import neurokit2 as nk  # todo: add this dependency
 
-from dataclasses import dataclass, field
 from iguazu.core.features import dataclass_to_dataframe
-
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
+logger = logging.getLogger(__name__)
 
 class NoRespirationPeaks(Exception):
     pass
