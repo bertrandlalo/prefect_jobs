@@ -13,7 +13,6 @@ from iguazu.tasks.standards import Report
 logger = logging.getLogger(__name__)
 
 
-
 class GalvanicFeaturesFlow(PreparedFlow):
     """Extract all galvanic features from a file dataset"""
 
@@ -54,9 +53,9 @@ class GalvanicFeaturesFlow(PreparedFlow):
             kwargs['query'] = self.DEFAULT_QUERY
             kwargs['dialect'] = 'postgresql_json'
 
-        # The cardiac features flow requires an upstream dataset flow in order
+        # The galvanic features flow requires an upstream dataset flow in order
         # to provide the input files. Create one and deduce the tasks to
-        # plug the cardiac flow to the output of the dataset flow
+        # plug the galvanic flow to the output of the dataset flow
         dataset_flow = GenericDatasetFlow(**kwargs)
         raw_signals = dataset_flow.terminal_tasks().pop()
         events = raw_signals
@@ -95,8 +94,8 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(message='Cardiac feature extraction finished!')
-
+        notify = SlackTask(preamble='Galvanic feature extraction finished.\n'
+                                    'Task report:')
         with self:
             create_noresult = create_flow_metadata.map(parent=raw_signals)
             # Signal processing branch
@@ -133,7 +132,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
 
 class GalvanicSummaryFlow(PreparedFlow):
-    """Collect all  cardiac features in a single CSV file"""
+    """Collect all  galvanic features in a single CSV file"""
 
     REGISTRY_NAME = 'summarize_galvanic'
     DEFAULT_QUERY = f"""
