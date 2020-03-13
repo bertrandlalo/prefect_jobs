@@ -112,6 +112,7 @@ class RespirationSummaryFlow(PreparedFlow):
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
         AND    standard->'features' ? '/iguazu/features/pzt/sequence' -- containing the GSR signal
+        AND    iguazu->>'version' = '{__version__}'  -- Select only files generated with last version (avoids ending with corrupted local file) 
         ORDER BY id -- always in the same order
     """
 
