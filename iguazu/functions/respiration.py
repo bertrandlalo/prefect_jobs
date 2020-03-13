@@ -137,7 +137,7 @@ def respiration_features(data):
     if not i_duration.empty:
         features.meanI = i_duration.mean()
     # expiration duration
-    e_duration = data.I_duration.dropna()
+    e_duration = data.E_duration.dropna()
     if not e_duration.empty:
         features.meanE = e_duration.mean()
     ie_duration = data.IE_duration.dropna()
