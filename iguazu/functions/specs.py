@@ -1,8 +1,11 @@
+import collections
 import enum
+import logging
 
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger()
 
 @enum.unique
 class EventSpecificationErrorCode(enum.Enum):
@@ -463,3 +466,48 @@ def empty_signals() -> pd.DataFrame:
     dataframe = pd.DataFrame(columns=list(columns))
     dataframe.index = dataframe.index.astype('datetime64[ns]')
     return dataframe
+
+
+def infer_standard_groups(hdf_path) -> dict:
+    standard_groups = collections.defaultdict(dict)
+    with pd.HDFStore(hdf_path, 'r') as store:
+        groups = list(store)
+        for g in groups:
+
+            if g.endswith('/annotations'):
+                logger.debug('Ignoring group %s due to naming', g)
+                continue
+
+            # Check signals specs
+            try:
+                check_signal_specification(pd.read_hdf(store, g))
+                logger.debug('Group %s meets the signal specification', g)
+                standard_groups.setdefault('signals', [])
+                standard_groups['signals'].append(g)
+            except SpecificationError as ex:
+                logger.debug('Dataframe on HDF5 under key %s is not '
+                             'a standard signals dataframe due to  %s',
+                             g, ex)
+
+            # Check event specs
+            try:
+                check_event_specification(pd.read_hdf(store, g))
+                logger.debug('Group %s meets the event specification', g)
+                standard_groups.setdefault('events', [])
+                standard_groups['events'].append(g)
+            except SpecificationError as ex:
+                logger.debug('Dataframe on HDF5 under key %s is not '
+                             'a standard events dataframe due to  %s',
+                             g, ex)
+
+            # Check feature specs
+            try:
+                check_feature_specification(pd.read_hdf(store, g))
+                logger.debug('Group %s meets the features specification', g)
+                standard_groups.setdefault('features', [])
+                standard_groups['features'].append(g)
+            except SpecificationError as ex:
+                logger.debug('Dataframe on HDF5 under key %s is not '
+                             'a standard features dataframe due to  %s',
+                             g, ex)
+    return standard_groups
