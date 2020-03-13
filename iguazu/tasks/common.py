@@ -316,8 +316,7 @@ class MergeHDF5(iguazu.Task):
             groups |= gi  # set union
 
     def default_outputs(self, *, parent, **inputs):
-        # output = parent.make_child(temporary=self.temporary,
-        #                            suffix=self.suffix)
+
         output = self.create_file(
             parent=parent,
             suffix=self.suffix,
@@ -404,9 +403,12 @@ class MergeDataframes(iguazu.Task):
         original_kws = prefect.context.run_kwargs
         parents = original_kws['parents']
         dummy_reference = parents[0]
-        # TODO remove metadata propagation
-        output = dummy_reference.make_child(
-            filename=self.filename, path=self.path, temporary=False)
+        output = self.create_file(
+            parent=dummy_reference,
+            filename=self.filename,
+            path='datasets',
+            temporary=False,
+        )
         return output
 
     def preconditions(self, **kwargs) -> NoReturn:
