@@ -152,7 +152,7 @@ class RunFlowGroup(click.core.Group):
 @click.option('--cache/--no-cache', 'cache', is_flag=True, default=True, show_default=True,
               help='Use the prefect cache. ')
 @click.option('--allow-flow-failure', is_flag=True, default=False,
-              help='When this flag is set, a flow exeuction that is not successful will '
+              help='When this flag is set, a flow execution that is not successful will '
                    'not make the program exit with a non-zero exit code. By default, '
                    'flows that are not successful have an exit code of -1.')
 @click.pass_context
@@ -258,13 +258,12 @@ def run_flow(flow_class, **kwargs):
         password=os.getenv('QUETZAL_PASSWORD', None),
         api_key=os.getenv('QUETZAL_API_KEY', None))
     quetzal_kws = {k: v for (k, v) in quetzal_kws.items() if v is not None}
-
     context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
     ###
     # Flow execution
     ###
-    flow, flow_state = execute_flow(flow_class, kwargs, executor, context_args)
+    flow, flow_state = execute_flow(flow_class, kwargs, executor, context_args, ctx.obj.get('cache', False))
 
     ###
     # Flow post-processing: reports et al.
