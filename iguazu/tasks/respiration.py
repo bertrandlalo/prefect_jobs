@@ -7,6 +7,8 @@ import iguazu
 from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResults
 from iguazu.core.files import FileAdapter
 from iguazu.functions.respiration import respiration_clean, respiration_sequence_features, NoRespirationPeaks
+from iguazu.functions.specs import infer_standard_groups
+from iguazu.utils import deep_update
 
 
 class CleanPZTSignal(iguazu.Task):
@@ -103,10 +105,12 @@ class ExtractPZTFeatures(iguazu.Task):
             # generate empty dataframe with features
             raise GracefulFailWithResults
 
-        # todo: find some file examples where signal is bad
+        if not features.empty:
+            features.loc[:, 'file_id'] = parent.id
 
         with pd.HDFStore(output_file.file, 'w') as store:
             features.to_hdf(store, self.output_hdf5_key)
+        deep_update(output_file.metadata, {'standard': infer_standard_groups(output_file.file_str)})
         return output_file
 
     def default_outputs(self, **kwargs):
