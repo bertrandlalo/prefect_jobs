@@ -101,9 +101,9 @@ ORDER BY id                                    -- always in the same order
             create_noresult = create_flow_metadata.map(parent=raw_files)
             standard_events = standardize_events.map(events=raw_files, upstream_tasks=[create_noresult])
             # vr_sequences = filter_vr.map(events=standard_events)
-            standard_ppg = standardize_ppg_signals.map(signals=raw_files)
-            standard_gsr = standardize_gsr_signals.map(signals=raw_files)
-            standard_pzt = standardize_pzt_signals.map(signals=raw_files)
+            standard_ppg = standardize_ppg_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
+            standard_gsr = standardize_gsr_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
+            standard_pzt = standardize_pzt_signals.map(signals=raw_files, upstream_tasks=[create_noresult])
             merged = merge.map(
                 parent=raw_files,
                 events=standard_events,
