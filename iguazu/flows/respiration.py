@@ -31,7 +31,7 @@ class RespirationFeaturesFlow(PreparedFlow):
             ORDER BY id                                -- always in the same order
         """
 
-    def _build(self, *, plot=False, **kwargs):
+    def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
         # families: (nb: None means "latest" version)
         required_families = dict(
@@ -74,8 +74,8 @@ class RespirationFeaturesFlow(PreparedFlow):
         )
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(message='Respiration feature extraction finished\n'
-                                   'Task report:')
+        notify = SlackTask(preamble='Respiration feature extraction finished\n'
+                                    'Task report:')
         with self:
             create_noresult = create_flow_metadata.map(parent=raw_signals)
             # Signal processing branch
@@ -107,7 +107,7 @@ class RespirationSummaryFlow(PreparedFlow):
                base->>'filename' AS filename  -- this is just to help the human debugging this
         FROM   metadata
         WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
         AND    standard->'features' ? '/iguazu/features/pzt/sequence' -- containing the GSR signal
         ORDER BY id -- always in the same order

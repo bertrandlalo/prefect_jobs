@@ -95,7 +95,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(message='Cardiac feature extraction finished!')
+        notify = SlackTask(message='Galvanic feature extraction finished!')
 
         with self:
             create_noresult = create_flow_metadata.map(parent=raw_signals)
