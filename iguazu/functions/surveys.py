@@ -39,10 +39,3 @@ def extract_meta_features(survey_features, config):
         list_meta_features.append(meta_feature)
     return pd.concat(list_meta_features, axis='index', ignore_index=True)
 
-# fname = '/Users/raph/Downloads/raw_hdf5_data_2018-07-27.10.48.24_6b80820f5864b7d856df9d4caa9cb3b5427f65b98a217d5429d7feadbb4a85a7_standard_events.hdf5'
-#
-# with pd.HDFStore(fname, 'r') as store:
-#     print(store.keys())
-#     events = pd.read_hdf(store, '/iguazu/events/standard')
-#
-# survey_features = extract_survey_features(events)
