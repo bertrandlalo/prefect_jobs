@@ -7,9 +7,10 @@ from typing import Any, Dict, List, Optional, Union
 
 from prefect import context, Task
 from prefect.engine import signals
-from quetzal.client import QuetzalAPIException, helpers
+from quetzal.client import helpers
 
 from iguazu.core.files import QuetzalFile
+from iguazu.core.files.quetzal import quetzal_client_from_secret
 
 ResultSetType = Union[QuetzalFile, Dict[str, Dict[str, Any]]]
 
@@ -63,7 +64,8 @@ class QuetzalBaseTask(Task):
         if 'quetzal_client' in context:  #TODO: change order context < task
             return helpers.get_client(**context.quetzal_client)
         elif self._client is None:
-            self._client = helpers.get_client(**self._client_args)
+            # self._client = helpers.get_client(**self._client_args)
+            self._client = quetzal_client_from_secret()
         return self._client
 
     def run(self) -> None:
@@ -157,33 +159,6 @@ class Query(QuetzalBaseTask):
                 rows[i] = QuetzalFile.retrieve(file_id=row['id'], workspace_id=workspace_id)
 
         return rows
-
-
-class ConvertToFileAdapter(Task):
-
-    def __init__(self, id_key: str = 'id', **kwargs):
-        super().__init__(**kwargs)
-        self.id_key = id_key
-
-    def run(self,
-            rows: Union[ResultSetType, List[ResultSetType]],
-            workspace_id: Optional[int],  # Note: We do not provide a default, user must set None if they mean it
-            id_key: Optional[str] = None,
-            ) -> Union[QuetzalFile, List[QuetzalFile]]:
-        is_list = isinstance(rows, list)
-        if not is_list:
-            rows = [rows]
-        id_key = id_key or self.id_key
-        file_adapters = []
-        for row in rows:
-            if id_key not in row:
-                raise RuntimeError('Input row does not have expected id key')
-            file = QuetzalFile(file_id=row[id_key], workspace_id=workspace_id)
-            file_adapters.append(file)
-
-        if not is_list:
-            return file_adapters[0]
-        return file_adapters
 
 
 class CreateWorkspace(QuetzalBaseTask):

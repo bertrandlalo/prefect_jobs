@@ -2,12 +2,11 @@ import gc
 import logging
 import os
 import pathlib
-import tempfile
-import shutil
 
 import psutil
 from prefect import context
-from quetzal.client import helpers
+
+from iguazu.core.files import LocalFile, QuetzalFile
 
 logger = logging.getLogger(__name__)
 
@@ -17,89 +16,91 @@ class CustomFileHandler(logging.FileHandler):
 
 
 def logging_handler(task, old_state, new_state):
+    try:
+        return _logging_handler(task, old_state, new_state)
+    except:
+        logger.warning('Logging handler failed to handle the state change, but '
+                       'the execution will continue', exc_info=True)
+        return new_state
+
+
+def _logging_handler(task, old_state, new_state):
     logger.debug('Managing log due to state change from %s to %s',
                  type(old_state).__name__,
                  type(new_state).__name__)
-    state_name = str(type(new_state).__name__).upper()
+    context_backend = context.temp_url.backend
+    target_path = (
+            pathlib.Path('logs') /
+            context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
+            'RUNNING'
+    )
+    log_filename = f'{context.task_full_name}-{task.slug}-{context.task_run_count}.log'
+
+    if new_state.is_running() or new_state.is_finished():
+        logger.debug('Configuring logs for %s', task)
+        # look at backend mode and create adapter with name
+
+        if context_backend == 'quetzal':
+            logger.debug('Uploading logs to quetzal')
+            file_class = QuetzalFile
+            init_kwargs = {'workspace_id': context.temp_url.workspace_id}
+        else:
+            logger.debug('Uploading logs to local temporary folder')
+            file_class = LocalFile
+            init_kwargs = {}
+
+        file_adapter = file_class(filename=log_filename, path=target_path, temporary=True, **init_kwargs)
+    else:
+        logger.debug('Logging handler ignoring state change to %s', new_state)
+        return new_state
 
     if new_state.is_running():
-        logger.debug('Configuring logs for %s', task)
-        temp_dir = context.get('temp_dir', None) or tempfile.mkdtemp()
-        log_filename = (
-            pathlib.Path(temp_dir) /
-            'logs' /
-            context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
-            state_name /
-            f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
-        ).with_suffix('.log')
-        log_filename.parent.mkdir(parents=True, exist_ok=True)
+        # Configurate Log Formatter and Handler
         formatter = logging.Formatter(
             '[%(asctime)s] %(levelname)8s - %(name)s.%(funcName)s:%(lineno)s | %(message)s'
         )
-        handler = CustomFileHandler(str(log_filename.resolve()), mode='a')
+        handler = CustomFileHandler(file_adapter.file_str, mode='a')
         handler.setFormatter(formatter)
         handler.setLevel(logging.DEBUG)
         root = logging.getLogger()
         root.addHandler(handler)
 
     elif new_state.is_finished():
+        state_name = str(type(new_state).__name__).upper()
+        # if state_name in ['MAPPED', ]:
+        #     return new_state
         logger.debug('Closing logs for %s', task)
         root = logging.getLogger()
         for hdlr in root.handlers[:]:  # Note the copy: we need to modify this list while iterating over it
+            # look for the current logging handler
             if not isinstance(hdlr, CustomFileHandler):
                 # ignore all other handlers
                 continue
-
+            # When found!!
             # Remove handler from root logger
             root.handlers = [hdlr for hdlr in root.handlers if not isinstance(hdlr, CustomFileHandler)]
-
             # Close the handler, flush all log messages
             hdlr.flush()
             hdlr.close()
-
-            # Upload to quetzal if the context information has all the necessary information
-            if 'quetzal_client' in context and context.get('quetzal_logs_workspace_name') is not None:
-                try:
-                    logger.debug('Uploading logs to quetzal')
-                    client = helpers.get_client(**context.quetzal_client)
-                    workspace_details = helpers.workspace.details(client, name=context.quetzal_logs_workspace_name)
-                    state_name = str(type(new_state).__name__).upper()
-                    target_path = (
-                        pathlib.Path('logs') /
-                        context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
-                        state_name
-                    )
-                    with open(hdlr.baseFilename, 'rb') as fd:
-                        helpers.workspace.upload(client, workspace_details.id, fd,
-                                                 path=str(target_path), temporary=True)
-                except:
-                    # Catch any error, log it and keep going
-                    logger.warning('Could not upload logs to quetzal', exc_info=True)
-
-            # Move to final directory on temp_dir with the state name
-            if 'temp_dir' in context:
-                log_filename = (
-                        pathlib.Path(context.temp_dir) /
-                        'logs' /
-                        context.scheduled_start_time.strftime('%Y%m%d-%H%M%S') /
-                        state_name /
-                        f'{context.task_full_name}-{task.slug}-{context.task_run_count}'
-                ).with_suffix('.log')
-                log_filename.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(hdlr.baseFilename, log_filename)
-                # Clear the parent directory when empty, in a "ask for forgiveness"
-                # instead of getting permission
-                try:
-                    log_filename.parent.rmdir()
-                except:
-                    # It was not empty
-                    pass
+            if context_backend == 'local':
+                # move from 'RUNNING' folder to final one (given task final status)
+                new_path = file_adapter.file.parents[1] / state_name / file_adapter.basename
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                file_adapter.file.rename(new_path)
+                file_adapter._local_path = new_path  # Not really necessary, but to avoid an invalid FileAdapter
+            else:  # quetzal
+                # upload on quetzal
+                file_adapter.upload()
+                # change path in base metadata and upload them
+                file_adapter.metadata['base']['path'] = str(
+                    pathlib.Path(file_adapter.metadata['base']['path']).parents[
+                        0] / state_name / file_adapter.basename)
+                file_adapter.upload_metadata()
 
     return new_state
 
 
 def garbage_collect_handler(task, old_state, new_state):
-
     # only trigger this when we pass from a non finished to a finished state
     if not old_state.is_finished() and new_state.is_finished():
         logger.debug('Managing garbage collection for %s on change from %s to %s',

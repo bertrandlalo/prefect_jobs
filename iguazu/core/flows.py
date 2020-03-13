@@ -54,7 +54,7 @@ def _get_flow_registry():
     return registered_classes
 
 
-def execute_flow(func, func_kwargs, executor, context_args):
+def execute_flow(func, func_kwargs, executor, context_args, use_cache):
     flow_parameters = func_kwargs.copy()
 
     # Create flow
@@ -71,13 +71,14 @@ def execute_flow(func, func_kwargs, executor, context_args):
             'task_states.pickle'
     )
     context_args.setdefault('caches', {})
-    try:
-        logger.info('Trying to restore previous cache from %s', cache_filename)
-        previous_cache = load_pickle(cache_filename, None) or {}
-        logger.info('Restored cached had %d elements', len(previous_cache))
-        context_args['caches'] = previous_cache
-    except:
-        logger.warning('Could not read cache at %s', cache_filename, exc_info=True)
+    if use_cache:
+        try:
+            logger.info('Trying to restore previous cache from %s', cache_filename)
+            previous_cache = load_pickle(cache_filename, None) or {}
+            logger.info('Restored cached had %d elements', len(previous_cache))
+            context_args['caches'] = previous_cache
+        except:
+            logger.warning('Could not read cache at %s', cache_filename, exc_info=True)
 
     with prefect.context(**context_args) as context:
         flow_state = flow.run(parameters=flow_parameters,
@@ -85,12 +86,13 @@ def execute_flow(func, func_kwargs, executor, context_args):
                               run_on_schedule=True)
         cache = context.caches
 
-    # Save cached states to a local file
-    try:
-        logger.info('Saving cache with %d elements to %s', len(cache), cache_filename)
-        dump_pickle(cache, cache_filename)
-    except:
-        logger.warning('Could not save cache to %s', cache_filename, exc_info=True)
+    if use_cache and cache:
+        # Save cached states to a local file
+        try:
+            logger.info('Saving cache with %d elements to %s', len(cache), cache_filename)
+            dump_pickle(cache, cache_filename)
+        except:
+            logger.warning('Could not save cache to %s', cache_filename, exc_info=True)
 
     return flow, flow_state
 

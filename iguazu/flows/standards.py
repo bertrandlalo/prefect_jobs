@@ -1,8 +1,9 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import MergeHDF5, AddSourceMetadata, SlackTask
+from iguazu.tasks.common import MergeHDF5, SlackTask
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
 from iguazu.tasks.standards import Report
 from iguazu.tasks.vr import (
@@ -18,23 +19,24 @@ class StandardizeVRFlow(PreparedFlow):
 
     REGISTRY_NAME = 'standardize_vr'
 
-    DEFAULT_QUERY = """\
+    DEFAULT_QUERY = f"""\
 SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
        base->>'filename' AS filename,  -- this is just to help the human debugging this
-       omi->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
+       omind->>'user_hash' AS user_hash  -- this is just to help the openmind human debugging this
 FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-AND    iguazu->>'created_by' IS NULL           -- No files created by iguazu
--- TODO: add a filter by protocol? Certainly needed for the VR protocol!
+AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+AND    COALESCE (iguazu->'flows'->'standardize_vr' ->> 'version', '') <  '{__version__}'
 ORDER BY id                                    -- always in the same order
 """
 
     def _build(self, **kwargs):
         required_families = dict(
             iguazu=None,
-            omi=None,
+            omind=None,
             standard=None,
+            protocol=None,
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -86,19 +88,9 @@ ORDER BY id                                    -- always in the same order
             verify_status=True,
             hdf5_family='standard',
             meta_keys=['standard'],
-            propagate_families=['omi'],
+            propagate_families=['omind', 'protocol'],
         )
-        update_meta = AddSourceMetadata(
-            new_meta={
-                # 'standard': {
-                #     'standardized': True,
-                # },
-                # TODO: think about adding this
-                # 'omi': {
-                #     'protocol': 'vr',
-                # },
-            },
-        )
+
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
         notify = SlackTask(preamble='Standardization of VR flow status finished.\n'
@@ -119,8 +111,7 @@ ORDER BY id                                    -- always in the same order
                 GSR=standard_gsr,
                 PZT=standard_pzt,
             )
-            update_noresult = update_meta.map(file=merged)
-            update_noresult2 = update_flow_metadata.map(parent=raw_files, child=merged)
+            update_noresult = update_flow_metadata.map(parent=raw_files, child=merged)
             message = report(files=merged, upstream_tasks=[update_noresult])
             notify(message=message)
 
