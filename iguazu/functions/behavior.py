@@ -393,7 +393,7 @@ def extract_space_stress_spawns_stimulations(events):
     check_event_specification(events)
 
     if 'space-stress_sequence' not in extract_complete_sequences(events, label_column='name'):
-        raise IguazuError('Could not find "space-stress_sequence".')
+        raise SequenceNotFound('Could not find "space-stress_sequence".')
 
     enemy_spawns = extract_metas(events, labels=['unity_space-stress_game_enemy_spawns'],
                                  meta_keys=['enemy_id', 'x', 'y', 'z'],
@@ -488,13 +488,14 @@ def extract_space_stress_features(events, wave_label='space-stress_game_enemy-wa
         feature_wave.global_inaccuracy = count_action_succeed.get(False, 0.)
         # count number of events based on failure_reason result
         count_failure_reason = participant_actions_wave.failure_reason.value_counts().to_dict()
+
         feature_wave.spatial_inaccuracy = count_failure_reason.get('bad_precision', 0.)
         feature_wave.temporal_inaccuracy = count_failure_reason.get('bad_planification', 0.)
         feature_wave.coordination_inaccuracy = count_failure_reason.get('finger_confusion', 0.)
         # count number of events based on button type
         count_button = participant_actions_wave.button.value_counts().to_dict()
-        feature_wave.pad_actions = count_failure_reason.get('pad', 0.)
-        feature_wave.trigger_actions = count_failure_reason.get('trigger', 0.)
+        feature_wave.pad_actions = count_button.get('pad', 0.)
+        feature_wave.trigger_actions = count_button.get('trigger', 0.)
 
         # count number of switch from button,ie. when previous != actual
         # eg. ["pad", "trigger", "pad", "pad"] => N_switch=2
