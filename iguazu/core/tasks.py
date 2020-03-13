@@ -513,31 +513,6 @@ class Task(ManagedTask):
             init_kwargs = {}
             find_kwargs = {'temporary': temporary}
 
-        # data_backend = prefect.context.get('data_backend', None)
-        # workspace_id = prefect.context.get('data_backend_workspace_id', None)
-        # if data_backend is None:
-        #     self.logger.warning('data_backend is not set. Set it with the '
-        #                         '--data-backend option of the iguazu flow command')
-        #     if parent is None:
-        #         raise RuntimeError('Cannot create new files when the data_backend is '
-        #                            'not set')
-        #     data_backend = 'quetzal' if isinstance(parent, QuetzalFile) else 'quetzal'
-        #     self.logger.debug('Guessing data backend to be %s due to type of its '
-        #                       'parent %s', data_backend, parent)
-
-        # init_kwargs = {}
-        # if data_backend == 'local':
-        #     file_class = LocalFile
-        # else:
-        #     file_class = QuetzalFile
-        #     init_kwargs = {'workspace_id': workspace_id}
-        #     if workspace_id is None:
-        #         if parent is not None and isinstance(parent, QuetzalFile):
-        #             init_kwargs['workspace_id'] = parent.workspace_id
-        #         else:
-        #             self.logger.warning('No workspace_id has been set, it will '
-        #                                 'not be possible to create new files...')
-
         # Handle filenames, path, prefixes, etc
         parent_ids = []
         if parent is not None:
@@ -546,7 +521,7 @@ class Task(ManagedTask):
             filename = tmp.stem
             extension = extension or tmp.suffix
             parent_ids = [parent.id]
-        filename = ''.join([filename, suffix or '', extension])
+        filename = ''.join([filename, suffix or '', extension or ''])
 
         journal_family = self.meta.metadata_journal_family
         default_meta = self.default_metadata(None, **self.run_kwargs)
@@ -570,12 +545,10 @@ class Task(ManagedTask):
             new_file = file_class(filename=filename, path=path,
                                   temporary=temporary,
                                   **init_kwargs)
-        else:
-            new_file = file_class.find(filename=filename,
-                                       path=path,
-                                       metadata=match_meta,
-                                       **find_kwargs)
-            if new_file is None:
+        else:  # not forced
+            if new_file is not None:
+                self.logger.debug('Task is not forced and there is a previous file')
+            else:
                 new_file = file_class(filename=filename, path=path,
                                       temporary=temporary,
                                       **init_kwargs)
