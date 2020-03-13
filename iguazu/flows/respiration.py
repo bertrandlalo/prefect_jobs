@@ -3,7 +3,7 @@ import logging
 from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
+from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask, PropagateMetadata
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
 from iguazu.tasks.respiration import CleanPZTSignal, ExtractPZTFeatures
 from iguazu.tasks.standards import Report
@@ -72,6 +72,7 @@ class RespirationFeaturesFlow(PreparedFlow):
             events_hdf5_key='/iguazu/events/standard',
             output_hdf5_key='/iguazu/features/pzt/sequence',
         )
+        propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
         notify = SlackTask(preamble='Respiration feature extraction finished\n'
@@ -86,7 +87,8 @@ class RespirationFeaturesFlow(PreparedFlow):
                                             parent=raw_signals)
 
             # Send slack notification
-            update_noresult = update_flow_metadata.map(parent=raw_signals, child=features)
+            features_with_metadata = propagate_metadata.map(parent=raw_signals, child=features)
+            update_noresult = update_flow_metadata.map(parent=raw_signals, child=features_with_metadata)
             message = report(files=features, upstream_tasks=[update_noresult])
             notify(message=message)
 
