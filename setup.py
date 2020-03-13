@@ -25,6 +25,7 @@ dependencies = [
     'statsmodels',
     'tables',
     'tzlocal',
+    'requests',
     # Requirements for plot-related tasks
     'Jinja2',
     'plotly',

@@ -31,6 +31,8 @@ defaultJob:
       key: api_key
     - name: SLACK_WEBHOOK_URL
       key: slack_url
+
+
   resources:
     limits:
       cpu: 50m
@@ -114,8 +116,6 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
-           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_galvanic",
-           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/galvanic",
            # Flow name
            "features_galvanic",
            # Flow options
@@ -140,8 +140,6 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
-           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_galvanic",
-           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/galvanic",
            # Flow name
            "summarize_galvanic",
            # Flow options
@@ -250,7 +248,57 @@ jobs:
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
            ]
-
+  ##############################################################################
+  # Respiration features
+  - name: respiration-features
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 2 * * *"       # In human: every day at exactly 2 am
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+      # General iguazu options
+           "--log-level", "DEBUG",
+      # Action
+           "flows", "run",
+      # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_respiration",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/respiration",
+      # Flow name
+           "features_respiration",
+      # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+      #"--limit", "100", "--shuffle",
+    ]
+  ##############################################################################
+  # Respiration summary
+  - name: respiration-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+      # General iguazu options
+           "--log-level", "DEBUG",
+      # Action
+           "flows", "run",
+      # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_respiration",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/respiration",
+      # Flow name
+           "summarize_respiration",
+      # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+    ]
 dask_scheduler:
   name: dask-scheduler
   image:
