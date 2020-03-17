@@ -7,14 +7,14 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import LoadJSON, SlackTask
 from iguazu.tasks.metadata import AddDynamicMetadata, AddStaticMetadata
-from iguazu.tasks.quetzal import CreateWorkspace, ScanWorkspace
 from iguazu.tasks.typeform import (
-    ExtractScores, FetchResponses, GetForm, GetUserHash, Report, Save, DEFAULT_BASE_URL
+    ExtractScores, FetchResponses, GetForm, GetUserHash, Report, SaveResponse,
+    DEFAULT_BASE_URL
 )
 
 
 class DownloadTypeform(PreparedFlow):
-    """Download typeform responses"""
+    """Download typeform responses to files"""
 
     REGISTRY_NAME = 'download_typeform'
 
@@ -28,7 +28,7 @@ class DownloadTypeform(PreparedFlow):
             form_id=form_id,
             force=True,   # this task should always run!
         )
-        save = Save(form_id=form_id)
+        save = SaveResponse(form_id=form_id)
         get_token = GetItem(
             name='GetResponseID',
         )
@@ -71,9 +71,10 @@ class DownloadTypeform(PreparedFlow):
 
 
 class ExtractTypeformFeatures(PreparedFlow):
+    """Extract all psychological features from typeform responses"""
 
-    REGISTRY_NAME = 'extract_typeform'
-    DEFAULT_QUERY = """
+    REGISTRY_NAME = 'features_typeform'
+    DEFAULT_QUERY = f"""
 SELECT base->>'id'         AS id,        -- id is the bare minimum needed for the query task to work
        base->>'filename'   AS filename,  -- this is just to help the human debugging this
        omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
@@ -82,7 +83,7 @@ FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
 AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
-AND    protocol->>'extra'->'form_id'
+-- AND    protocol->>'extra'->'form_id' = '...'      -- Only from the VR questionnaire (TODO: think about this)
 AND    COALESCE(iguazu->'flows'->'extract_typeform'->>'version', '') 
        < '{__version__}'                       -- That has not already been processed by this flow
 ORDER BY id                                    -- always in the same order
@@ -94,8 +95,7 @@ ORDER BY id                                    -- always in the same order
                **kwargs):
         required_families = dict(
             iguazu=None,
-            omi=None,
-            standard=None,
+            omind=None,
             protocol=None,
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args

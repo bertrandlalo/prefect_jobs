@@ -1,9 +1,9 @@
-import copy
+import json
 import json
 import logging
 import os
 import pathlib
-from typing import Any, Dict, Iterable, NoReturn, Optional, List, Tuple, Union
+from typing import Dict, Iterable, List, NoReturn, Optional, Union
 
 import pandas as pd
 import prefect
@@ -15,7 +15,6 @@ from iguazu.core.files import FileAdapter, LocalFile
 from iguazu.functions import specs
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
-from iguazu.utils import deep_update
 
 logger = logging.getLogger(__name__)
 
@@ -411,10 +410,7 @@ class MergeDataframes(iguazu.Task):
 
 
 class LoadJSON(iguazu.Task):
+    """Read a file that contains JSON data"""
     def run(self, *, file: FileAdapter) -> Dict:
-        with open(file.filename, 'r') as f:
+        with file.file.open(mode='r') as f:
             return json.load(f)
-
-@prefect.task
-def identity(x):
-    return x

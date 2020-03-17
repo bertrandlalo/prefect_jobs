@@ -20,6 +20,7 @@ pendulum>=2.0.5,<2.1
 pyentrp>=0.5.0,<0.6
 nolds>=0.5.2,<0.6
 requests>=2.22,<2.23
+PyYAML>=5.1.2,<5.2
 # Requirements for plot-related tasks
 Jinja2>=2.10.1,<2.11
 plotly>=4.5.2,<4.6

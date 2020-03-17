@@ -15,10 +15,6 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-def _clip_page_size(size, min_value, max_value):
-    return max(min_value, min(size, max_value))
-
-
 def _get_default_header(token):
     return {
         'Content-Type': 'text/plain',
@@ -29,7 +25,30 @@ def _get_default_header(token):
 
 
 def fetch_responses(url: str, form_id: str, token: str, page_size: int = 1000) -> List[Dict]:
-    page_size = _clip_page_size(page_size, 100, 1000)
+    """ Download all responses of a typeform form using the typeform API
+
+    Parameters
+    ----------
+    url
+        URL of the typeform API.
+    form_id
+        Identifier of the typeform form.
+    token
+        Authentication token for the typeform API.
+    page_size
+        Page size to use when downloading responses.
+
+    Returns
+    -------
+    A list with all responses as dictionaries.
+
+    Notes
+    -----
+    The schema of the response is available at
+    https://developer.typeform.com/responses/
+
+    """
+    page_size = np.clip(page_size, 100, 1000)
     url = f'{url}/forms/{form_id}/responses'
     params = dict(page_size=page_size)
     payload = {}
