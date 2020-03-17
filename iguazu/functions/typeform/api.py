@@ -1,9 +1,13 @@
 import logging
 from collections import deque
+from functools import lru_cache, partial
 from typing import Dict, List
 
+import pendulum
 from numpy import clip
 from requests import codes, request
+
+from iguazu.functions.typeform import TypeformException
 
 
 logger = logging.getLogger(__name__)
@@ -115,3 +119,38 @@ def get_form_fields(form: Dict) -> Dict:
             properties = f.get('properties', {})
             fields_queue.extend(properties.get('fields', []))
     return fields
+
+
+def get_response_fields(response: Dict) -> Dict:
+    fields = {
+        answer['field']['ref']: answer
+        for answer in response.get('answers', [])
+    }
+    return fields
+
+
+def _generic_parse(answer, *, key, func):
+    if key not in answer:
+        logger.warning('Could not parse %s in %s, returning None', key, answer)
+        return None
+    return func(answer[key])
+
+
+PARSERS = {
+    'boolean': partial(_generic_parse, key='boolean', func=bool),
+    'choice': partial(_generic_parse, key='choice', func=lambda x: x['label']),
+    'choices': partial(_generic_parse, key='choices', func=lambda x: x['labels']),
+    'number': partial(_generic_parse, key='number', func=float),
+    'text': partial(_generic_parse, key='text', func=str),
+    'phone_number': partial(_generic_parse, key='phone_number', func=str),
+    'email': partial(_generic_parse, key='email', func=str),
+    'date': partial(_generic_parse, key='date', func=lambda x: pendulum.parse(x).isoformat())
+}
+
+
+def parse_answer(answer):
+    answer_type = answer['type']
+    if answer_type not in PARSERS:
+        raise NotImplementedError(f'Parsing an answer of type "{answer_type}" is not implemented')
+    value = PARSERS[answer_type](answer)
+    return value
