@@ -1,0 +1,37 @@
+definitions:
+  maps:
+    occurrence:
+      Jamais: 0
+      1 à 2 fois: 1
+      1 fois par semaine: 2
+      2-3 fois par semaine: 3
+      Presque tous les jours: 4
+      Tous les jours: 5
+
+domains:
+  - name: mental_health
+    operation: mean
+    dimensions:
+    - name: emotional_well-being
+      operation: sum
+      questions:
+        - field_ref: 47373e16dfeb7d01
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+        - field_ref: e53f0bc7317e6995
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+        - field_ref: 7758bec371913adb
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+    - name: social_well-being
+      operation: sum
+      questions:
+        - field_ref: 3e01e3861f317b64
+        - field_ref: ddc572070aeec689
+        - field_ref: f109c3f45764ab61
+        - field_ref: 3c22d6b5c5394e79
+        - field_ref: 057b82c2e4dde124

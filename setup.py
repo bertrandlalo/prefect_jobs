@@ -26,6 +26,8 @@ dependencies = [
     'tables',
     'tzlocal',
     'requests',
+    'pyyaml',
+    'marshmallow',
     # Requirements for plot-related tasks
     'Jinja2',
     'plotly',

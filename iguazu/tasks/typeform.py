@@ -83,7 +83,7 @@ class GetUserHash(iguazu.Task):
         return user_hash
 
 
-class Save(iguazu.Task):
+class SaveResponse(iguazu.Task):
 
     def __init__(self, form_id: str, **kwargs):
         super().__init__(**kwargs)
@@ -130,7 +130,7 @@ class ExtractScores(iguazu.Task):
 
 class Report(iguazu.Task):
 
-    def run(self, *, files):
+    def run(self, *, files: List[FileAdapter]) -> str:
         status = []
         journal_family = self.meta.metadata_journal_family
         for f in files:
