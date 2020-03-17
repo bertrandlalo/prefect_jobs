@@ -28,6 +28,7 @@ dependencies = [
     'requests',
     'pyyaml',
     'marshmallow',
+    'jsonref',
     # Requirements for plot-related tasks
     'Jinja2',
     'plotly',

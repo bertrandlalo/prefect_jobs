@@ -140,3 +140,39 @@ def response():
             }
         ]
     }
+
+
+def form_config():
+    contents = """\
+definitions:
+  maps:
+    occurrence:
+      "Jamais": 0
+      "1 à 2 fois": 1
+      "1 fois par semaine": 2
+      "2-3 fois par semaine": 3
+      "Presque tous les jours": 4
+      "Tous les jours": 5
+
+domains:
+  - name: domain_one
+    operation: mean
+    dimensions:
+    - name: dimension_one
+      operation: sum
+      questions:
+        - field_ref: ref_nested1
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+        - field_ref: ref_nested2
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+    - name: dimension_two
+      operation: sum
+      questions:
+        - field_ref: scale1
+        - field_ref: scale2
+        - field_ref: scale3
+"""

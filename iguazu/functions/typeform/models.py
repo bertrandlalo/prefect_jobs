@@ -1,5 +1,7 @@
 import logging
 
+import numpy as np
+
 from iguazu.functions.typeform.api import get_form_fields, get_response_fields, parse_answer
 from iguazu.functions.typeform import TypeformException
 
@@ -7,8 +9,39 @@ from iguazu.functions.typeform import TypeformException
 logger = logging.getLogger(__name__)
 
 
-class Question:
+class _Tree:
+
+    def __init__(self, children=None, reducer=None):
+        self._children = children or []
+        self._reducer = reducer or None
+
+    @property
+    def reducer(self):
+        if self._reducer is None:
+            raise ValueError('Cannot reduce a leaf')
+        operations = {
+            'mean': np.mean,
+            'sum': np.sum,
+        }
+        return operations[self._reducer]
+
+    def get_range(self, form):
+        mins = []
+        maxs = []
+        for c in self._children:
+            qmin, qmax = c.get_range(form)
+            mins.append(qmin)
+            maxs.append(qmax)
+        return self.reducer(mins), self.reducer(maxs)
+
+    def get_value(self, form, response):
+        vals = [c.get_value(form, response) for c in self._children]
+        return self.reducer(vals)
+
+
+class Question(_Tree):
     def __init__(self, field_ref, reverse, value_map):
+        super().__init__()
         self.field_ref = field_ref
         self.reverse = reverse
         self.value_map = value_map
@@ -60,21 +93,22 @@ class Question:
         return min_value, max_value
 
 
+class Dimension(_Tree):
 
-
-class Dimension:
     def __init__(self, name, operation, reverse, questions):
         self.name = name
         self.operation = operation
         self.reverse = reverse
         self.questions = questions
+        super().__init__(self.questions, self.operation)
 
 
-class Domain:
+class Domain(_Tree):
     def __init__(self, name, operation, dimensions):
         self.name = name
         self.operation = operation
         self.dimensions = dimensions
+        super().__init__(self.dimensions, self.operation)
 
 
 class Configuration:

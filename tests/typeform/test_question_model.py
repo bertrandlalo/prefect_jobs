@@ -1,7 +1,7 @@
 from iguazu.functions.typeform.models import Question
 
 
-def test_question_range_with_value_map(form_with_group):
+def test_range_with_value_map(form_with_group):
     value_map = {
         "Jamais": -100,
         "1 à 2 fois": 1,
@@ -19,7 +19,7 @@ def test_question_range_with_value_map(form_with_group):
     assert qrange == (-100, +100)
 
 
-def test_question_range(form_with_scale):
+def test_range(form_with_scale):
     qrange1 = Question(field_ref='ref_scale1', reverse=False, value_map=None).get_range(form_with_scale)
     qrange2 = Question(field_ref='ref_scale2', reverse=False, value_map=None).get_range(form_with_scale)
     qrange3 = Question(field_ref='ref_scale3', reverse=False, value_map=None).get_range(form_with_scale)
@@ -29,7 +29,7 @@ def test_question_range(form_with_scale):
     assert qrange3 == (1, 5)
 
 
-def test_question_range_reverse(form_with_scale):
+def test_range_reverse(form_with_scale):
     qrange1 = Question(field_ref='ref_scale1', reverse=True, value_map=None).get_range(form_with_scale)
     qrange2 = Question(field_ref='ref_scale2', reverse=True, value_map=None).get_range(form_with_scale)
     qrange3 = Question(field_ref='ref_scale3', reverse=True, value_map=None).get_range(form_with_scale)
@@ -39,7 +39,7 @@ def test_question_range_reverse(form_with_scale):
     assert qrange3 == (1, 5)
 
 
-def test_question_value_with_value_map(form_with_group, response):
+def test_value_with_value_map(form_with_group, response):
     value_map = {
         "1 à 2 fois": 1,
         "Tous les jours": 5,
@@ -56,7 +56,7 @@ def test_question_value_with_value_map(form_with_group, response):
     assert value2 == 5
 
 
-def test_question_value_with_value_map_reversed(form_with_group, response):
+def test_value_with_value_map_reversed(form_with_group, response):
     value_map = {
         "Jamais": 0,
         "1 à 2 fois": 1,
@@ -77,7 +77,7 @@ def test_question_value_with_value_map_reversed(form_with_group, response):
     assert value2 == 0
 
 
-def test_question_value(form_with_scale, response):
+def test_value(form_with_scale, response):
     value1 = Question(
         field_ref='ref_scale1',
         reverse=False,
@@ -95,7 +95,7 @@ def test_question_value(form_with_scale, response):
     assert value3 == 5
 
 
-def test_question_value_reversed(form_with_scale, response):
+def test_value_reversed(form_with_scale, response):
     value1 = Question(
         field_ref='ref_scale1',
         reverse=True,

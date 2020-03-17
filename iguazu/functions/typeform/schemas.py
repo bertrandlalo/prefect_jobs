@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+import json
+
+import jsonref
+import yaml
 from marshmallow import (
     fields, post_dump, post_load, Schema, validates, ValidationError
 )
@@ -82,135 +86,8 @@ class ConfigurationSchema(Schema, OrderedFieldsMixin):
         return Configuration(**data)
 
 
-__all__ = [
-    'ConfigurationSchema', 'DimensionSchema', 'DomainSchema', 'QuestionSchema',
-]
-
-
-def generic_test(schema_cls, example):
-    import json
-    import sys
-    import yaml
-
-    schema = schema_cls()
-    try:
-        instance = schema.load(example)
-    except ValidationError as err:
-        print('Validation error:', err.messages)
-        return
-
-    print('Loaded instance:', instance)
-    print('Dumped instance:', schema.dump(instance))
-    print('Dumped instance (json):', json.dumps(schema.dump(instance), indent=2, ensure_ascii=False), sep='\n')
-    print('Dumped instance (yaml):')
-    yaml.safe_dump(schema.dump(instance), stream=sys.stdout, allow_unicode=True, default_flow_style=False,
-                   sort_keys=False)
-
-
-def test_question():
-    question_example = {
-        'field_ref': "xyz123",
-        'value_map': {
-            'never': 0,
-            'sometimes': 1,
-            'always': 2,
-            "1 à 2 fois": 3,
-        },
-    }
-    generic_test(QuestionSchema, question_example)
-
-
-def test_dimension():
-    dimension_example = {
-        'name': 'some_dimension_name',
-        'questions': [
-            {'field_ref': "xyz123"},
-            {'field_ref': "abc000", "reverse": True},
-        ],
-    }
-    generic_test(DimensionSchema, dimension_example)
-
-
-def test_domain():
-    domain_example = {
-        'name': 'some_domain_name',
-        'dimensions': [
-            {
-                'name': 'some_dimension_name',
-                'questions': [
-                    {'field_ref': "xyz123"},
-                    {'field_ref': "abc000", "reverse": True},
-                ],
-                'operation': 'mean',
-            },
-            {
-                'name': 'another_dimension_name',
-                'questions': [
-                    {'field_ref': "foo", 'reverse': True},
-                    {'field_ref': "bar", "reverse": False},
-                ],
-                'reverse': True
-            }
-        ]
-    }
-    generic_test(DomainSchema, domain_example)
-
-
-def test_config():
-    example_config = {
-        'definitions': {'foo': 'bar'},
-        'domains': [
-            {
-                'name': 'some_domain_name',
-                'dimensions': [
-                    {
-                        'name': 'some_dimension_name',
-                        'questions': [
-                            {'field_ref': "xyz123"},
-                            {'field_ref': "abc000", "reverse": True},
-                        ],
-                        'operation': 'mean',
-                    },
-                    {
-                        'name': 'another_dimension_name',
-                        'questions': [
-                            {'field_ref': "foo", 'reverse': True},
-                            {'field_ref': "bar", "reverse": False},
-                        ],
-                        'reverse': True
-                    }
-                ]
-            },
-            {
-                'name': 'some_other_domain_name',
-                'dimensions': [
-                    {
-                        'name': 'first_dimension',
-                        'questions': [
-                            {'field_ref': "ref1"},
-                            {'field_ref': "ref2"},
-                        ],
-                        'operation': 'mean',
-                    },
-                    {
-                        'name': 'second_dimensions',
-                        'operation': 'sum',
-                        'questions': [
-                            {'field_ref': "ref3", 'reverse': True},
-                            {'field_ref': "ref4", "reverse": False},
-                        ],
-                        'reverse': True
-                    }
-                ]
-            }
-        ]
-    }
-    generic_test(ConfigurationSchema, example_config)
-
-
 def unref(obj):
     """ Resolve JsonRef objects in `obj` """
-    import jsonref
     if isinstance(obj, jsonref.JsonRef):
         obj = dict(obj)
     elif isinstance(obj, dict):
@@ -222,58 +99,22 @@ def unref(obj):
     return obj
 
 
-def test_real_config():
-    import io
-    import json
-    import jsonref
-    import yaml
-    config_text = """\
-definitions:
-  maps:
-    occurrence:
-      "Jamais": 0
-      "1 à 2 fois": 1
-      "1 fois par semaine": 2
-      "2-3 fois par semaine": 3
-      "Presque tous les jours": 4
-      "Tous les jours": 5
-
-domains:
-  - name: mental_health
-    operation: mean
-    dimensions:
-    - name: emotional_well-being
-      operation: sum
-      questions:
-        - field_ref: 47373e16dfeb7d01
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-        - field_ref: e53f0bc7317e6995
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-        - field_ref: 7758bec371913adb
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-    - name: social_well-being
-      operation: sum
-      questions:
-        - field_ref: 3e01e3861f317b64
-        - field_ref: ddc572070aeec689
-        - field_ref: f109c3f45764ab61
-        - field_ref: 3c22d6b5c5394e79
-        - field_ref: 057b82c2e4dde124
-    """
-    obj = yaml.safe_load(io.StringIO(config_text))
-    obj = unref(jsonref.loads(json.dumps(obj)))
-    generic_test(ConfigurationSchema, obj)
+def load_config(file):
+    with open(file, 'r') as f:
+        obj_with_refs = yaml.safe_load(f)
+    obj_without_refs = unref(jsonref.loads(json.dumps(obj_with_refs)))
+    return obj_without_refs
 
 
-if __name__ == '__main__':
-    test_question()
-    test_dimension()
-    test_domain()
-    test_config()
-    test_real_config()
+__all__ = [
+    'ConfigurationSchema', 'DimensionSchema', 'DomainSchema', 'QuestionSchema',
+    'load_config',
+]
+
+
+# if __name__ == '__main__':
+#     test_question()
+#     test_dimension()
+#     test_domain()
+#     test_config()
+#     test_real_config()
