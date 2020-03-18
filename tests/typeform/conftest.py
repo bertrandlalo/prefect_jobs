@@ -66,7 +66,9 @@ def form_with_group(form_template):
             'id': 'group1',
             'ref': 'ref_group1',
             'type': 'group',
-            'properties': nested_fields,
+            'properties': {
+                'fields': nested_fields,
+            },
         }
     ]
     return form
@@ -108,6 +110,13 @@ def form_with_scale(form_template):
 
 
 @pytest.fixture(scope='function')
+def form(form_template, form_with_group, form_with_scale):
+    form = copy.deepcopy(form_template)
+    form['fields'] = form_with_group['fields'] + form_with_scale['fields']
+    return form
+
+
+@pytest.fixture(scope='function')
 def response():
     random_id = ''.join(random.choices(string.ascii_letters, k=6))
     return {
@@ -142,7 +151,140 @@ def response():
     }
 
 
-def form_config():
+@pytest.fixture(scope='function')
+def form_config_sums(tmp_path):
+    contents = """\
+definitions:
+  maps:
+    occurrence:
+      "Jamais": 0
+      "1 à 2 fois": 1
+      "1 fois par semaine": 2
+      "2-3 fois par semaine": 3
+      "Presque tous les jours": 4
+      "Tous les jours": 5
+
+domains:
+  - name: domain_one
+    operation: sum
+    dimensions:
+    - name: dimension_one
+      operation: sum
+      questions:
+        - field_ref: ref_nested1
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+        - field_ref: ref_nested2
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: false
+    - name: dimension_two
+      operation: sum
+      questions:
+        - field_ref: ref_scale1
+        - field_ref: ref_scale2
+        - field_ref: ref_scale3
+"""
+    from iguazu.functions.typeform.schemas import ConfigurationSchema, load_config
+    file = tmp_path / 'form_config_sums.yaml'
+    with file.open('w') as f:
+        f.write(contents)
+    config_obj = load_config(file)
+    return ConfigurationSchema().load(config_obj)
+
+
+@pytest.fixture(scope='function')
+def form_config_sums_reversed(tmp_path):
+    contents = """\
+definitions:
+  maps:
+    occurrence:
+      "Jamais": 0
+      "1 à 2 fois": 1
+      "1 fois par semaine": 2
+      "2-3 fois par semaine": 3
+      "Presque tous les jours": 4
+      "Tous les jours": 5
+
+domains:
+  - name: domain_one
+    operation: sum
+    dimensions:
+    - name: dimension_one
+      operation: sum
+      questions:
+        - field_ref: ref_nested1
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: true
+        - field_ref: ref_nested2
+          value_map:
+            $ref: '#/definitions/maps/occurrence'
+          reverse: true
+    - name: dimension_two
+      operation: sum
+      questions:
+        - field_ref: ref_scale1
+          reverse: true
+        - field_ref: ref_scale2
+          reverse: true
+        - field_ref: ref_scale3
+          reverse: true
+"""
+    from iguazu.functions.typeform.schemas import ConfigurationSchema, load_config
+    file = tmp_path / 'form_config_sums_reversed.yaml'
+    with file.open('w') as f:
+        f.write(contents)
+    config_obj = load_config(file)
+    return ConfigurationSchema().load(config_obj)
+
+
+@pytest.fixture(scope='function')
+def form_config_means(tmp_path):
+    contents = """\
+    definitions:
+      maps:
+        occurrence:
+          "Jamais": 0
+          "1 à 2 fois": 1
+          "1 fois par semaine": 2
+          "2-3 fois par semaine": 3
+          "Presque tous les jours": 4
+          "Tous les jours": 5
+
+    domains:
+      - name: domain_one
+        operation: mean
+        dimensions:
+        - name: dimension_one
+          operation: mean
+          questions:
+            - field_ref: ref_nested1
+              value_map:
+                $ref: '#/definitions/maps/occurrence'
+              reverse: false
+            - field_ref: ref_nested2
+              value_map:
+                $ref: '#/definitions/maps/occurrence'
+              reverse: false
+        - name: dimension_two
+          operation: mean
+          questions:
+            - field_ref: ref_scale1
+            - field_ref: ref_scale2
+            - field_ref: ref_scale3
+    """
+    from iguazu.functions.typeform.schemas import ConfigurationSchema, load_config
+    file = tmp_path / 'form_config_means.yaml'
+    with file.open('w') as f:
+        f.write(contents)
+    config_obj = load_config(file)
+    return ConfigurationSchema().load(config_obj)
+
+
+@pytest.fixture(scope='function')
+def form_config_means_reversed(tmp_path):
     contents = """\
 definitions:
   maps:
@@ -159,20 +301,46 @@ domains:
     operation: mean
     dimensions:
     - name: dimension_one
-      operation: sum
+      operation: mean
       questions:
         - field_ref: ref_nested1
           value_map:
             $ref: '#/definitions/maps/occurrence'
-          reverse: false
+          reverse: true
         - field_ref: ref_nested2
           value_map:
             $ref: '#/definitions/maps/occurrence'
-          reverse: false
+          reverse: true
     - name: dimension_two
-      operation: sum
+      operation: mean
       questions:
-        - field_ref: scale1
-        - field_ref: scale2
-        - field_ref: scale3
+        - field_ref: ref_scale1
+          reverse: true
+        - field_ref: ref_scale2
+          reverse: true
+        - field_ref: ref_scale3
+          reverse: true
 """
+    from iguazu.functions.typeform.schemas import ConfigurationSchema, load_config
+    file = tmp_path / 'form_config_means_reversed.yaml'
+    with file.open('w') as f:
+        f.write(contents)
+    config_obj = load_config(file)
+    return ConfigurationSchema().load(config_obj)
+
+
+@pytest.fixture(params=['form_config_sums', 'form_config_sums_reversed'])
+def form_config_all_sums(request):
+    # "Meta" fixture as shown in
+    # https://github.com/pytest-dev/pytest/issues/349#issuecomment-189370273
+    # but updated to use the newer function getfixturevalue
+    return request.getfixturevalue(request.param)
+
+
+@pytest.fixture(params=['form_config_means', 'form_config_means_reversed'])
+def form_config_all_means(request):
+    # "Meta" fixture as shown in
+    # https://github.com/pytest-dev/pytest/issues/349#issuecomment-189370273
+    # but updated to use the newer function getfixturevalue
+    return request.getfixturevalue(request.param)
+
