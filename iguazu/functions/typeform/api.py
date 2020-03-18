@@ -149,5 +149,8 @@ def parse_answer(answer):
     answer_type = answer['type']
     if answer_type not in PARSERS:
         raise NotImplementedError(f'Parsing an answer of type "{answer_type}" is not implemented')
+    elif answer_type == 'choices':
+        logger.warning('Questions with type "choices" are not handled entirely because '
+                       'there is no way to convert them to a value')
     value = PARSERS[answer_type](answer)
     return value

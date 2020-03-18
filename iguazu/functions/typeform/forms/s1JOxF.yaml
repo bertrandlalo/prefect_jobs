@@ -21,6 +21,14 @@ definitions:
       Triangle: 3
       Being out of shape: 0
 
+    countries:
+      Venezuela: 5
+      France: 4
+      USA: 3
+      Australia: 2
+      South Africa: 1
+      Germany: 0
+
 domains:
   - name: culture
     operation: mean
@@ -31,17 +39,21 @@ domains:
           - field_ref: ef7850f4-39d8-4097-bccf-e66fe8213af0
             value_map:
               $ref: '#/definitions/maps/colors'
-          - field_ref: 2f776b96-7552-4deb-9100-d2d3371e59a9
           - field_ref: 68e72c09-69bd-476f-8575-e3961cb040c2
-      - name: personal
-        operation: sum
-        questions:
-          - field_ref: 4bebbb88-d7dc-42e3-9d49-9b2f21f7c1e1
-          - field_ref: c09765e0-b114-4a33-9830-2dfab6c7a5f7
-      - name: trivia
-        operation: sum
-        questions:
-          - field_ref: 662facb2-a017-4c3d-9ee9-3b842acda6d9
+## Commenting this one because is not numeric
+#      - name: personal
+#        operation: sum
+#        questions:
+## Commenting this one because "choices" are not handled correctly at the moment
+#          - field_ref: 4bebbb88-d7dc-42e3-9d49-9b2f21f7c1e1
+#            value_map:
+#              $ref: '#/definitions/maps/countries'
+#          - field_ref: c09765e0-b114-4a33-9830-2dfab6c7a5f7
+## Commenting this one because is not numeric
+#      - name: trivia
+#        operation: sum
+#        questions:
+#          - field_ref: 662facb2-a017-4c3d-9ee9-3b842acda6d9
 
   - name: skills
     operation: mean

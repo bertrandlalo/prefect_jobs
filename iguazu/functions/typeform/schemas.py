@@ -18,9 +18,16 @@ logger = logging.getLogger(__name__)
 
 
 class OrderedFieldsMixin:
+    # I don't like how marshmallow handles ordered fields:
+    # https://marshmallow.readthedocs.io/en/stable/quickstart.html#ordering-output
+    # because it uses an OrderedDict, which complicates the dump by pyyaml.
+    # So this mixin class does a reordering of the class with the builtin dict,
+    # leveraging that since 3.6, Python respects dict ordering
+
     @post_dump
     def reorder_keys(self, data, **kwargs):
         declared_fields = getattr(self, 'declared_fields', {})
+        # trick to order a dict: pop the item and set it again
         for field in declared_fields:
             if field in data:
                 data[field] = data.pop(field)
@@ -111,7 +118,7 @@ def unref(obj):
 
 
 def collect_errors(error: ValidationError) -> str:
-    parts = _collect_errors(error.messages, [])
+    parts = _collect_errors(error.normalized_messages(), [])
     return '\n'.join(parts)
 
 
