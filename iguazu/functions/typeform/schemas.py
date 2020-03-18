@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
+import pkg_resources
+from typing import Dict, List
 
 import jsonref
 import yaml
@@ -10,6 +13,8 @@ from marshmallow import (
 from iguazu.functions.typeform.models import (
     Configuration, Dimension, Domain, Question
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrderedFieldsMixin:
@@ -85,6 +90,12 @@ class ConfigurationSchema(Schema, OrderedFieldsMixin):
     def make_configuration(self, data, **kwargs):
         return Configuration(**data)
 
+    @post_dump
+    def remove_defaults(self, data, **kwargs):
+        if not data['definitions']:
+            del data['definitions']
+        return data
+
 
 def unref(obj):
     """ Resolve JsonRef objects in `obj` """
@@ -99,22 +110,63 @@ def unref(obj):
     return obj
 
 
+def collect_errors(error: ValidationError) -> str:
+    parts = _collect_errors(error.messages, [])
+    return '\n'.join(parts)
+
+
+def _collect_errors(details: Dict, prefix: List[str]) -> List[str]:
+    errors = []
+    for key, value in details.items():
+        new_prefix = prefix[:]
+        if isinstance(key, int):
+            new_prefix.append(f'[{key}]')
+        elif prefix:
+            new_prefix.extend(['.', str(key)])
+        else:
+            new_prefix.append(str(key))
+        new_prefix_str = ''.join(new_prefix)
+
+        if isinstance(value, dict):
+            errors.extend(_collect_errors(value, new_prefix))
+        elif isinstance(value, list):
+            errors.extend([f'{new_prefix_str}: {v}' for v in value])
+        else:
+            errors.append(f'{new_prefix_str}: {value}')
+    return errors
+
+
 def load_config(file):
-    with open(file, 'r') as f:
-        obj_with_refs = yaml.safe_load(f)
+    if hasattr(file, 'read'):
+        obj_with_refs = yaml.safe_load(file)
+    else:
+        with open(file, 'r') as f:
+            obj_with_refs = yaml.safe_load(f)
     obj_without_refs = unref(jsonref.loads(json.dumps(obj_with_refs)))
     return obj_without_refs
 
 
+def get_form_config(form_id: str) -> Configuration:
+    resource_name = f'forms/{form_id}.yaml'
+    logger.debug('Trying to find resource on %s named %s', __name__, resource_name)
+    try:
+        stream = pkg_resources.resource_stream(__name__, resource_name)
+    except FileNotFoundError:
+        logger.error('Could not find form configuration for %s', form_id, exc_info=True)
+        raise
+    config = load_config(stream)
+    schema = ConfigurationSchema()
+
+    try:
+        instance = schema.load(config)
+    except ValidationError as err:
+        logger.error('Form configuration is invalid. Validation error details are:\n%s',
+                     collect_errors(err))
+        raise
+    return instance
+
+
 __all__ = [
     'ConfigurationSchema', 'DimensionSchema', 'DomainSchema', 'QuestionSchema',
-    'load_config',
+    'load_config', 'get_form_config',
 ]
-
-
-# if __name__ == '__main__':
-#     test_question()
-#     test_dimension()
-#     test_domain()
-#     test_config()
-#     test_real_config()

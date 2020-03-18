@@ -9,29 +9,484 @@ definitions:
       Tous les jours: 5
 
 domains:
+  - name: anxiety
+    operation: sum
+    dimensions:
+      - name: inhibitory_anxiety
+        operation: sum
+        questions:
+          - field_ref: 993ecdfd0c9a5ec4
+          - field_ref: cdf035e91c187449
+          - field_ref: 0ed3437ad95761db
+          - field_ref: 9699bcee2f3f7d30
+          - field_ref: ca77ccd1f7aaad41
+      - name: prospective_anxiety
+        operation: sum
+        questions:
+          - field_ref: 6be3d6ad406dcb8e
+          - field_ref: c9328836454bd690
+          - field_ref: 722835a0549afd5d
+          - field_ref: 71cd4395aad46376
+          - field_ref: aed5a9ea2ae59960
+          - field_ref: 3a4203f0b22df1ea
+          - field_ref: 5eca865c9ed63399
+
+  - name: coping
+    operation: mean
+    dimensions:
+      - name: avoidance_coping
+        operation: sum
+        questions:
+          - field_ref: e4fe610efee0c030
+          - field_ref: fb0450729e0be62c
+          - field_ref: a7972bfcb8a9c0cd
+      - name: emotional_support_seeking
+        operation: sum
+        questions:
+          - field_ref: 1b8d806e719ff8fd
+          - field_ref: 95a5ecf5133a46a2
+          - field_ref: 9ea0241175a177e8
+          - field_ref: e1bb383ebd4f79ce
+          - field_ref: aa1a88e424a1c318
+      - name: instrumental_support_seeking
+        operation: sum
+        questions:
+          - field_ref: cc20ba7ee8236fc2
+          - field_ref: f4d3c0c50464bfa3
+          - field_ref: c8657efc77f76b21
+          - field_ref: 1340b50e9d8b7fcb
+          - field_ref: 011785d4e1de2136
+          - field_ref: 88d7c718663903fa
+          - field_ref: b95f80c57a8d361b
+          - field_ref: f182e0833fa433db
+      - name: preventive_coping
+        operation: sum
+        questions:
+          - field_ref: ff6698e23d7142f9
+          - field_ref: 7c7bf5718c0e56a1
+          - field_ref: 4ebccff60492ecb6
+          - field_ref: c4246197bf464a46
+          - field_ref: 9ff67fc7902a9d3d
+          - field_ref: 3600db47fdaf4ac4
+          - field_ref: 592492ad2b595c35
+          - field_ref: 93d8431cf45383fc
+          - field_ref: b2976004bac37d0a
+          - field_ref: ebff4306c942b5d3
+      - name: proactive_coping
+        operation: sum
+        questions:
+          - field_ref: 5cf1e55be91c0074
+          - field_ref: 1d8ce68058a078d3
+            reverse: true
+          - field_ref: 704c4e5cad5525dc
+          - field_ref: a0f7963885491790
+          - field_ref: 7879757020cd9c81
+          - field_ref: 5d20ba1aa92bab1a
+          - field_ref: 9abf2704be10509d
+          - field_ref: 66cb1a6b8f6354aa
+          - field_ref: ae23abd0fadb2fd4
+            reverse: true
+          - field_ref: 394a9832ae171c98
+          - field_ref: 5431184ea56f0860
+          - field_ref: 85fcad1084061923
+          - field_ref: 40d43195d5f5a139
+            reverse: true
+          - field_ref: a36f63651817f271
+      - name: reflective_coping
+        operation: sum
+        questions:
+          - field_ref: b7427ccd4109eba1
+          - field_ref: 5a61eeef16a97901
+          - field_ref: d58dc085db4d72a8
+          - field_ref: 1d46638bbe5fca1d
+          - field_ref: 8a4d91380b080a46
+          - field_ref: d86bd5e2b324b2c3
+          - field_ref: 4d3870f4272feff3
+          - field_ref: d88d380837d6bbf5
+          - field_ref: d139814355bc5597
+          - field_ref: 888bd7dbeb46c2eb
+          - field_ref: 60045398d33c1e8f
+      - name: strategic_coping
+        operation: sum
+        questions:
+          - field_ref: 54fd8613d60edfe9
+          - field_ref: 4b0eaa2d02d45103
+          - field_ref: 5a2a7cb43d2f6982
+          - field_ref: 1b67640780d61d1a
+
+  - name: langer_creativity
+    operation: sum
+    dimensions:
+      - name: engagement
+        operation: sum
+        questions:
+          - field_ref: 8f33a19c071b80b6
+          - field_ref: 70ba6e5e9e01dfc7
+            reverse: true
+          - field_ref: d98b0d81816b6b8a
+          - field_ref: 6146a113a8a786c4
+            reverse: true
+          - field_ref: 5860d8f79fbec312
+            reverse: true
+      - name: flexibility
+        operation: sum
+        questions:
+          - field_ref: 46dd521891462c40
+          - field_ref: 35acb47736d316e2
+            reverse: true
+          - field_ref: 37bd22eff59bbdd5
+          - field_ref: ad9a0b8eb7b37183
+      - name: novelty_producing
+        operation: sum
+        questions:
+          - field_ref: 6269df1a7e173087
+            reverse: true
+          - field_ref: 477f0e068013e474
+          - field_ref: c49be75c2427e59e
+          - field_ref: f7e0318583cb853c
+          - field_ref: e5bb6e510c48abbc
+          - field_ref: c86a1bc54ceb9e21
+            reverse: true
+      - name: novelty_seeking
+        operation: sum
+        questions:
+          - field_ref: c5ead40a40dfedae
+          - field_ref: 585c71fb6ae68637
+            reverse: true
+          - field_ref: 03123d60bc0bdb58
+            reverse: true
+          - field_ref: 5a0244f38c4d735f
+          - field_ref: a5bb8377d97d6591
+          - field_ref: 34314c7737d60711
+
+  - name: maia_interoception
+    operation: mean
+    dimensions:
+      - name: attention_regulation
+        operation: sum
+        questions:
+          - field_ref: abab8401-b77b-4e6b-9695-95b865b60324
+          - field_ref: 1ce8ac4e-2bf0-43dd-a905-fe2730c3549f
+          - field_ref: 2c36de8c-d537-4b7e-975d-fb39e26e4be6
+          - field_ref: 09b75c04-f3fe-487b-9885-10c911dd7b25
+          - field_ref: acc34762-ff4c-41ef-b4bb-3f2fd70a4d48
+          - field_ref: 3a2eb1db-1a89-42b2-a65b-46b5d60e1b73
+          - field_ref: eb34e245-8a42-4b88-8dc6-6448ea44e59a
+      - name: body_listening
+        operation: sum
+        questions:
+          - field_ref: f0697eb3-5941-49a1-b997-1e6622f1eaa4
+          - field_ref: a1169596-20a1-471a-a641-bf5f5014e0df
+          - field_ref: d229f0a0-7b71-4876-81df-94344dc290b6
+      - name: emotional_awareness
+        operation: sum
+        questions:
+          - field_ref: bcea0af5-59fe-487d-a671-bc0184602717
+          - field_ref: 4541e1d8-56a2-4db6-a4e2-047109b6ca26
+          - field_ref: 491f16d4-9af3-40e7-a3c7-9cd32bf33b1d
+          - field_ref: b918c6b5-be95-49d1-8870-250efe742e7a
+          - field_ref: 6e805168-749d-4c3c-a4d1-71f8fb1d107f
+      - name: not_distracting
+        operation: sum
+        questions:
+          - field_ref: 07e6c403-fdec-4a17-b477-3a4e1d8babb5
+            reverse: true
+          - field_ref: ab3c41f2-ee8d-443d-96d9-b60502728f64
+            reverse: true
+          - field_ref: 9a11d6ad-7877-4910-9d5b-506d1dad226e
+            reverse: true
+      - name: not_worrying
+        operation: sum
+        questions:
+          - field_ref: 0434e502-53ed-4ab7-b81d-2930a816dc49
+            reverse: true
+          - field_ref: 2a847939-c35b-4914-931c-6b9aa71f9f31
+            reverse: true
+          - field_ref: eb18f8df-2b73-49e4-a108-7fbdcb8b8e9a
+      - name: noticing
+        operation: sum
+        questions:
+          - field_ref: 5f7d21c0-5069-4fdc-8e0b-1c6c4f24063d
+          - field_ref: 901475d9-76db-4e68-ac33-339d32be1dd9
+          - field_ref: b9b6c308-1fa1-48e0-b763-38f78a05ab0c
+          - field_ref: 2a21b619-6582-4012-a4e9-0cd776d68259
+      - name: self_regulation
+        operation: sum
+        questions:
+          - field_ref: 2b6b9023-223a-4bef-8e47-ab764d78ffab
+          - field_ref: 42ca10f4-efeb-472f-9adf-1cc4409ee3df
+          - field_ref: 9e5cc9c2-d556-4292-9998-dfc349ff4cd2
+          - field_ref: 23069ee4-7848-4dc6-ba3c-2c751675fabe
+      - name: trusting
+        operation: sum
+        questions:
+          - field_ref: 5cd6f174-191b-42c9-b466-46ef91173bab
+          - field_ref: 83af685f-3469-40ca-8d76-9018260fa487
+          - field_ref: 14643910-4616-44ad-ae28-d6327f6d2905
+
   - name: mental_health
     operation: mean
     dimensions:
-    - name: emotional_well-being
-      operation: sum
-      questions:
-        - field_ref: 47373e16dfeb7d01
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-        - field_ref: e53f0bc7317e6995
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-        - field_ref: 7758bec371913adb
-          value_map:
-            $ref: '#/definitions/maps/occurrence'
-          reverse: false
-    - name: social_well-being
-      operation: sum
-      questions:
-        - field_ref: 3e01e3861f317b64
-        - field_ref: ddc572070aeec689
-        - field_ref: f109c3f45764ab61
-        - field_ref: 3c22d6b5c5394e79
-        - field_ref: 057b82c2e4dde124
+      - name: emotional_well-being
+        operation: sum
+        questions:
+          - field_ref: 47373e16dfeb7d01
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: e53f0bc7317e6995
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 7758bec371913adb
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+      - name: psychological_well-being
+        operation: sum
+        questions:
+          - field_ref: c618a05dcef23bca
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 3a66917386b1afeb
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 1a02f69d82bd2b31
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: ef1cf5df16810419
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 610255b27d463cb0
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 848768bf553ff5e7
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+      - name: social_well-being
+        operation: sum
+        questions:
+          - field_ref: 3e01e3861f317b64
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: ddc572070aeec689
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: f109c3f45764ab61
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 3c22d6b5c5394e79
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+          - field_ref: 057b82c2e4dde124
+            value_map:
+              $ref: '#/definitions/maps/occurrence'
+
+  - name: needs_at_work
+    operation: mean
+    dimensions:
+      - name: autonomy
+        operation: sum
+        questions:
+          - field_ref: 76fd592940bb530b
+          - field_ref: d8d2d559c409978b
+          - field_ref: 7e9ab1310fcd22e5
+          - field_ref: 170663f37280a80a
+      - name: competence
+        operation: sum
+        questions:
+          - field_ref: 0b9c143e5e7e6eb0
+          - field_ref: de90b2fb96b79653
+          - field_ref: bfdce0ded0f7f623
+          - field_ref: 9f21d2b969335fb8
+      - name: relatedness
+        operation: sum
+        questions:
+          - field_ref: 45d0204e06187721
+          - field_ref: 30ebba0778a4156f
+          - field_ref: 4eea78332af969cf
+          - field_ref: 24ad54dd60026e03
+
+  - name: orientation_to_happiness
+    operation: mean
+    dimensions:
+      - name: life_of_engagement
+        operation: sum
+        questions:
+          - field_ref: 9c468c7266fd3c94
+          - field_ref: 3e2b29a8d17fe93c
+          - field_ref: 36ca651340f7ceab
+          - field_ref: eab3e5693041f64b
+          - field_ref: c381c5a1615b0352
+          - field_ref: 724da58bdf243133
+      - name: life_of_meaning
+        operation: sum
+        questions:
+          - field_ref: 9d1d1e49966ff86f
+          - field_ref: d7fb68d48239b52c
+          - field_ref: 9e73c953b3a923be
+          - field_ref: 240a501c576c0df8
+          - field_ref: 62e5ea4cbd186476
+          - field_ref: ecb9d1b076f99507
+      - name: life_of_pleasure
+        operation: sum
+        questions:
+          - field_ref: 95d9964ad2a9d7e0
+          - field_ref: 90f442db38ee6549
+          - field_ref: ded59d4c4e2c96d4
+          - field_ref: a5e5a047faf6f879
+          - field_ref: 72bf007ebdd079b3
+          - field_ref: bbeb4c23008f2eff
+
+  - name: others_compassion
+    operation: mean
+    dimensions:
+      - name: disengagement
+        operation: sum
+        questions:
+          - field_ref: 090ec9cabcbb7145
+          - field_ref: 0a2ad38b004563bf
+          - field_ref: 075d6c30167391d9
+          - field_ref: 344a58e6befb8c99
+      - name: humanity
+        operation: sum
+        questions:
+          - field_ref: 856c963c821d8141
+          - field_ref: f1373b3e4f7ab053
+          - field_ref: e72fcd5558aeafff
+          - field_ref: 8cb30ebd730b45ff
+      - name: indifference
+        operation: sum
+        questions:
+          - field_ref: d8f542084f4325b6
+          - field_ref: e5997fe1650ea62d
+          - field_ref: 1f18cc0040a9f2c6
+          - field_ref: 8c83d4ff4f2ab889
+      - name: kindness
+        operation: sum
+        questions:
+          - field_ref: a78050b45f15f265
+          - field_ref: f6b45f645aa2cb08
+          - field_ref: 08cd4b578a8982ef
+          - field_ref: d8776b0cb605c5f5
+      - name: others_mindfullness
+        operation: sum
+        questions:
+          - field_ref: c295360636ad5702
+          - field_ref: b34182bdf55e1bd6
+          - field_ref: 00b4eb32ff942afb
+          - field_ref: 01a4840b41241b19
+      - name: separation
+        operation: sum
+        questions:
+          - field_ref: 93aeb7555813eec6
+          - field_ref: defe99f8dc0dd013
+          - field_ref: adc9c4c0026d4947
+          - field_ref: 587a8c2f5c7ebc59
+
+  - name: perth_emotional_reactivity_negative
+    operation: sum
+    dimensions:
+      - name: negative_activation
+        operation: sum
+        questions:
+          - field_ref: 8de24a09fb5f931e
+          - field_ref: 9ffd7add81988348
+          - field_ref: 91a446a9af8cb1a7
+          - field_ref: f6fa185b6f7355f3
+          - field_ref: 23565be5165e274d
+      - name: negative_duration
+        operation: sum
+        questions:
+          - field_ref: 07fb194f7f8de09e
+          - field_ref: 0cace96ac90577b7
+          - field_ref: 2513d19ea3ea55e6
+          - field_ref: 0f2b1cc7eb53d5d7
+          - field_ref: e59f6eeb559662d8
+      - name: negative_intensity
+        operation: sum
+        questions:
+          - field_ref: ae3ca7cd9cd16b33
+          - field_ref: b769244e862847d4
+          - field_ref: 8891ce7bdaedbf21
+          - field_ref: 69a215b415a6ac64
+          - field_ref: 5da1d6341893121a
+
+  - name: perth_emotional_reactivity_positive
+    operation: sum
+    dimensions:
+      - name: positive_activation
+        operation: sum
+        questions:
+          - field_ref: 9496c04b091aa795
+          - field_ref: 87357f7f3121acec
+          - field_ref: fce9ad6e96ebad69
+          - field_ref: 60cbf91a434603cd
+          - field_ref: 9dd6e1c81d654a0b
+      - name: positive_duration
+        operation: sum
+        questions:
+          - field_ref: 202f8f9d5e4f4d3b
+          - field_ref: a99f2714a424d7d2
+          - field_ref: c724a3de7c82ff58
+          - field_ref: 7f9f956e8f499134
+          - field_ref: 3cdaede9cb0dcb10
+      - name: positive_intensity
+        operation: sum
+        questions:
+          - field_ref: 68c1d595fe936ae6
+          - field_ref: d721d8e2e1c1d42d
+          - field_ref: fe5812e40d89ae9b
+          - field_ref: 94ea24871d07e14f
+          - field_ref: f81d8ef23e1709f0
+
+  - name: self_compassion
+    operation: mean
+    dimensions:
+      - name: common_humanity
+        operation: sum
+        questions:
+          - field_ref: 4ec5e3102e1a7a87
+          - field_ref: 2f39e2e795da3095
+      - name: isolation
+        operation: sum
+        reverse: true
+        questions:
+          - field_ref: 7bcb937595d7322d
+          - field_ref: 0118d3a3de9fd83a
+      - name: over_identified
+        operation: sum
+        reverse: true
+        questions:
+          - field_ref: 50818e093e6a852b
+          - field_ref: b23aa20c05fef895
+      - name: self_judgment
+        operation: sum
+        reverse: true
+        questions:
+          - field_ref: cf6ba2596d4d66bd
+          - field_ref: 444daab2b9f3c6fd
+      - name: self_kindness
+        operation: sum
+        questions:
+          - field_ref: 8bf2513265a13089
+          - field_ref: a33e3dc2b4e4fbf7
+      - name: self_mindfullness
+        operation: sum
+        questions:
+          - field_ref: ab4f4d7cd0e184a4
+          - field_ref: bfd998875f8436ce
+
+  - name: self_efficacity
+    operation: sum
+    dimensions:
+      - name: self_efficacity
+        operation: sum
+        questions:
+          - field_ref: 08e0aab3c025aa19
+          - field_ref: b9ce88e88c7107d2
+          - field_ref: 2c36984e35e9b620
+          - field_ref: eb62a550b68d93d4
+          - field_ref: 9afcdc6328efc5d2
+          - field_ref: 265df217b391e127
+          - field_ref: e35d48c3a5f5c45e
+          - field_ref: ac27f42869d120a2
+          - field_ref: 780b7ea2c140bd78
+          - field_ref: 7c52a051dd1fdf20

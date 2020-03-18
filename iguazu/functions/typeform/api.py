@@ -1,14 +1,11 @@
 import logging
 from collections import deque
-from functools import lru_cache, partial
+from functools import partial
 from typing import Dict, List
 
 import pendulum
 from numpy import clip
 from requests import codes, request
-
-from iguazu.functions.typeform import TypeformException
-
 
 logger = logging.getLogger(__name__)
 

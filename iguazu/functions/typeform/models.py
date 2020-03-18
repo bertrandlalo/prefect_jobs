@@ -112,6 +112,6 @@ class Domain(_Tree):
 
 
 class Configuration:
-    def __init__(self, domains, definitions):
+    def __init__(self, domains, definitions=None):
         self.domains = domains
         self.definitions = definitions
