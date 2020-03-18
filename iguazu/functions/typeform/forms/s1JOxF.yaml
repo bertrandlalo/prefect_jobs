@@ -1,0 +1,100 @@
+definitions:
+  maps:
+    colors:
+      red: 1
+      blue: 2
+      green: 3
+      black: 4
+      white: 5
+
+    categories:
+      Nature: 3
+      Robots: 0
+      Fire: 1
+      Art: 2
+
+    shapes:
+      Circle: 1
+      Square: 4
+      Rectangle: 4
+      Blob: 0
+      Triangle: 3
+      Being out of shape: 0
+
+domains:
+  - name: culture
+    operation: mean
+    dimensions:
+      - name: art
+        operation: sum
+        questions:
+          - field_ref: ef7850f4-39d8-4097-bccf-e66fe8213af0
+            value_map:
+              $ref: '#/definitions/maps/colors'
+          - field_ref: 2f776b96-7552-4deb-9100-d2d3371e59a9
+          - field_ref: 68e72c09-69bd-476f-8575-e3961cb040c2
+      - name: personal
+        operation: sum
+        questions:
+          - field_ref: 4bebbb88-d7dc-42e3-9d49-9b2f21f7c1e1
+          - field_ref: c09765e0-b114-4a33-9830-2dfab6c7a5f7
+      - name: trivia
+        operation: sum
+        questions:
+          - field_ref: 662facb2-a017-4c3d-9ee9-3b842acda6d9
+
+  - name: skills
+    operation: mean
+    dimensions:
+      - name: bilingual
+        operation: sum
+        questions:
+          - field_ref: 80378af9-4594-47dd-9714-96602a549fc4
+      - name: math
+        operation: sum
+        questions:
+          - field_ref: fc4cc535-94ad-4933-a97f-f1d181c54b59
+      - name: fayot
+        operation: sum
+        questions:
+          - field_ref: e657f5c8-138b-42e0-817c-a344b36877e6
+
+## Commenting this one because it is a date and we do not support an operation
+## that uses dates (sum and mean will fail with dates)
+#  - name: foobar
+#    operation: sum
+#    dimensions:
+#    - name: time
+#      operation: sum
+#      questions:
+#        - field_ref: 2d08f7e2-e4ad-4731-a417-d4e80373ad8b
+
+  - name: ethics
+    operation: sum
+    dimensions:
+      - name: agrees
+        operation: sum
+        questions:
+          - field_ref: 5ab15a57-7d05-4573-8ceb-70f2a5cb6b6a
+
+  - name: profile
+    operation: sum
+    dimensions:
+      - name: numerical
+        operation: sum
+        questions:
+          - field_ref: b486a9e3-24cf-4b75-ab8d-1d7f811b5ca4
+            reverse: true
+          - field_ref: 65af85e5-aac2-481e-b100-2f9fc6c0fdc1
+            reverse: true
+          - field_ref: 2c352954-2783-4dd1-9188-af3a7651ef1b
+      - name: tastes
+        operation: mean
+        questions:
+          - field_ref: 01f4efc3-ca52-4072-8392-cdfeeef035ee
+            value_map:
+              $ref: '#/definitions/maps/categories'
+          - field_ref: a3a7416b-868b-4cb3-aa1d-59879297869f
+          - field_ref: 5e3ed6a9-d48e-4a5e-b12b-24263a4d2220
+            value_map:
+              $ref: '#/definitions/maps/shapes'
