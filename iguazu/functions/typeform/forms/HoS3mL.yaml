@@ -478,7 +478,7 @@ domains:
   - name: self_efficacity
     operation: sum
     dimensions:
-      - name: self_efficacity
+      - name: self_efficacity_dim
         operation: sum
         questions:
           - field_ref: 08e0aab3c025aa19

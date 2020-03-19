@@ -91,7 +91,7 @@ def test_vr_questionnaire_dimension_features(vr_features):
     assert features['self_judgment']['value'] == 2 + 4
     assert features['self_kindness']['value'] == 3 + 2
     assert features['self_mindfullness']['value'] == 3 + 4
-    assert features['self_efficacity']['value'] == 5 + 3 + 4 + 5 + 4 + 4 + 6 + 6 + 6 + 5
+    assert features['self_efficacity_dim']['value'] == 5 + 3 + 4 + 5 + 4 + 4 + 6 + 6 + 6 + 5
 
 
 def test_vr_questionnaire_domain_features(vr_features):

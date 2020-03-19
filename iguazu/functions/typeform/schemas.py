@@ -2,6 +2,7 @@
 import json
 import logging
 import pkg_resources
+from collections import Counter
 from typing import Dict, List
 
 import jsonref
@@ -95,13 +96,25 @@ class ConfigurationSchema(Schema, OrderedFieldsMixin):
 
     @post_load
     def make_configuration(self, data, **kwargs):
-        return Configuration(**data)
+        instance = Configuration(**data)
+        self.validate_repeated(instance)
+        return instance
 
     @post_dump
     def remove_defaults(self, data, **kwargs):
         if not data['definitions']:
             del data['definitions']
         return data
+
+    def validate_repeated(self, instance):
+        # Verification that there are no repeated feature names
+        counter = Counter([domain.name for domain in instance.domains])
+        for domain in instance.domains:
+            counter.update([dimension.name for dimension in domain.dimensions])
+        messages = [f'Feature named "{name}" is repeated {reps} times'
+                    for name, reps in counter.items() if reps > 1]
+        if messages:
+            raise ValidationError(messages)
 
 
 def unref(obj):
