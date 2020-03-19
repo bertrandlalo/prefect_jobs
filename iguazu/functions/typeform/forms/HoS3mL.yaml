@@ -159,70 +159,71 @@ domains:
           - field_ref: a5bb8377d97d6591
           - field_ref: 34314c7737d60711
 
-  - name: maia_interoception
-    operation: mean
-    dimensions:
-      - name: attention_regulation
-        operation: sum
-        questions:
-          - field_ref: abab8401-b77b-4e6b-9695-95b865b60324
-          - field_ref: 1ce8ac4e-2bf0-43dd-a905-fe2730c3549f
-          - field_ref: 2c36de8c-d537-4b7e-975d-fb39e26e4be6
-          - field_ref: 09b75c04-f3fe-487b-9885-10c911dd7b25
-          - field_ref: acc34762-ff4c-41ef-b4bb-3f2fd70a4d48
-          - field_ref: 3a2eb1db-1a89-42b2-a65b-46b5d60e1b73
-          - field_ref: eb34e245-8a42-4b88-8dc6-6448ea44e59a
-      - name: body_listening
-        operation: sum
-        questions:
-          - field_ref: f0697eb3-5941-49a1-b997-1e6622f1eaa4
-          - field_ref: a1169596-20a1-471a-a641-bf5f5014e0df
-          - field_ref: d229f0a0-7b71-4876-81df-94344dc290b6
-      - name: emotional_awareness
-        operation: sum
-        questions:
-          - field_ref: bcea0af5-59fe-487d-a671-bc0184602717
-          - field_ref: 4541e1d8-56a2-4db6-a4e2-047109b6ca26
-          - field_ref: 491f16d4-9af3-40e7-a3c7-9cd32bf33b1d
-          - field_ref: b918c6b5-be95-49d1-8870-250efe742e7a
-          - field_ref: 6e805168-749d-4c3c-a4d1-71f8fb1d107f
-      - name: not_distracting
-        operation: sum
-        questions:
-          - field_ref: 07e6c403-fdec-4a17-b477-3a4e1d8babb5
-            reverse: true
-          - field_ref: ab3c41f2-ee8d-443d-96d9-b60502728f64
-            reverse: true
-          - field_ref: 9a11d6ad-7877-4910-9d5b-506d1dad226e
-            reverse: true
-      - name: not_worrying
-        operation: sum
-        questions:
-          - field_ref: 0434e502-53ed-4ab7-b81d-2930a816dc49
-            reverse: true
-          - field_ref: 2a847939-c35b-4914-931c-6b9aa71f9f31
-            reverse: true
-          - field_ref: eb18f8df-2b73-49e4-a108-7fbdcb8b8e9a
-      - name: noticing
-        operation: sum
-        questions:
-          - field_ref: 5f7d21c0-5069-4fdc-8e0b-1c6c4f24063d
-          - field_ref: 901475d9-76db-4e68-ac33-339d32be1dd9
-          - field_ref: b9b6c308-1fa1-48e0-b763-38f78a05ab0c
-          - field_ref: 2a21b619-6582-4012-a4e9-0cd776d68259
-      - name: self_regulation
-        operation: sum
-        questions:
-          - field_ref: 2b6b9023-223a-4bef-8e47-ab764d78ffab
-          - field_ref: 42ca10f4-efeb-472f-9adf-1cc4409ee3df
-          - field_ref: 9e5cc9c2-d556-4292-9998-dfc349ff4cd2
-          - field_ref: 23069ee4-7848-4dc6-ba3c-2c751675fabe
-      - name: trusting
-        operation: sum
-        questions:
-          - field_ref: 5cd6f174-191b-42c9-b466-46ef91173bab
-          - field_ref: 83af685f-3469-40ca-8d76-9018260fa487
-          - field_ref: 14643910-4616-44ad-ae28-d6327f6d2905
+## Commented: these dimensions and domain has not been implemented in the form
+#  - name: maia_interoception
+#    operation: mean
+#    dimensions:
+#      - name: attention_regulation
+#        operation: sum
+#        questions:
+#          - field_ref: abab8401-b77b-4e6b-9695-95b865b60324
+#          - field_ref: 1ce8ac4e-2bf0-43dd-a905-fe2730c3549f
+#          - field_ref: 2c36de8c-d537-4b7e-975d-fb39e26e4be6
+#          - field_ref: 09b75c04-f3fe-487b-9885-10c911dd7b25
+#          - field_ref: acc34762-ff4c-41ef-b4bb-3f2fd70a4d48
+#          - field_ref: 3a2eb1db-1a89-42b2-a65b-46b5d60e1b73
+#          - field_ref: eb34e245-8a42-4b88-8dc6-6448ea44e59a
+#      - name: body_listening
+#        operation: sum
+#        questions:
+#          - field_ref: f0697eb3-5941-49a1-b997-1e6622f1eaa4
+#          - field_ref: a1169596-20a1-471a-a641-bf5f5014e0df
+#          - field_ref: d229f0a0-7b71-4876-81df-94344dc290b6
+#      - name: emotional_awareness
+#        operation: sum
+#        questions:
+#          - field_ref: bcea0af5-59fe-487d-a671-bc0184602717
+#          - field_ref: 4541e1d8-56a2-4db6-a4e2-047109b6ca26
+#          - field_ref: 491f16d4-9af3-40e7-a3c7-9cd32bf33b1d
+#          - field_ref: b918c6b5-be95-49d1-8870-250efe742e7a
+#          - field_ref: 6e805168-749d-4c3c-a4d1-71f8fb1d107f
+#      - name: not_distracting
+#        operation: sum
+#        questions:
+#          - field_ref: 07e6c403-fdec-4a17-b477-3a4e1d8babb5
+#            reverse: true
+#          - field_ref: ab3c41f2-ee8d-443d-96d9-b60502728f64
+#            reverse: true
+#          - field_ref: 9a11d6ad-7877-4910-9d5b-506d1dad226e
+#            reverse: true
+#      - name: not_worrying
+#        operation: sum
+#        questions:
+#          - field_ref: 0434e502-53ed-4ab7-b81d-2930a816dc49
+#            reverse: true
+#          - field_ref: 2a847939-c35b-4914-931c-6b9aa71f9f31
+#            reverse: true
+#          - field_ref: eb18f8df-2b73-49e4-a108-7fbdcb8b8e9a
+#      - name: noticing
+#        operation: sum
+#        questions:
+#          - field_ref: 5f7d21c0-5069-4fdc-8e0b-1c6c4f24063d
+#          - field_ref: 901475d9-76db-4e68-ac33-339d32be1dd9
+#          - field_ref: b9b6c308-1fa1-48e0-b763-38f78a05ab0c
+#          - field_ref: 2a21b619-6582-4012-a4e9-0cd776d68259
+#      - name: self_regulation
+#        operation: sum
+#        questions:
+#          - field_ref: 2b6b9023-223a-4bef-8e47-ab764d78ffab
+#          - field_ref: 42ca10f4-efeb-472f-9adf-1cc4409ee3df
+#          - field_ref: 9e5cc9c2-d556-4292-9998-dfc349ff4cd2
+#          - field_ref: 23069ee4-7848-4dc6-ba3c-2c751675fabe
+#      - name: trusting
+#        operation: sum
+#        questions:
+#          - field_ref: 5cd6f174-191b-42c9-b466-46ef91173bab
+#          - field_ref: 83af685f-3469-40ca-8d76-9018260fa487
+#          - field_ref: 14643910-4616-44ad-ae28-d6327f6d2905
 
   - name: mental_health
     operation: mean

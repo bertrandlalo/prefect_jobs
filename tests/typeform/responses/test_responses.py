@@ -63,35 +63,35 @@ def test_vr_questionnaire_dimension_features(vr_features):
     assert features['novelty_producing']['value'] == 4 + 3 + 4 + 7 + 4 + 4
     # Next feature has 2 reversed questions:           *   *
     assert features['novelty_seeking']['value'] == 5 + 3 + 3 + 6 + 6 + 6
-
-    # assert features['emotional_well-being']['value'] == 1234
-    # assert features['psychological_well-being']['value'] == 1234
-    # assert features['social_well-being']['value'] == 1234
-    # assert features['autonomy']['value'] == 1234
-    # assert features['competence']['value'] == 1234
-    # assert features['relatedness']['value'] == 1234
-    # assert features['life_of_engagement']['value'] == 1234
-    # assert features['life_of_meaning']['value'] == 1234
-    # assert features['life_of_pleasure']['value'] == 1234
-    # assert features['disengagement']['value'] == 1234
-    # assert features['humanity']['value'] == 1234
-    # assert features['indifference']['value'] == 1234
-    # assert features['kindness']['value'] == 1234
-    # assert features['others_mindfullness']['value'] == 1234
-    # assert features['separation']['value'] == 1234
-    # assert features['negative_activation']['value'] == 1234
-    # assert features['negative_duration']['value'] == 1234
-    # assert features['negative_intensity']['value'] == 1234
-    # assert features['positive_activation']['value'] == 1234
-    # assert features['positive_duration']['value'] == 1234
-    # assert features['positive_intensity']['value'] == 1234
-    # assert features['common_humanity']['value'] == 1234
-    # assert features['isolation']['value'] == 1234
-    # assert features['over_identified']['value'] == 1234
-    # assert features['self_judgment']['value'] == 1234
-    # assert features['self_kindness']['value'] == 1234
-    # assert features['self_mindfullness']['value'] == 1234
-    # assert features['self_efficacity']['value'] == 1234
+    # Next 3 features use value maps
+    assert features['emotional_well-being']['value'] == 4 + 4 + 3
+    assert features['psychological_well-being']['value'] == 2 + 3 + 3 + 3 + 4 + 1
+    assert features['social_well-being']['value'] == 1 + 4 + 3 + 2 + 3
+    assert features['autonomy']['value'] == 5 + 5 + 6 + 6
+    assert features['competence']['value'] == 5 + 4 + 5 + 4
+    assert features['relatedness']['value'] == 4 + 4 + 5 + 3
+    assert features['life_of_engagement']['value'] == 3 + 5 + 4 + 5 + 3 + 4
+    assert features['life_of_meaning']['value'] == 4 + 3 + 5 + 5 + 4 + 5
+    assert features['life_of_pleasure']['value'] == 4 + 5 + 1 + 2 + 2 + 3
+    assert features['disengagement']['value'] == 2 + 2 + 3 + 4
+    assert features['humanity']['value'] == 4 + 5 + 3 + 2
+    assert features['indifference']['value'] == 3 + 2 + 2 + 4
+    assert features['kindness']['value'] == 4 + 3 + 3 + 4
+    assert features['others_mindfullness']['value'] == 4 + 3 + 5 + 4
+    assert features['separation']['value'] == 1 + 2 + 4 + 3
+    assert features['negative_activation']['value'] == 3 + 3 + 3 + 3 + 2
+    assert features['negative_duration']['value'] == 5 + 4 + 3 + 4 + 4
+    assert features['negative_intensity']['value'] == 2 + 3 + 2 + 2 + 2
+    assert features['positive_activation']['value'] == 4 + 3 + 5 + 4 + 4
+    assert features['positive_duration']['value'] == 3 + 3 + 4 + 4 + 5
+    assert features['positive_intensity']['value'] == 5 + 4 + 4 + 5 + 4
+    assert features['common_humanity']['value'] == 3 + 2
+    assert features['isolation']['value'] == 4 + 2
+    assert features['over_identified']['value'] == 2 + 3
+    assert features['self_judgment']['value'] == 2 + 4
+    assert features['self_kindness']['value'] == 3 + 2
+    assert features['self_mindfullness']['value'] == 3 + 4
+    assert features['self_efficacity']['value'] == 5 + 3 + 4 + 5 + 4 + 4 + 6 + 6 + 6 + 5
 
 
 def test_vr_questionnaire_domain_features():
