@@ -5,17 +5,15 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import pandas as pd
-import prefect
 from prefect.client import Secret
 
 import iguazu
 from iguazu.core.exceptions import PreconditionFailed
-from iguazu.core.files import FileAdapter, LocalFile, QuetzalFile
+from iguazu.core.files import FileAdapter
 from iguazu.functions.typeform import (
-    add_form_config, answers_to_dataframe, fetch_form, fetch_responses,
-    calculate_scores
+#     add_form_config, answers_to_dataframe, calculate_scores
+    extract_features, fetch_form, fetch_responses
 )
-
 
 DEFAULT_BASE_URL = 'https://api.typeform.com'
 
@@ -58,7 +56,6 @@ class FetchResponses(_BaseTypeformAPITask):
         self.logger.info('Requesting typeform responses of form %s at address %s',
                          self._form_id, self._base_url)
         responses = fetch_responses(self._base_url, self._form_id, self.token)
-        responses = responses[:3]
         self.logger.info('Obtained %d responses', len(responses))
         return responses
 
@@ -120,12 +117,10 @@ class SaveResponse(iguazu.Task):
 class ExtractScores(iguazu.Task):
 
     def run(self, *, response: Dict, form: Dict) -> pd.DataFrame:
-        df_answers = answers_to_dataframe(response)
-        df_extended, domain_config = add_form_config(df_answers, form)
-        df_scores = calculate_scores(df_extended)
-        self.logger.info('Extracted typeform answers and scores:\n%s',
-                         df_scores.to_string())
-        return df_scores
+        dataframe = extract_features(form, response)
+        self.logger.info('Extracted typeform features:\n%s',
+                         dataframe.to_string())
+        return dataframe
 
 
 class Report(iguazu.Task):
