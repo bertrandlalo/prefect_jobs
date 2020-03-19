@@ -94,5 +94,18 @@ def test_vr_questionnaire_dimension_features(vr_features):
     assert features['self_efficacity']['value'] == 5 + 3 + 4 + 5 + 4 + 4 + 6 + 6 + 6 + 5
 
 
-def test_vr_questionnaire_domain_features():
-    pass
+def test_vr_questionnaire_domain_features(vr_features):
+    features = vr_features
+
+    assert features['anxiety']['value'] == 11 + 12
+    assert features['coping']['value'] == (13 + 20 + 38 + 31 + 62 + 49 + 20) / 7
+    assert features['langer_creativity']['value'] == 28 + 24 + 26 + 29
+    assert features['mental_health']['value'] == (11 + 16 + 13) / 3
+    assert features['needs_at_work']['value'] == (22 + 18 + 16) / 3
+    assert features['orientation_to_happiness']['value'] == (24 + 26 + 17) / 3
+    assert features['others_compassion']['value'] == (11 + 14 + 11 + 14 + 16 + 10) / 6
+    assert features['perth_emotional_reactivity_negative']['value'] == 14 + 20 + 11
+    assert features['perth_emotional_reactivity_positive']['value'] == 20 + 19 + 22
+    assert features['self_compassion']['value'] == (5 + 6 + 5 + 6 + 5 + 7) / 6
+    assert features['self_efficacity']['value'] == 5 + 3 + 4 + 5 + 4 + 4 + 6 + 6 + 6 + 5
+
