@@ -5,7 +5,7 @@ from prefect.tasks.core.operators import GetItem
 from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import LoadJSON, SlackTask
+from iguazu.tasks.common import LoadDataframe, LoadJSON, MergeDataframes, SlackTask
 from iguazu.tasks.metadata import (
     AddDynamicMetadata, AddStaticMetadata, CreateFlowMetadata, UpdateFlowMetadata
 )
@@ -78,9 +78,7 @@ class ExtractTypeformFeatures(PreparedFlow):
     REGISTRY_NAME = 'features_typeform'
     DEFAULT_QUERY = f"""
 SELECT base->>'id'         AS id,        -- id is the bare minimum needed for the query task to work
-       base->>'filename'   AS filename,  -- this is just to help the human debugging this
-       omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-       iguazu->>'version'  AS version    -- this is just to help the openmind human debugging this
+       base->>'filename'   AS filename   -- this is just to help the human debugging this
 FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
@@ -99,6 +97,7 @@ ORDER BY id                                    -- always in the same order
             iguazu=None,
             omind=None,
             protocol=None,
+            standard=None,
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -120,7 +119,9 @@ ORDER BY id                                    -- always in the same order
         create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
         read_json = LoadJSON()
         read_form = GetForm(form_id=form_id, base_url=base_url)
-        extract_scores = ExtractScores()
+        extract_scores = ExtractScores(
+            output_hdf5_key='/iguazu/features/typeform/subject',
+        )
         # propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
@@ -140,3 +141,63 @@ ORDER BY id                                    -- always in the same order
                          help='ID of the form (questionnaire) on typeform.'),
         )
 
+
+class SummarizeTypeformFlow(PreparedFlow):
+    """ Collect all typeform features in a single CSV file """
+
+    REGISTRY_NAME = 'summarize_typeform'
+    DEFAULT_QUERY = f"""
+SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+       base->>'filename' AS filename  -- this is just to help the human debugging this
+FROM metadata
+WHERE  base->>'state' = 'READY'                -- No temporary files
+AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+AND    standard->'features' ? '/iguazu/features/typeform/subject' -- containing the typeform features
+AND    iguazu->>'version' = '{__version__}'    -- Select only files generated with last version 
+                                               -- (avoids ending with corrupted local file)
+ORDER BY id -- always in the same order
+"""
+
+    def _build(self, **kwargs):
+        required_families = dict(
+            iguazu=None,
+            omind=None,
+            protocol=None,
+            standard=None,
+        )
+        families = kwargs.get('families', {}) or {}  # Could be None by default args
+        for name in required_families:
+            families.setdefault(name, required_families[name])
+        kwargs['families'] = families
+
+        # When the query is set by kwargs, leave the query and dialect as they
+        # come. Otherwise, set to the default defined just above
+        if not kwargs.get('query', None):
+            kwargs['query'] = self.DEFAULT_QUERY
+            kwargs['dialect'] = 'postgresql_json'
+
+        # First part of this flow: obtain a dataset of files
+        dataset_flow = GenericDatasetFlow(**kwargs)
+
+        features_files = dataset_flow.terminal_tasks().pop()
+        self.update(dataset_flow)
+
+        read_features = LoadDataframe(
+            key='/iguazu/features/typeform/subject',
+        )
+        merge_features = MergeDataframes(
+            filename='typeform_summary.csv',
+            path='datasets',
+        )
+        notify = SlackTask(message='Typeform feature summarization finished!')
+
+        with self:
+            feature_dataframes = read_features.map(file=features_files)
+            merged_dataframe = merge_features(parents=features_files, dataframes=feature_dataframes)
+            # Send slack notification
+            notify(upstream_tasks=[merged_dataframe])
+
+    @staticmethod
+    def click_options():
+        return GenericDatasetFlow.click_options()

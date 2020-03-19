@@ -130,6 +130,10 @@ class ExtractScores(iguazu.Task):
                           features.to_string())
         with pd.HDFStore(output_file.file_str, 'w') as store:
             features.to_hdf(store, self.output_hdf5_key)
+
+        # TODO: change/rewrite after merge to use the same approach as raph
+        output_file.metadata['standard']['features'] = [self.output_hdf5_key]
+
         return output_file
 
     def postconditions(self, results):
