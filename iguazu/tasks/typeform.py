@@ -5,15 +5,16 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import pandas as pd
+import prefect
 from prefect.client import Secret
 
 import iguazu
 from iguazu.core.exceptions import PreconditionFailed
 from iguazu.core.files import FileAdapter
 from iguazu.functions.typeform import (
-#     add_form_config, answers_to_dataframe, calculate_scores
     extract_features, fetch_form, fetch_responses
 )
+from iguazu.functions.specs import check_feature_specification
 
 DEFAULT_BASE_URL = 'https://api.typeform.com'
 
@@ -116,11 +117,32 @@ class SaveResponse(iguazu.Task):
 
 class ExtractScores(iguazu.Task):
 
-    def run(self, *, response: Dict, form: Dict) -> pd.DataFrame:
-        dataframe = extract_features(form, response)
-        self.logger.info('Extracted typeform features:\n%s',
-                         dataframe.to_string())
-        return dataframe
+    def __init__(self, *,
+                 output_hdf5_key: Optional[str] = '/iguazu/features/typeform/subject',
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.output_hdf5_key = output_hdf5_key
+
+    def run(self, *, parent: FileAdapter, response: Dict, form: Dict) -> FileAdapter:
+        output_file = self.default_outputs()
+        features = extract_features(form, response)
+        self.logger.debug('Extracted typeform features:\n%s',
+                          features.to_string())
+        with pd.HDFStore(output_file.file_str, 'w') as store:
+            features.to_hdf(store, self.output_hdf5_key)
+        return output_file
+
+    def postconditions(self, results):
+        super().postconditions(results)
+        with pd.HDFStore(results.file_str, 'r') as store:
+            features = pd.read_hdf(store, self.output_hdf5_key)
+        check_feature_specification(features)
+
+    def default_outputs(self, **kwargs) -> FileAdapter:
+        original_kws = prefect.context.run_kwargs
+        parent = original_kws['parent']
+        output = self.create_file(parent=parent, suffix='_features', extension='.hdf5', temporary=False)
+        return output
 
 
 class Report(iguazu.Task):

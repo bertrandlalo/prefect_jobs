@@ -2,11 +2,13 @@ import click
 from prefect import unmapped
 from prefect.tasks.core.operators import GetItem
 
-from iguazu import  __version__
+from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import LoadJSON, SlackTask
-from iguazu.tasks.metadata import AddDynamicMetadata, AddStaticMetadata
+from iguazu.tasks.metadata import (
+    AddDynamicMetadata, AddStaticMetadata, CreateFlowMetadata, UpdateFlowMetadata
+)
 from iguazu.tasks.typeform import (
     ExtractScores, FetchResponses, GetForm, GetUserHash, Report, SaveResponse,
     DEFAULT_BASE_URL
@@ -84,7 +86,7 @@ WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
 AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
 -- AND    protocol->>'extra'->'form_id' = '...'      -- Only from the VR questionnaire (TODO: think about this)
-AND    COALESCE(iguazu->'flows'->'extract_typeform'->>'version', '')
+AND    COALESCE(iguazu->'flows'->'features_typeform'->>'version', '')
        < '{__version__}'                       -- That has not already been processed by this flow
 ORDER BY id                                    -- always in the same order
 """
@@ -115,14 +117,19 @@ ORDER BY id                                    -- always in the same order
         json_files = dataset_flow.terminal_tasks().pop()
         self.update(dataset_flow)
 
+        create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
         read_json = LoadJSON()
         read_form = GetForm(form_id=form_id, base_url=base_url)
         extract_scores = ExtractScores()
+        # propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
+        update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
         with self:
+            create_noresult = create_flow_metadata.map(parent=json_files)
             form = read_form()
-            responses = read_json.map(file=json_files)
-            scores = extract_scores.map(response=responses, form=unmapped(form))
+            responses = read_json.map(file=json_files, upstream_tasks=[create_noresult])
+            scores = extract_scores.map(parent=json_files, response=responses, form=unmapped(form))
+            update_noresult = update_flow_metadata.map(parent=json_files, child=scores)
 
     @staticmethod
     def click_options():
