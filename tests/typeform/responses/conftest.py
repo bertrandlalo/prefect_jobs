@@ -14065,17 +14065,17 @@ def vr_response():
             "id": "unit-test-fake-user-hash"
         },
         "landed_at": "2018-11-10T16:01:06Z",
-        "landing_id": "005ddb7fa052cd47f2dbb3fc05eee506",
+        "landing_id": "748e9880-6aa1-11ea-bda8-5f255b527162",  # anonymized
         "metadata": {
             "browser": "default",
             "network_id": "830a26cb1a",
             "platform": "other",
-            "referer": "https://omind.typeform.com/to/HoS3mL?id=5e5295f11423b0e85833a756bc2a722abb480aeed4eb7512e8484c3627aab6a2",
+            "referer": "https://omind.typeform.com/to/HoS3mL?id=unit-test-fake-user-hash",
             "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"
         },
-        "response_id": "005ddb7fa052cd47f2dbb3fc05eee506",
+        "response_id": "748e9880-6aa1-11ea-bda8-5f255b527162",  # anonymized
         "submitted_at": "2018-11-10T16:33:33Z",
-        "token": "005ddb7fa052cd47f2dbb3fc05eee506",
+        "token": "748e9880-6aa1-11ea-bda8-5f255b527162",  # anonymized
         "variables": [
             {
                 "key": "score",
