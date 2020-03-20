@@ -53,7 +53,7 @@ class DownloadTypeform(PreparedFlow):
 
         with self:
             responses = fetch()
-            response_id = get_token.map(task_result=responses, key=unmapped('token'))
+            response_id = get_token.map(task_result=responses, key=unmapped('response_id'))
             user_hash = get_user_hash.map(response=responses)
             files = save.map(response=responses,
                              response_id=response_id)
@@ -125,6 +125,7 @@ ORDER BY id                                    -- always in the same order
         extract_scores = ExtractScores(
             output_hdf5_key='/iguazu/features/typeform/subject',
         )
+        # TODO: propagate metadata when the branch that has that task is merged
         # propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
