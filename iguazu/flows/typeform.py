@@ -84,8 +84,11 @@ WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
 AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
 -- AND    protocol->>'extra'->'form_id' = '...'      -- Only from the VR questionnaire (TODO: think about this)
-AND    COALESCE(iguazu->'flows'->'features_typeform'->>'version', '')
-       < '{__version__}'                       -- That has not already been processed by this flow
+AND    ( 
+           iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL         -- That has not already been succesfully processed by this flow
+       OR  COALESCE(iguazu->'flows'->'{REGISTRY_NAME}'->>'version', '')  -- or if has been processed but by an outdated version
+            < '{__version__}'
+       )
 ORDER BY id                                    -- always in the same order
 """
 
