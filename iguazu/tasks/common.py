@@ -217,9 +217,11 @@ class MergeHDF5(iguazu.Task):
             output_file.metadata.setdefault(self.hdf5_family, {})
             output_file.metadata[self.hdf5_family] = infer_standard_groups(output_file.file_str)
 
+        # make a copy of parent.metadata
+        parent_metadata = copy.deepcopy(parent.metadata)
         # Propagate metadata
         for k in self.propagate_families:
-            parent_meta = parent.metadata.get(k, {})
+            parent_meta = parent_metadata.get(k, {})
             parent_meta.pop('id', None)
             output_file.metadata[k].update(parent_meta)
 
