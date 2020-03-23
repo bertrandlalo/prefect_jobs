@@ -208,10 +208,10 @@ def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshol
     epochs = []
     for i, idx in enumerate(idx_epochs):
         logger.debug('Epoch %d / %d', i + 1, len(idx_epochs))
-        input = signals.iloc[idx][[column]].dropna()
-        if not input.empty:
+        chunk = signals.iloc[idx][[column]].dropna()
+        if not chunk.empty:
             chunk = (
-                apply_cvxEDA(input, **cvxeda_params)
+                apply_cvxEDA(chunk, **cvxeda_params)
                     .iloc[idx_warmup]
                     .rename_axis(index='epoched_index')
                     .reset_index()
