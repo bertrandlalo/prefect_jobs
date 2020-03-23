@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from sklearn.metrics import auc
 from sklearn.preprocessing import RobustScaler
 
 from iguazu.core.features import dataclass_to_dataframe
+from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -304,8 +306,6 @@ def galvanic_scrpeaks(signals, annotations, column='GSR_SCR', peaks_kwargs=None,
     return data, annotations
 
 
-from dataclasses import dataclass, field
-
 
 # Galvanic features
 # -----------------
@@ -427,8 +427,6 @@ def scr_features(scr: pd.Series, peaks: pd.DataFrame) -> SCRFeatures:
     logger.debug('SCR features: %s', features)
     return features
 
-
-from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 
 def gsr_features(cvx, peaks, events, known_sequences=None):
