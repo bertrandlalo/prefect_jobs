@@ -235,9 +235,9 @@ def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshol
 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
     annotations.loc[:signals.index[0] + warm_up_timedelta,
-    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'  # Todo: question: should we add a new column?
     annotations.loc[signals.index[-1] - warm_up_timedelta:,
-    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'  # Todo: question: should we add a new column?
     # replace column string name by 'gsr' for lisibility purpose
     signals.columns = signals.columns.str.replace(column, 'GSR')
 
