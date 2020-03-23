@@ -1,6 +1,5 @@
 import logging
 
-from iguazu import __version__
 from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
@@ -29,8 +28,8 @@ class GalvanicFeaturesFlow(PreparedFlow):
         AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    COALESCE (iguazu->'flows'->'features_galvanic' ->> 'version', '') <  '{__version__}'
-        ORDER BY id                                -- always in the same order
+        AND    iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL         -- That has not already been succesfully processed by this flow
+       OR  COALESCE(iguazu->'flows'->'{REGISTRY_NAME}'->>'version', '')  -- or if has been processed but by an outdated version        ORDER BY id                                -- always in the same order
     """
 
     def _build(self, **kwargs):
