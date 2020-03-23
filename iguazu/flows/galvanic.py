@@ -4,9 +4,9 @@ from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.functions.galvanic import GSRArtifactCorruption
-from iguazu.tasks.common import LoadDataframe, MergeDataframes, PropagateMetadata, SlackTask
+from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
 from iguazu.tasks.galvanic import CleanGSRSignal, ApplyCVX, DetectSCRPeaks, Downsample, ExtractGSRFeatures
-from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.standards import Report
 
 logger = logging.getLogger(__name__)

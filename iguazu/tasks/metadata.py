@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import Dict, NoReturn
+from typing import Dict, NoReturn, Optional, List
 
 import prefect
 
@@ -64,3 +64,18 @@ class AddSourceMetadata(prefect.Task):
         new_meta = copy.deepcopy(self.new_meta)
         deep_update(file.metadata, new_meta)
         file.upload_metadata()
+
+
+class PropagateMetadata(prefect.Task):
+
+    def __init__(self, *, propagate_families: Optional[List[str]] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.propagate_families = propagate_families
+
+    def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
+        # Propagate metadata
+        deep_update(child.metadata, {propagate_family: parent.metadata.get(propagate_family, {})
+                                     for propagate_family in self.propagate_families})
+        # upload metadata
+        child.upload_metadata()
+        return child
