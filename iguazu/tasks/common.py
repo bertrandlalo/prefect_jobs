@@ -2,7 +2,7 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional, List
+from typing import Dict, Iterable, NoReturn, Optional, List, Mapping
 
 import pandas as pd
 import prefect
@@ -297,10 +297,6 @@ class PropagateMetadata(prefect.Task):
         self.propagate_families = propagate_families
 
     def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
-        if child is None:
-            print('oh dear')
-            import ipdb;
-            ipdb.set_trace()
         # Propagate metadata
         for k in self.propagate_families:
             parent_meta = parent.metadata.get(k, {})
@@ -372,16 +368,24 @@ class MergeDataframes(iguazu.Task):
         return output
 
     def default_outputs(self, **kwargs):
-        original_kws = prefect.context.run_kwargs
-        parents = original_kws['parents']
-        dummy_reference = parents[0]
         output = self.create_file(
-            parent=dummy_reference,
+            parent=None,
             filename=self.filename,
             path='datasets',
             temporary=False,
         )
         return output
+
+    def default_metadata(self, exception, **inputs) -> Mapping:
+        meta = super().default_metadata(exception, **inputs)
+        if exception is None:
+            # Use the default metadata from the super class, but change the parents
+            # to include all the input files
+            original_kws = prefect.context.run_kwargs
+            parents = original_kws['parents']
+            journal_family = self.meta.metadata_journal_family
+            meta[journal_family]['parents'] = [p.id for p in parents]
+        return meta
 
     def preconditions(self, **kwargs) -> NoReturn:
         super().preconditions(**kwargs)
