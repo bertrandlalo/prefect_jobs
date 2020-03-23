@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.dsp.filters import filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
@@ -345,9 +346,6 @@ class SCLFeatures:
 #     HF: float = np.nan
 #     VHF: float = np.nan
 #     LFHF: float = np.nan
-
-
-import statsmodels.api as sm
 
 
 def linear_regression(y, x):
