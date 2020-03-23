@@ -231,13 +231,13 @@ def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshol
     # add an annotation rejection boolean on amplitude criteria
     # todo: helpers with inputs: data, annotations, and index or bool condition, that sets values in data to NaN and annotate in annotations
     annotations.loc[signals[signals[
-                                column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'  # Todo: question: should we add a new column?
+                                column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'
 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
     annotations.loc[:signals.index[0] + warm_up_timedelta,
-    'GSR'] = 'CVX warm up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'
     annotations.loc[signals.index[-1] - warm_up_timedelta:,
-    'GSR'] = 'CVX warm up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'
     # replace column string name by 'gsr' for lisibility purpose
     signals.columns = signals.columns.str.replace(column, 'GSR')
 
