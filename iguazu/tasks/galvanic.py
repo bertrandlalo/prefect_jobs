@@ -12,7 +12,6 @@ from iguazu.functions.galvanic import (
 )
 from iguazu.functions.specs import infer_standard_groups
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
-from iguazu.utils import deep_update
 
 
 class CleanGSRSignal(iguazu.Task):
@@ -304,7 +303,7 @@ class ExtractGSRFeatures(iguazu.Task):
 
         with pd.HDFStore(output_file.file, 'w') as store:
             features.to_hdf(store, self.output_hdf5_key)
-        deep_update(output_file.metadata, {'standard': infer_standard_groups(output_file.file_str)})
+        output_file.metadata['standard'] = infer_standard_groups(output_file.file_str)
         return output_file
 
     def default_outputs(self, **kwargs):
