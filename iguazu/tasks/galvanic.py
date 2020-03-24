@@ -32,12 +32,12 @@ class CleanGSRSignal(iguazu.Task):
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/standard',
                  events_hdf5_key: Optional[str] = '/iguazu/events/standard',
                  output_hdf5_key: Optional[str] = 'iguazu/signal/gsr/clean',
-                 warmup_duration: int = 30,
+                 warmup_duration: float = 30.,
                  interpolation_kwargs: Optional[Dict] = None,
                  filter_kwargs: Optional[Dict] = None,
                  scaling_kwargs: Optional[Dict] = None,
-                 corrupted_maxratio: Optional[float] = None,
-                 sampling_rate: Optional[float] = None,
+                 corrupted_maxratio: float = 0.6,
+                 sampling_rate: float = 512,
                  **kwargs):
         """
         Parameters
@@ -61,9 +61,9 @@ class CleanGSRSignal(iguazu.Task):
 
         self.column = 'GSR'
 
-        self.sampling_rate = sampling_rate or 512
-        self.warmup_duration = warmup_duration or 30
-        self.corrupted_maxratio = corrupted_maxratio or 0.6
+        self.sampling_rate = sampling_rate
+        self.warmup_duration = warmup_duration
+        self.corrupted_maxratio = corrupted_maxratio
         self.interpolation_kwargs = interpolation_kwargs or dict(method='pchip')
         self.filter_kwargs = filter_kwargs or dict(
             order=100,
@@ -119,7 +119,7 @@ class Downsample(iguazu.Task):
     def __init__(self, *,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/clean',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/downsampled',
-                 sampling_rate: Optional[float] = 256,
+                 sampling_rate: float = 256,
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -160,20 +160,20 @@ class ApplyCVX(iguazu.Task):
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/downsampled',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/deconvoluted',
                  column: str = 'GSR_filtered_clean_zscored',
-                 warmup_duration: Optional[float] = None,
-                 threshold_scr: Optional[float] = None,
-                 epoch_size: Optional[int] = None,
-                 epoch_overlap: Optional[int] = None,
+                 warmup_duration: float = 15.,
+                 threshold_scr: float = 4.,
+                 epoch_size: int = 300,
+                 epoch_overlap: int = 60,
                  cvxeda_kwargs: Optional[Dict] = None,
                  **kwargs):
         super().__init__(**kwargs)
 
         self.output_hdf5_key = output_hdf5_key
         self.column = column
-        self.warmup_duration = warmup_duration or 15.
-        self.threshold_scr = threshold_scr or 4.
-        self.epoch_size = epoch_size or 300
-        self.epoch_overlap = epoch_overlap or 60
+        self.warmup_duration = warmup_duration
+        self.threshold_scr = threshold_scr
+        self.epoch_size = epoch_size
+        self.epoch_overlap = epoch_overlap
         self.cvxeda_kwargs = cvxeda_kwargs or {}
 
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
@@ -217,7 +217,7 @@ class DetectSCRPeaks(iguazu.Task):
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/deconvoluted',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/scrpeaks',
                  column: str = 'GSR_SCR',
-                 max_increase_duration: Optional[float] = None,
+                 max_increase_duration: float = 7.,
                  peaks_kwargs: Optional[dict] = None,
                  **kwargs):
         super().__init__(**kwargs)
@@ -228,7 +228,7 @@ class DetectSCRPeaks(iguazu.Task):
                                                  prominence=.1,
                                                  prominence_window=15,
                                                  rel_height=.5)
-        self.max_increase_duration = max_increase_duration or 7
+        self.max_increase_duration = max_increase_duration
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
