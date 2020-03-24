@@ -1,5 +1,6 @@
 import logging
 
+from iguazu import __version__
 from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
@@ -25,12 +26,11 @@ class GalvanicFeaturesFlow(PreparedFlow):
         WHERE  base->>'state' = 'READY'                -- No temporary files
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
         AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+        AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
         AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL         -- That has not already been succesfully processed by this flow
-       OR  COALESCE(iguazu->'flows'->'{REGISTRY_NAME}'->>'version', '')  -- or if has been processed but by an outdated version        ORDER BY id                                -- always in the same order
-    """
+        AND    COALESCE (iguazu->'flows'->'{REGISTRY_NAME}' ->> 'version', '') <  '{__version__}'    """
 
     def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
