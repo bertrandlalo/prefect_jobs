@@ -110,7 +110,7 @@ class CleanGSRSignal(iguazu.Task):
         signals = original_kws['signals']
         output = self.create_file(
             parent=signals,
-            suffix=f'_gsr_clean'
+            suffix='_gsr_clean'
         )
         return output
 
@@ -151,7 +151,7 @@ class Downsample(iguazu.Task):
         signals = original_kws['signals']
         output = self.create_file(
             parent=signals,
-            suffix=f'_gsr_downsampled'
+            suffix='_gsr_downsampled'
         )
         return output
 
@@ -207,7 +207,7 @@ class ApplyCVX(iguazu.Task):
         signals = original_kws['signals']
         output = self.create_file(
             parent=signals,
-            suffix=f'_cvx'
+            suffix='_cvx'
         )
         return output
 
@@ -257,7 +257,7 @@ class DetectSCRPeaks(iguazu.Task):
         signals = original_kws['signals']
         output = self.create_file(
             parent=signals,
-            suffix=f'_scrpeaks'
+            suffix='_scrpeaks'
         )
         return output
 
@@ -308,7 +308,7 @@ class ExtractGSRFeatures(iguazu.Task):
         parent = original_kws['parent']
         output = self.create_file(
             parent=parent,
-            suffix=f'_gsr_features',
+            suffix='_gsr_features',
             temporary=False,
         )
         return output
