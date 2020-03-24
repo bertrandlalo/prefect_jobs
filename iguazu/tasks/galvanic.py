@@ -28,7 +28,7 @@ class CleanGSRSignal(iguazu.Task):
         - scale the signal on the whole session between 0 and 1
     """
 
-    def __init__(self,
+    def __init__(self, *,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/standard',
                  events_hdf5_key: Optional[str] = '/iguazu/events/standard',
                  output_hdf5_key: Optional[str] = 'iguazu/signal/gsr/clean',
@@ -78,7 +78,7 @@ class CleanGSRSignal(iguazu.Task):
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
         self.auto_manage_input_dataframe('events', events_hdf5_key)
 
-    def run(self,
+    def run(self, *,
             signals: pd.DataFrame,
             annotations: pd.DataFrame,
             events: pd.DataFrame) -> FileAdapter:
@@ -116,7 +116,7 @@ class CleanGSRSignal(iguazu.Task):
 
 class Downsample(iguazu.Task):
 
-    def __init__(self,
+    def __init__(self, *,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/clean',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/downsampled',
                  sampling_rate: Optional[float] = 256,
@@ -129,7 +129,7 @@ class Downsample(iguazu.Task):
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
-    def run(self,
+    def run(self, *,
             signals: pd.DataFrame,
             annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
@@ -156,7 +156,7 @@ class Downsample(iguazu.Task):
 
 
 class ApplyCVX(iguazu.Task):
-    def __init__(self,
+    def __init__(self, *,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/downsampled',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/deconvoluted',
                  column: str = 'GSR_filtered_clean_zscored',
@@ -179,7 +179,8 @@ class ApplyCVX(iguazu.Task):
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
-    def run(self, signals: pd.DataFrame,
+    def run(self, *,
+            signals: pd.DataFrame,
             annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
@@ -212,6 +213,7 @@ class ApplyCVX(iguazu.Task):
 
 class DetectSCRPeaks(iguazu.Task):
     def __init__(self,
+                 *,
                  signals_hdf5_key: Optional[str] = '/iguazu/signal/gsr/deconvoluted',
                  output_hdf5_key: Optional[str] = '/iguazu/signal/gsr/scrpeaks',
                  column: str = 'GSR_SCR',
@@ -230,7 +232,8 @@ class DetectSCRPeaks(iguazu.Task):
         self.auto_manage_input_dataframe('signals', signals_hdf5_key)
         self.auto_manage_input_dataframe('annotations', signals_hdf5_key + '/annotations')
 
-    def run(self, signals: pd.DataFrame,
+    def run(self, *,
+            signals: pd.DataFrame,
             annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
