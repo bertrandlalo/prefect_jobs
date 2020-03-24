@@ -1,5 +1,6 @@
+import pathlib
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, NoReturn
 
 import pandas as pd
 import prefect
@@ -237,23 +238,19 @@ class DetectSCRPeaks(iguazu.Task):
             annotations: pd.DataFrame) -> FileAdapter:
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
-
+        output = self.default_outputs()
         peaks, peaks_annotations = galvanic_scrpeaks(signals,
                                                      annotations,
                                                      column=self.column,
                                                      peaks_kwargs=self.peaks_kwargs,
                                                      max_increase_duration=self.max_increase_duration)
+        self.store_output(output.file, self.output_hdf5_key, peaks, peaks_annotations)
+        return output
 
-        return self.save(peaks, annotations)
-
-    # Refactored this method out of run so that it can be reused by a child
-    # class such as ExtractGSRSignal
-    def save(self, peaks: pd.DataFrame, annotations: pd.DataFrame) -> FileAdapter:
-        output_file = self.default_outputs()
-        with pd.HDFStore(str(output_file.file.resolve()), 'w') as store:
-            peaks.to_hdf(store, self.output_hdf5_key)
-            annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-        return output_file
+    def store_output(self, f: pathlib.Path, key: str, dataframe: pd.DataFrame, annotations: pd.DataFrame) -> NoReturn:
+        with pd.HDFStore(str(f.resolve()), 'w') as store:
+            dataframe.to_hdf(store, key)
+            annotations.to_hdf(store, key + '/annotations')
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
