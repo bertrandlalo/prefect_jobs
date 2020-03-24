@@ -74,8 +74,11 @@ class PropagateMetadata(prefect.Task):
 
     def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
         # Propagate metadata
-        deep_update(child.metadata, {propagate_family: parent.metadata.get(propagate_family, {})
-                                     for propagate_family in self.propagate_families})
+        parent_metadata = copy.deepcopy(parent.metadata)
+        for k in self.propagate_families:
+            parent_meta = parent_metadata.get(k, {})
+            parent_meta.pop('id', None)
+            child.metadata[k].update(parent_meta)
         # upload metadata
         child.upload_metadata()
         return child
