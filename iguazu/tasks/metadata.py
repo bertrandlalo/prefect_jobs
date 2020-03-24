@@ -78,7 +78,7 @@ class PropagateMetadata(prefect.Task):
         for k in self.propagate_families:
             parent_meta = parent_metadata.get(k, {})
             parent_meta.pop('id', None)
-            child.metadata[k].update(parent_meta)
+            deep_update(child.metadata, {k: parent_meta})
         # upload metadata
         child.upload_metadata()
         return child
