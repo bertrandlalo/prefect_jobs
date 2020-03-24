@@ -1,3 +1,4 @@
+import re
 from typing import Dict, Optional
 
 import pandas as pd
@@ -294,11 +295,9 @@ class ExtractGSRFeatures(iguazu.Task):
             raise SoftPreconditionFailed('Input events are empty')
 
         output_file = self.default_outputs()
-        known_sequences = [sequence for sequence in VALID_SEQUENCE_KEYS if
-                           not any(excl in sequence for excl in
-                                   ['intro', 'outro', 'lobby'])]  # lobby is too short to extract gsr
+        blacklist = re.compile('.*(intro|outro|lobby).*')  # regexp to remove lobbies that are too short for GSR
+        known_sequences = [sequence for sequence in VALID_SEQUENCE_KEYS if not blacklist.match(sequence)]
         # intro is warm up
-
         features = gsr_features(cvx, scrpeaks, events, known_sequences=known_sequences)
         if not features.empty:
             features.loc[:, 'file_id'] = parent.id
