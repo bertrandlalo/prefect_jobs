@@ -1,6 +1,5 @@
-import pathlib
 import re
-from typing import Dict, Optional, NoReturn
+from typing import Dict, Optional
 
 import pandas as pd
 import prefect
@@ -11,7 +10,7 @@ from iguazu.core.files import FileAdapter
 from iguazu.functions.galvanic import (
     downsample, galvanic_cvx, galvanic_scrpeaks, galvanic_clean, gsr_features
 )
-from iguazu.functions.specs import infer_standard_groups
+from iguazu.functions.specs import infer_standard_groups, store_output
 from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 
@@ -88,10 +87,10 @@ class CleanGSRSignal(iguazu.Task):
         if events.empty:
             raise SoftPreconditionFailed('Input events are empty')
 
-        output_file = self.default_outputs()
+        output = self.default_outputs()
 
         self.logger.info('Galvanic preprocessing for signal=%s, events=%s -> %s',
-                         signals, events, output_file)
+                         signals, events, output)
         clean, clean_annotations = galvanic_clean(signals=signals, events=events, annotations=annotations,
                                                   column=self.column,
                                                   warmup_duration=self.warmup_duration,
@@ -100,10 +99,8 @@ class CleanGSRSignal(iguazu.Task):
                                                   filter_kwargs=self.filter_kwargs,
                                                   scaling_kwargs=self.scaling_kwargs)
         # todo: keep only last row?
-        with pd.HDFStore(output_file.file, 'w') as store:
-            clean.to_hdf(store, self.output_hdf5_key)
-            clean_annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-        return output_file
+        store_output(output.file, self.output_hdf5_key, dataframe=clean, annotations=clean_annotations)
+        return output
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
@@ -136,15 +133,13 @@ class Downsample(iguazu.Task):
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
-        output = downsample(signals, self.sampling_rate)
-        annotations = annotations.loc[output.index, :]
+        downsampled = downsample(signals, self.sampling_rate)
+        downsampled_annotations = annotations.loc[downsampled.index, :]
 
-        output_file = self.default_outputs()
+        output = self.default_outputs()
 
-        with pd.HDFStore(output_file.file, 'a') as store:
-            output.to_hdf(store, self.output_hdf5_key)
-            annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-        return output_file
+        store_output(output.file, self.output_hdf5_key, dataframe=downsampled, annotations=downsampled_annotations)
+        return output
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
@@ -186,7 +181,7 @@ class ApplyCVX(iguazu.Task):
         if signals.empty:
             raise SoftPreconditionFailed('Input signals are empty')
 
-        output_file = self.default_outputs()
+        output = self.default_outputs()
 
         cvx, cvx_annotations = galvanic_cvx(signals=signals,
                                             annotations=annotations,
@@ -197,10 +192,8 @@ class ApplyCVX(iguazu.Task):
                                             epoch_overlap=self.epoch_overlap,
                                             )
 
-        with pd.HDFStore(output_file.file, 'w') as store:
-            cvx.to_hdf(store, self.output_hdf5_key)
-            cvx_annotations.to_hdf(store, self.output_hdf5_key + '/annotations')
-        return output_file
+        store_output(output.file, self.output_hdf5_key, dataframe=cvx, annotations=cvx_annotations)
+        return output
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
@@ -244,13 +237,8 @@ class DetectSCRPeaks(iguazu.Task):
                                                      column=self.column,
                                                      peaks_kwargs=self.peaks_kwargs,
                                                      max_increase_duration=self.max_increase_duration)
-        self.store_output(output.file, self.output_hdf5_key, peaks, peaks_annotations)
+        store_output(output.file, self.output_hdf5_key, dataframe=peaks, annotations=peaks_annotations)
         return output
-
-    def store_output(self, f: pathlib.Path, key: str, dataframe: pd.DataFrame, annotations: pd.DataFrame) -> NoReturn:
-        with pd.HDFStore(str(f.resolve()), 'w') as store:
-            dataframe.to_hdf(store, key)
-            annotations.to_hdf(store, key + '/annotations')
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
@@ -290,7 +278,7 @@ class ExtractGSRFeatures(iguazu.Task):
         if events.empty:
             raise SoftPreconditionFailed('Input events are empty')
 
-        output_file = self.default_outputs()
+        output = self.default_outputs()
         blacklist = re.compile('.*(intro|outro|lobby).*')  # regexp to remove lobbies that are too short for GSR
         known_sequences = [sequence for sequence in VALID_SEQUENCE_KEYS if not blacklist.match(sequence)]
         # intro is warm up
@@ -298,10 +286,9 @@ class ExtractGSRFeatures(iguazu.Task):
         if not features.empty:
             features.loc[:, 'file_id'] = parent.id
 
-        with pd.HDFStore(output_file.file, 'w') as store:
-            features.to_hdf(store, self.output_hdf5_key)
-        output_file.metadata['standard'] = infer_standard_groups(output_file.file_str)
-        return output_file
+        store_output(output.file, self.output_hdf5_key, dataframe=features, annotations=None)
+        output.metadata['standard'] = infer_standard_groups(output.file_str)
+        return output
 
     def default_outputs(self, **kwargs):
         original_kws = prefect.context.run_kwargs
