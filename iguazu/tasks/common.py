@@ -2,7 +2,7 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional, List
+from typing import Dict, Iterable, NoReturn, Optional, List, Mapping
 
 import pandas as pd
 import prefect
@@ -217,9 +217,11 @@ class MergeHDF5(iguazu.Task):
             output_file.metadata.setdefault(self.hdf5_family, {})
             output_file.metadata[self.hdf5_family] = infer_standard_groups(output_file.file_str)
 
+        # make a copy of parent.metadata
+        parent_metadata = copy.deepcopy(parent.metadata)
         # Propagate metadata
         for k in self.propagate_families:
-            parent_meta = parent.metadata.get(k, {})
+            parent_meta = parent_metadata.get(k, {})
             parent_meta.pop('id', None)
             output_file.metadata[k].update(parent_meta)
 
@@ -267,8 +269,7 @@ class MergeHDF5(iguazu.Task):
             groups |= gi  # set union
 
     def default_outputs(self, *, parent, **inputs):
-        # output = parent.make_child(temporary=self.temporary,
-        #                            suffix=self.suffix)
+
         output = self.create_file(
             parent=parent,
             suffix=self.suffix,
@@ -352,13 +353,24 @@ class MergeDataframes(iguazu.Task):
         return output
 
     def default_outputs(self, **kwargs):
-        original_kws = prefect.context.run_kwargs
-        parents = original_kws['parents']
-        dummy_reference = parents[0]
-        # TODO remove metadata propagation
-        output = dummy_reference.make_child(
-            filename=self.filename, path=self.path, temporary=False)
+        output = self.create_file(
+            parent=None,
+            filename=self.filename,
+            path='datasets',
+            temporary=False,
+        )
         return output
+
+    def default_metadata(self, exception, **inputs) -> Mapping:
+        meta = super().default_metadata(exception, **inputs)
+        if exception is None:
+            # Use the default metadata from the super class, but change the parents
+            # to include all the input files
+            original_kws = prefect.context.run_kwargs
+            parents = original_kws['parents']
+            journal_family = self.meta.metadata_journal_family
+            meta[journal_family]['parents'] = [p.id for p in parents]
+        return meta
 
     def preconditions(self, **kwargs) -> NoReturn:
         super().preconditions(**kwargs)
