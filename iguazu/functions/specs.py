@@ -2,7 +2,7 @@ import collections
 import enum
 import logging
 import pathlib
-from typing import NoReturn
+from typing import NoReturn, Optional
 
 import numpy as np
 import pandas as pd
@@ -517,8 +517,8 @@ def infer_standard_groups(hdf_path) -> dict:
     return standard_groups
 
 
-def store_output(f: pathlib.Path, key: str, *, dataframe: pd.DataFrame = None,
-                 annotations: pd.DataFrame = None) -> NoReturn:
+def store_output(f: pathlib.Path, key: str, *, dataframe: Optional[pd.DataFrame],
+                 annotations: Optional[pd.DataFrame]) -> NoReturn:
     """ Store dataframe and annotations into a HDF file """
     with pd.HDFStore(str(f.resolve()), 'w') as store:
         if dataframe is not None:
