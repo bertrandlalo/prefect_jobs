@@ -33,17 +33,20 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_file_adapter: bool = False, **kwargs):
+    def __init__(self, as_file_adapter: bool = False, limit: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self._as_file_adapter = as_file_adapter
+        self._limit = limit
 
-    def run(self, basedir, pattern='**/*.hdf5'):
+    def run(self, basedir: str, pattern: str = '**/*.hdf5'):
         if not basedir:
             return []
         path = pathlib.Path(basedir)
         # regex = re.compile(regex)
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
-        files = [file for file in path.glob(pattern)]
+        files = [file.relative_to(path) for file in path.glob(pattern)]
+        if self._limit is not None:
+            files = files[:self._limit]
         # files.sort()
         self.logger.info('list_files on basedir %s found %d files to process',
                          basedir, len(files))
