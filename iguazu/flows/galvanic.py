@@ -18,19 +18,25 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_galvanic'
     DEFAULT_QUERY = f"""
-        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename,  -- this is just to help the human debugging this
-               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-        AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
-        AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
-        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    COALESCE (iguazu->'flows'->'{REGISTRY_NAME}' ->> 'version', '') <  '{__version__}'    """
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND                                             --  iguazu standardize flow has ran but failed or deprecated (lower version)
+       (
+        OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+        OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < {__version__}
+        )                             
+    ORDER BY id                                     -- always in the same order
+        """
 
     def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
@@ -135,15 +141,15 @@ class GalvanicSummaryFlow(PreparedFlow):
 
     REGISTRY_NAME = 'summarize_galvanic'
     DEFAULT_QUERY = f"""
-        SELECT
-               base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename  -- this is just to help the human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
-        ORDER BY id -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
+    ORDER BY id -- always in the same order
     """
 
     def _build(self,
