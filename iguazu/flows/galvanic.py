@@ -30,11 +30,11 @@ class GalvanicFeaturesFlow(PreparedFlow):
     AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
     AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
     AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-    AND    (
-               iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL         -- That has not already been succesfully processed by this flow
-           OR  COALESCE(iguazu->'flows'->'{REGISTRY_NAME}'->>'version', '')  -- or if has been processed but by an outdated version
-                < '{__version__}'
-   )                                 
+    AND                                             --  iguazu standardize flow has ran but failed or deprecated (lower version)
+       (
+        OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+        OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < {__version__}
+        )                             
     ORDER BY id                                     -- always in the same order
         """
 

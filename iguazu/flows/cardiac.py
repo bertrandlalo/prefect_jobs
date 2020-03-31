@@ -27,7 +27,11 @@ class CardiacFeaturesFlow(PreparedFlow):
         AND    standard->'signals' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
         AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    COALESCE (iguazu->'flows'->'features_cardiac' ->> 'version', '') <  '{__version__}'
+        AND    
+            (
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < {__version__}
+            )
         ORDER BY id                                     -- always in the same order
 """
 
