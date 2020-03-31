@@ -115,16 +115,16 @@ class CardiacSummaryFlow(PreparedFlow):
 
     REGISTRY_NAME = 'summarize_cardiac'
     DEFAULT_QUERY = f"""
-        SELECT
-               base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename  -- this is just to help the human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
-        --AND    standard->'features' ? '/iguazu/features/ppg/sequence' -- containing the PPG features
-        ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
+    --AND    standard->'features' ? '/iguazu/features/ppg/sequence' -- containing the PPG features
+    ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
 """
 
     def _build(self, **kwargs):

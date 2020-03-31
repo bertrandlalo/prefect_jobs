@@ -141,15 +141,15 @@ class GalvanicSummaryFlow(PreparedFlow):
 
     REGISTRY_NAME = 'summarize_galvanic'
     DEFAULT_QUERY = f"""
-        SELECT
-               base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename  -- this is just to help the human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
-        ORDER BY id -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
+    ORDER BY id -- always in the same order
     """
 
     def _build(self,
