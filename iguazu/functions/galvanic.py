@@ -1,7 +1,9 @@
 import logging
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 from dsu.cvxEDA import apply_cvxEDA
 from dsu.dsp.filters import filtfilt_signal, scale_signal, drop_rows
 from dsu.dsp.peaks import detect_peaks
@@ -11,6 +13,7 @@ from sklearn.metrics import auc
 from sklearn.preprocessing import RobustScaler
 
 from iguazu.core.features import dataclass_to_dataframe
+from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -205,10 +208,10 @@ def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshol
     epochs = []
     for i, idx in enumerate(idx_epochs):
         logger.debug('Epoch %d / %d', i + 1, len(idx_epochs))
-        input = signals.iloc[idx][[column]].dropna()
-        if not input.empty:
+        chunk = signals.iloc[idx][[column]].dropna()
+        if not chunk.empty:
             chunk = (
-                apply_cvxEDA(input, **cvxeda_params)
+                apply_cvxEDA(chunk, **cvxeda_params)
                     .iloc[idx_warmup]
                     .rename_axis(index='epoched_index')
                     .reset_index()
@@ -228,13 +231,13 @@ def galvanic_cvx(signals, annotations, column=None, warmup_duration=15, threshol
     # add an annotation rejection boolean on amplitude criteria
     # todo: helpers with inputs: data, annotations, and index or bool condition, that sets values in data to NaN and annotate in annotations
     annotations.loc[signals[signals[
-                                column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'  # Todo: question: should we add a new column?
+                                column + '_SCR'] >= threshold_scr].index, 'GSR'] = 'CVX SCR outlier'
 
     warm_up_timedelta = warmup_duration * np.timedelta64(1, 's')
     annotations.loc[:signals.index[0] + warm_up_timedelta,
-    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'
     annotations.loc[signals.index[-1] - warm_up_timedelta:,
-    'GSR'] = 'CVX wam up'  # Todo: question: should we add a new column?
+    'GSR'] = 'CVX warm up'
     # replace column string name by 'gsr' for lisibility purpose
     signals.columns = signals.columns.str.replace(column, 'GSR')
 
@@ -303,38 +306,36 @@ def galvanic_scrpeaks(signals, annotations, column='GSR_SCR', peaks_kwargs=None,
     return data, annotations
 
 
-from dataclasses import dataclass, field
-
 
 # Galvanic features
 # -----------------
 @dataclass
 class SCRFeatures:
-    amplitudeSCR: float = field(default=np.nan,
+    SCRamplitude: float = field(default=np.nan,
                                 metadata={'doc': 'Mean amplitude of SCR component', 'units': 'au'})
-    increaseSCR: float = field(default=np.nan,
+    SCRincrease: float = field(default=np.nan,
                                metadata={'doc': 'Increase duration of SCR component', 'units': 's'})
-    decreaseSCR: float = field(default=np.nan,
+    SCRdecrease: float = field(default=np.nan,
                                metadata={'doc': 'Recovery duration of SCR component', 'units': 's'})
-    rateSCR: float = field(default=np.nan,
+    SCRrate: float = field(default=np.nan,
                            metadata={'doc': 'Number of SCR peaks divided by duration', 'units': 'peaks/s'})
 
 
 @dataclass
 class SCLFeatures:
-    meanSCL: float = field(default=np.nan,
+    SCLmean: float = field(default=np.nan,
                            metadata={'doc': 'Mean of SCL component', 'units': 'su'})
-    medianSCL: float = field(default=np.nan,
+    SCLmedian: float = field(default=np.nan,
                              metadata={'doc': 'Median of SCL component', 'units': 'su'})
-    SDSCL: float = field(default=np.nan,
+    SCLsd: float = field(default=np.nan,
                          metadata={'doc': 'Standard deviation of SCL component', 'units': 'su'})
-    aucSCL: float = field(default=np.nan,
+    SCLauc: float = field(default=np.nan,
                           metadata={'doc': 'Area Under Curve divided by duration of SCL component', 'units': 'su/s'})
-    slopeSCL: float = field(default=np.nan,
+    SCLslope: float = field(default=np.nan,
                             metadata={'doc': 'Slope from linear regression on SCL component', 'units': 'su'})
-    interceptSCL: float = field(default=np.nan,
+    SCLintercept: float = field(default=np.nan,
                                 metadata={'doc': 'Intercept from linear regression on SCL component', 'units': 'su'})
-    rSCL: float = field(default=np.nan,
+    SCLr: float = field(default=np.nan,
                         metadata={'doc': 'R coefficient from linear regression on SCL component', 'units': 'su'})
 
 
@@ -345,9 +346,6 @@ class SCLFeatures:
 #     HF: float = np.nan
 #     VHF: float = np.nan
 #     LFHF: float = np.nan
-
-
-import statsmodels.api as sm
 
 
 def linear_regression(y, x):
@@ -381,9 +379,9 @@ def scl_features(scl: pd.Series) -> SCLFeatures:
     period_mins = (scl.index[-1] - scl.index[0]) / np.timedelta64(60, 's')
     logger.debug('Calculating time features on %.1f minutes of SCL data', period_mins)
 
-    features.meanSCL = np.mean(scl)
-    features.medianSCL = np.median(scl)
-    features.SDSCL = np.std(scl)
+    features.SCLmean = np.mean(scl)
+    features.SCLmedian = np.median(scl)
+    features.SCLsd = np.std(scl)
 
     # convert datetime index into floats
     scl.index -= scl.index[0]
@@ -392,8 +390,8 @@ def scl_features(scl: pd.Series) -> SCLFeatures:
     x = scl.index
     y = scl.values.astype(float)
 
-    features.aucSCL = auc(y=y, x=x) / period_mins
-    features.slopeSCL, features.interceptSCL, features.rSCL, _, _ = linear_regression(y, x)
+    features.SCLauc = auc(y=y, x=x) / period_mins
+    features.SCLslope, features.SCLintercept, features.SCLr, _, _ = linear_regression(y, x)
 
     logger.debug('SCL features: %s', features)
     return features
@@ -415,22 +413,20 @@ def scr_features(scr: pd.Series, peaks: pd.DataFrame) -> SCRFeatures:
 
     if peaks.empty:
         # just means that there were no SCR peaks, return 0 to all features
-        features.amplitudeSCR = features.increaseSCR = features.decreaseSCR = features.rateSCR = 0.
+        features.SCRamplitude = features.SCRincrease = features.SCRdecrease = features.SCRrate = 0.
         return features
 
     period_mins = (scr.index[-1] - scr.index[0]) / np.timedelta64(60, 's')
     logger.debug('Calculating peak features on %.1f minutes of SCR data', period_mins)
 
-    features.amplitudeSCR = np.mean(peaks['GSR_SCR_peaks_increase-amplitude'])
-    features.increaseSCR = np.mean(peaks['GSR_SCR_peaks_increase-duration'])
-    features.decreaseSCR = np.mean(peaks['GSR_SCR_peaks_recovery-duration'])
-    features.rateSCR = len(peaks) / period_mins
+    features.SCRamplitude = np.mean(peaks['GSR_SCR_peaks_increase-amplitude'])
+    features.SCRincrease = np.mean(peaks['GSR_SCR_peaks_increase-duration'])
+    features.SCRdecrease = np.mean(peaks['GSR_SCR_peaks_recovery-duration'])
+    features.SCRrate = len(peaks) / period_mins
 
     logger.debug('SCR features: %s', features)
     return features
 
-
-from iguazu.functions.unity import VALID_SEQUENCE_KEYS
 
 
 def gsr_features(cvx, peaks, events, known_sequences=None):

@@ -5,13 +5,12 @@ from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.functions.galvanic import GSRArtifactCorruption
-from iguazu.tasks.common import LoadDataframe, MergeDataframes, PropagateMetadata, SlackTask
+from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
 from iguazu.tasks.galvanic import CleanGSRSignal, ApplyCVX, DetectSCRPeaks, Downsample, ExtractGSRFeatures
-from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.standards import Report
 
 logger = logging.getLogger(__name__)
-
 
 
 class GalvanicFeaturesFlow(PreparedFlow):
@@ -19,20 +18,26 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_galvanic'
     DEFAULT_QUERY = f"""
-        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename,  -- this is just to help the human debugging this
-               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-        AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
-        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    COALESCE (iguazu->'flows'->'features_galvanic' ->> 'version', '') <  '{__version__}'
-        ORDER BY id                                -- always in the same order
-    """
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    (iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL 
+           OR   
+            (
+                iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
+        ))                      
+    ORDER BY id                                     -- always in the same order
+        """
 
     def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
@@ -54,9 +59,9 @@ class GalvanicFeaturesFlow(PreparedFlow):
             kwargs['query'] = self.DEFAULT_QUERY
             kwargs['dialect'] = 'postgresql_json'
 
-        # The cardiac features flow requires an upstream dataset flow in order
+        # The galvanic features flow requires an upstream dataset flow in order
         # to provide the input files. Create one and deduce the tasks to
-        # plug the cardiac flow to the output of the dataset flow
+        # plug the galvanic flow to the output of the dataset flow
         dataset_flow = GenericDatasetFlow(**kwargs)
         raw_signals = dataset_flow.terminal_tasks().pop()
         events = raw_signals
@@ -95,8 +100,8 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(message='Galvanic feature extraction finished!')
-
+        notify = SlackTask(preamble='Galvanic feature extraction finished.\n'
+                                    'Task report:')
         with self:
             create_noresult = create_flow_metadata.map(parent=raw_signals)
             # Signal processing branch
@@ -133,19 +138,19 @@ class GalvanicFeaturesFlow(PreparedFlow):
 
 
 class GalvanicSummaryFlow(PreparedFlow):
-    """Collect all  cardiac features in a single CSV file"""
+    """Collect all  galvanic features in a single CSV file"""
 
     REGISTRY_NAME = 'summarize_galvanic'
     DEFAULT_QUERY = f"""
-        SELECT
-               base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename  -- this is just to help the human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
-        ORDER BY id -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
+    ORDER BY id -- always in the same order
     """
 
     def _build(self,

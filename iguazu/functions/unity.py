@@ -228,4 +228,7 @@ def extract_standardized_events(events: pd.DataFrame) -> pd.DataFrame: #selectio
     standard_events = standard_events[['id', 'name', 'begin', 'end', 'data']]
 
     merged = pd.concat((standard_events, standard_sequences), axis='index', sort=False)
+    # fix dtype of begin and end to datetime
+    merged['begin'] = merged['begin'].astype('datetime64[ns]')
+    merged['end'] = merged['end'].astype('datetime64[ns]')
     return sort_standard_events(merged)

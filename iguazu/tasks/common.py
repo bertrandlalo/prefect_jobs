@@ -2,7 +2,7 @@ import copy
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional, List
+from typing import Dict, Iterable, NoReturn, Optional, List, Mapping
 
 import pandas as pd
 import prefect
@@ -33,17 +33,20 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_file_adapter: bool = False, **kwargs):
+    def __init__(self, as_file_adapter: bool = False, limit: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self._as_file_adapter = as_file_adapter
+        self._limit = limit
 
-    def run(self, basedir, pattern='**/*.hdf5'):
+    def run(self, basedir: str, pattern: str = '**/*.hdf5'):
         if not basedir:
             return []
         path = pathlib.Path(basedir)
         # regex = re.compile(regex)
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
-        files = [file for file in path.glob(pattern)]
+        files = [file.relative_to(path) for file in path.glob(pattern)]
+        if self._limit is not None:
+            files = files[:self._limit]
         # files.sort()
         self.logger.info('list_files on basedir %s found %d files to process',
                          basedir, len(files))
@@ -217,9 +220,11 @@ class MergeHDF5(iguazu.Task):
             output_file.metadata.setdefault(self.hdf5_family, {})
             output_file.metadata[self.hdf5_family] = infer_standard_groups(output_file.file_str)
 
+        # make a copy of parent.metadata
+        parent_metadata = copy.deepcopy(parent.metadata)
         # Propagate metadata
         for k in self.propagate_families:
-            parent_meta = parent.metadata.get(k, {})
+            parent_meta = parent_metadata.get(k, {})
             parent_meta.pop('id', None)
             output_file.metadata[k].update(parent_meta)
 
@@ -290,27 +295,6 @@ class AddSourceMetadata(prefect.Task):
         file.upload()
 
 
-class PropagateMetadata(prefect.Task):
-
-    def __init__(self, *, propagate_families: Optional[List[str]] = None, **kwargs):
-        super().__init__(**kwargs)
-        self.propagate_families = propagate_families
-
-    def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
-        if child is None:
-            print('oh dear')
-            import ipdb;
-            ipdb.set_trace()
-        # Propagate metadata
-        for k in self.propagate_families:
-            parent_meta = parent.metadata.get(k, {})
-            parent_meta.pop('id', None)
-            child.metadata[k].update(parent_meta)
-        # upload metadata
-        child.upload_metadata()
-        return child
-
-
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
 
@@ -372,16 +356,24 @@ class MergeDataframes(iguazu.Task):
         return output
 
     def default_outputs(self, **kwargs):
-        original_kws = prefect.context.run_kwargs
-        parents = original_kws['parents']
-        dummy_reference = parents[0]
         output = self.create_file(
-            parent=dummy_reference,
+            parent=None,
             filename=self.filename,
             path='datasets',
             temporary=False,
         )
         return output
+
+    def default_metadata(self, exception, **inputs) -> Mapping:
+        meta = super().default_metadata(exception, **inputs)
+        if exception is None:
+            # Use the default metadata from the super class, but change the parents
+            # to include all the input files
+            original_kws = prefect.context.run_kwargs
+            parents = original_kws['parents']
+            journal_family = self.meta.metadata_journal_family
+            meta[journal_family]['parents'] = [p.id for p in parents]
+        return meta
 
     def preconditions(self, **kwargs) -> NoReturn:
         super().preconditions(**kwargs)

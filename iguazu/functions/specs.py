@@ -1,11 +1,14 @@
 import collections
 import enum
 import logging
+import pathlib
+from typing import NoReturn, Optional
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger()
+
 
 @enum.unique
 class EventSpecificationErrorCode(enum.Enum):
@@ -46,6 +49,7 @@ class SignalSpecificationErrorCode(enum.Enum):
 
 class SpecificationError(Exception):
     """Exception used when an object does not meet a specification"""
+
     def __init__(self, message, code):
         super().__init__(message)
         self.code = code
@@ -218,9 +222,9 @@ def sort_standard_events(dataframe: pd.DataFrame) -> pd.DataFrame:
         tz = dataframe['begin'].dtype.tz
     sorted_dataframe = (
         dataframe
-        .assign(end_na=lambda x: x['end'].fillna(pd.Timestamp.max.tz_localize(tz=tz)))
-        .sort_values(by=['begin', 'end_na', 'id'])
-        .drop(columns='end_na')
+            .assign(end_na=lambda x: x['end'].fillna(pd.Timestamp.max.tz_localize(tz=tz)))
+            .sort_values(by=['begin', 'end_na', 'id'])
+            .drop(columns='end_na')
     )
     return sorted_dataframe
 
@@ -276,7 +280,7 @@ def _check_feature_specification_v1(obj):
                                             FeatureSpecificationErrorCode.MISSING_COLUMN)
 
     # [2] - column types
-    object_columns = ('id', )
+    object_columns = ('id',)
     for col in object_columns:
         if dataframe[col].dtype != np.dtype(object):
             raise FeatureSpecificationError(f'Column "{col}" must be of object dtype',
@@ -375,9 +379,9 @@ def _check_signal_specification_v1(obj):
     # Use mne channel names for standard 10/05 to avoid writing them down
     from mne.channels import make_standard_montage
     known_columns = (
-        make_standard_montage('standard_1005').ch_names +  # EEG
-        ['I', 'II', 'III', 'aVR', 'aVL', 'aVF'] +  # ECG
-        ['PPG', 'GSR', 'PZT']
+            make_standard_montage('standard_1005').ch_names +  # EEG
+            ['I', 'II', 'III', 'aVR', 'aVL', 'aVF'] +  # ECG
+            ['PPG', 'GSR', 'PZT']
     )
     for col in dataframe.columns:
         if col == 'sample_number':
@@ -511,3 +515,13 @@ def infer_standard_groups(hdf_path) -> dict:
                              'a standard features dataframe due to  %s',
                              g, ex)
     return standard_groups
+
+
+def store_output(f: pathlib.Path, key: str, *, dataframe: Optional[pd.DataFrame],
+                 annotations: Optional[pd.DataFrame]) -> NoReturn:
+    """ Store dataframe and annotations into a HDF file """
+    with pd.HDFStore(str(f.resolve()), 'w') as store:
+        if dataframe is not None:
+            dataframe.to_hdf(store, key)
+        if annotations is not None:
+            annotations.to_hdf(store, key + '/annotations')

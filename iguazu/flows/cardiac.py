@@ -5,28 +5,34 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.cardiac import CleanPPGSignal, ExtractHRVFeatures, SSFPeakDetect
 from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
+from iguazu.tasks.standards import Report
 
 logger = logging.getLogger(__name__)
 
 
 class CardiacFeaturesFlow(PreparedFlow):
     """Extract all  cardiac features from a file dataset"""
-
     REGISTRY_NAME = 'features_cardiac'
     DEFAULT_QUERY = f"""
-SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-       base->>'filename' AS filename,  -- this is just to help the human debugging this
-       omi->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-       iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-FROM   metadata
-WHERE  base->>'state' = 'READY'                -- No temporary files
-AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-AND    (standard->'standardized')::bool        -- Only standardized files
-AND    standard->'groups' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
-AND    standard->'groups' ? '/iguazu/events/standard'     -- containing standardized events
-AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-AND    iguazu->>'version' <= '{__version__}'   -- by this iguazu version or earlier
-ORDER BY id                                    -- always in the same order
+        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+               base->>'filename' AS filename,  -- this is just to help the human debugging this
+               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+        FROM   metadata
+        WHERE  base->>'state' = 'READY'                -- No temporary files
+        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+        AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+        AND    standard->'signals' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
+        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+        AND    
+            (
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < {__version__}
+            )
+        ORDER BY id                                     -- always in the same order
 """
 
     def _build(self, *, plot=False, **kwargs):
@@ -34,8 +40,9 @@ ORDER BY id                                    -- always in the same order
         # families: (nb: None means "latest" version)
         required_families = dict(
             iguazu=None,
-            omi=None,
+            omind=None,
             standard=None,
+            protocol=None
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -46,7 +53,7 @@ ORDER BY id                                    -- always in the same order
         # come. Otherwise, set to the default defined just above
         if not kwargs.get('query', None):
             kwargs['query'] = self.DEFAULT_QUERY
-            kwargs['dialect'] = 'postgres_json'
+            kwargs['dialect'] = 'postgresql_json'
 
         # The cardiac features flow requires an upstream dataset flow in order
         # to provide the input files. Create one and deduce the tasks to
@@ -55,6 +62,7 @@ ORDER BY id                                    -- always in the same order
         raw_signals = dataset_flow.terminal_tasks().pop()
         events = raw_signals
         self.update(dataset_flow)
+        create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
         # Instantiate tasks
         clean = CleanPPGSignal(
@@ -72,11 +80,16 @@ ORDER BY id                                    -- always in the same order
             nni_hdf5_key='/iguazu/signal/ppg/NNi',
             output_hdf5_key='/iguazu/features/ppg/sequence',
         )
-        notify = SlackTask(message='Cardiac feature extraction finished!')
+        propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
 
+        update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
+        report = Report()
+        notify = SlackTask(preamble='Cardiac feature extraction finished.\n'
+                                    'Task report:')
         with self:
+            create_noresult = create_flow_metadata.map(parent=raw_signals)
             # Signal processing branch
-            clean_signals = clean.map(signals=raw_signals)
+            clean_signals = clean.map(signals=raw_signals, upstream_tasks=[create_noresult])
             preprocessed_signals = detect_peaks.map(signals=clean_signals)
             # Feature extraction
             features = extract_features.map(nn=preprocessed_signals,
@@ -84,8 +97,11 @@ ORDER BY id                                    -- always in the same order
                                             events=events,
                                             parent=raw_signals)
 
+            features_with_metadata = propagate_metadata.map(parent=raw_signals, child=features)
+            update_noresult = update_flow_metadata.map(parent=raw_signals, child=features_with_metadata)
             # Send slack notification
-            notify(upstream_tasks=[features])
+            message = report(files=features_with_metadata, upstream_tasks=[update_noresult])
+            notify(message=message)
 
         logger.debug('Built flow %s with tasks %s', self, self.tasks)
 
@@ -99,27 +115,26 @@ class CardiacSummaryFlow(PreparedFlow):
 
     REGISTRY_NAME = 'summarize_cardiac'
     DEFAULT_QUERY = f"""
-SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-       base->>'filename' AS filename,  -- this is just to help the human debugging this
-       omi->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-       iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-FROM   metadata
-WHERE  base->>'state' = 'READY'                -- No temporary files
-AND    base->>'filename' LIKE '%_hrv_features.hdf5'         -- Only HDF5 files TODO: remove _hrv_features hack
-AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully processed
-AND    iguazu->>'version' <= '{__version__}'   -- by this iguazu version or earlier
-ORDER BY id                                    -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
+    --AND    standard->'features' ? '/iguazu/features/ppg/sequence' -- containing the PPG features
+    ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
 """
 
-    def _build(self, *,
-               workspace_name=None, query=None, alt_query=None,
-               **kwargs):
+    def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
         # families: (nb: None means "latest" version)
         required_families = dict(
             iguazu=None,
-            omi=None,
+            omind=None,
             standard=None,
+            protocol=None
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -130,7 +145,7 @@ ORDER BY id                                    -- always in the same order
         # come. Otherwise, set to the default defined just above
         if not kwargs.get('query', None):
             kwargs['query'] = self.DEFAULT_QUERY
-            kwargs['dialect'] = 'postgres_json'
+            kwargs['dialect'] = 'postgresql_json'
 
         # Manage connections to other flows
         dataset_flow = GenericDatasetFlow(**kwargs)
