@@ -84,9 +84,9 @@ def _logging_handler(task, old_state, new_state):
             hdlr.close()
             if context_backend == 'local':
                 # move from 'RUNNING' folder to final one (given task final status)
-                new_path = file_adapter.file.parents[1] / state_name / file_adapter.basename
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-                file_adapter.file.rename(new_path)
+                new_path = file_adapter.file.parents[1] / state_name
+                new_path.mkdir(exist_ok=True)
+                file_adapter.file.rename(new_path / file_adapter.basename)
                 file_adapter._local_path = new_path  # Not really necessary, but to avoid an invalid FileAdapter
             else:  # quetzal
                 # upload on quetzal
@@ -94,7 +94,7 @@ def _logging_handler(task, old_state, new_state):
                 # change path in base metadata and upload them
                 file_adapter.metadata['base']['path'] = str(
                     pathlib.Path(file_adapter.metadata['base']['path']).parents[
-                        0] / state_name / file_adapter.basename)
+                        0] / state_name)
                 file_adapter.upload_metadata()
 
     return new_state
