@@ -3,8 +3,8 @@ import logging
 from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask, PropagateMetadata
-from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.respiration import CleanPZTSignal, ExtractPZTFeatures
 from iguazu.tasks.standards import Report
 
@@ -13,22 +13,27 @@ logger = logging.getLogger(__name__)
 
 class RespirationFeaturesFlow(PreparedFlow):
     """Extract all  respiration features from a file dataset"""
-
     REGISTRY_NAME = 'features_respiration'
     DEFAULT_QUERY = f"""
-            SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-                   base->>'filename' AS filename,  -- this is just to help the human debugging this
-                   omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-                   iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-            FROM   metadata
-            WHERE  base->>'state' = 'READY'                -- No temporary files
-            AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-            AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-            AND    standard->'signals' ? '/iguazu/signal/pzt/standard' -- containing the PZT signal
-            AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-            AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-            AND    COALESCE (iguazu->'flows'->'features_respiration' ->> 'version', '') <  '{__version__}'
-            ORDER BY id                                -- always in the same order
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'signals' ? '/iguazu/signal/pzt/standard' -- containing the PZT signal
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    (iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL 
+           OR   
+            (
+                iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
+        ))                      
+    ORDER BY id                                     -- always in the same order
         """
 
     def _build(self, **kwargs):
@@ -104,16 +109,16 @@ class RespirationSummaryFlow(PreparedFlow):
 
     REGISTRY_NAME = 'summarize_respiration'
     DEFAULT_QUERY = f"""
-        SELECT
-               base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename  -- this is just to help the human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/pzt/sequence' -- containing the GSR signal
-        AND    iguazu->>'version' = '{__version__}'  -- Select only files generated with last version (avoids ending with corrupted local file) 
-        ORDER BY id -- always in the same order
+    SELECT
+           base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename  -- this is just to help the human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
+    AND    standard->'features' ? '/iguazu/features/pzt/sequence' -- containing the PPG features
+    ORDER BY id -- always in the same order         always in the same order
     """
 
     def _build(self, **kwargs):
