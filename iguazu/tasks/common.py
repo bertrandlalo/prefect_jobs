@@ -49,7 +49,7 @@ class ListFiles(prefect.Task):
         path = pathlib.Path(basedir)
         # regex = re.compile(regex)
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
-        files = [file for file in path.glob(self._pattern)]
+        files = [file.relative_to(path) for file in path.glob(self._pattern)]
         if self._limit is not None:
             files = files[:self._limit]
         # files.sort()
