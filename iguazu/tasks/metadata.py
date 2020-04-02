@@ -3,11 +3,12 @@ from typing import Any, Dict, NoReturn, Tuple
 
 import prefect
 
+import iguazu
 from iguazu import __version__, FileAdapter
 from iguazu.utils import deep_update
 
 
-class CreateFlowMetadata(prefect.Task):
+class CreateFlowMetadata(iguazu.Task):
     """ Create flow key with current registry name in family iguazu -> flows """
 
     def __init__(self, *, flow_name, **kwargs):
@@ -15,8 +16,9 @@ class CreateFlowMetadata(prefect.Task):
         self.flow_name = flow_name
 
     def run(self, *, parent: FileAdapter) -> NoReturn:
+        journal_family = self.meta.metadata_journal_family
         new_meta = {
-            'iguazu': {
+            journal_family: {
                 'flows': {
                     self.flow_name: {
                         'status': None,
@@ -29,7 +31,7 @@ class CreateFlowMetadata(prefect.Task):
         parent.upload_metadata()
 
 
-class UpdateFlowMetadata(prefect.Task):
+class UpdateFlowMetadata(iguazu.Task):
     """ Update status of current flow in metadata"""
 
     def __init__(self, *, flow_name, **kwargs):
@@ -37,11 +39,12 @@ class UpdateFlowMetadata(prefect.Task):
         self.flow_name = flow_name
 
     def run(self, *, parent: FileAdapter, child: FileAdapter) -> NoReturn:
+        journal_family = self.meta.metadata_journal_family
         new_meta = {
-            'iguazu': {
+            journal_family: {
                 'flows': {
                     self.flow_name: {
-                        'status': child.metadata['iguazu']['status'],  # todo get status from child
+                        'status': child.metadata[journal_family]['status'],  # todo get status from child
                         'version': __version__,
                     }
                 }
