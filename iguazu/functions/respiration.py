@@ -21,24 +21,24 @@ class NoRespirationPeaks(Exception):
 # --------------------
 @dataclass
 class PZTFeatures:
-    meanPZT: float = field(default=np.nan,
+    AMPmean: float = field(default=np.nan,
                            metadata={'doc': 'Mean respiratory amplitude', 'units': 'au'})
-    maxPZT: float = field(default=np.nan,
+    AMPmax: float = field(default=np.nan,
                           metadata={'doc': 'Max respiratory amplitude', 'units': 'au'})
-    minPZT: float = field(default=np.nan,
+    AMPmin: float = field(default=np.nan,
                           metadata={'doc': 'Min respiratory amplitude', 'units': 'au'})
-    sdPZT: float = field(default=np.nan,
+    AMPsd: float = field(default=np.nan,
                          metadata={'doc': 'Standard Deviation respiratory amplitude', 'units': 'au'})
 
-    meanPERIOD: float = field(default=np.nan,
+    PERIODmean: float = field(default=np.nan,
                               metadata={'doc': 'Mean respiratory cycle duration', 'units': 's'})
-    sdPERIOD: float = field(default=np.nan,
+    PERIODsd: float = field(default=np.nan,
                             metadata={'doc': 'Standard Deviation of respiratory cycle duration', 'units': 's'})
-    meanI: float = field(default=np.nan,
-                         metadata={'doc': 'Mean respiratory inspiration duration', 'units': 's'})
-    meanE: float = field(default=np.nan,
-                         metadata={'doc': 'Mean respiratory expiration duration', 'units': 's'})
-    meanIE: float = field(default=np.nan,
+    INSPImean: float = field(default=np.nan,
+                             metadata={'doc': 'Mean respiratory inspiration duration', 'units': 's'})
+    EXPImean: float = field(default=np.nan,
+                            metadata={'doc': 'Mean respiratory expiration duration', 'units': 's'})
+    IEmean: float = field(default=np.nan,
                           metadata={'doc': 'Mean ratio between inspiration and expiration durations', 'units': 'au'})
 
 
@@ -128,27 +128,27 @@ def respiration_features(data):
     # amplitude characteristics
     amplitude = data.IE_amplitude.dropna()
     if not amplitude.empty:
-        features.meanPZT = amplitude.mean()
-        features.maxPZT = amplitude.max()
-        features.minPZT = amplitude.min()
-        features.sdPZT = amplitude.std()
+        features.AMPmean = amplitude.mean()
+        features.AMPmax = amplitude.max()
+        features.AMPmin = amplitude.min()
+        features.AMPsd = amplitude.std()
     # inspiration duration
     i_duration = data.I_duration.dropna()
     if not i_duration.empty:
-        features.meanI = i_duration.mean()
+        features.INSPImean = i_duration.mean()
     # expiration duration
     e_duration = data.E_duration.dropna()
     if not e_duration.empty:
-        features.meanE = e_duration.mean()
+        features.EXPImean = e_duration.mean()
     ie_duration = data.IE_duration.dropna()
 
     # I/E ratio
     ie_ratio = data.IE_ratio.dropna()
     if not ie_ratio.empty:
-        features.meanIE = ie_ratio.mean()
+        features.IEmean = ie_ratio.mean()
 
     # respiration average cycle
     if not ie_duration.empty:
-        features.meanPERIOD = ie_duration.mean()
-        features.sdPERIOD = ie_duration.std()
+        features.PERIODmean = ie_duration.mean()
+        features.PERIODsd = ie_duration.std()
     return features
