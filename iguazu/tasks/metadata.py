@@ -98,3 +98,22 @@ class AddDynamicMetadata(prefect.Task):
         current_level[last_key] = value
         file.upload_metadata()
         return file
+
+
+class PropagateMetadata(prefect.Task):
+
+    def __init__(self, *, propagate_families: Optional[List[str]] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.propagate_families = propagate_families
+
+    def run(self, *, parent: FileAdapter, child: FileAdapter) -> FileAdapter:
+        # Propagate metadata
+        parent_metadata = copy.deepcopy(parent.metadata)
+        for k in self.propagate_families:
+            parent_meta = parent_metadata.get(k, {})
+            parent_meta.pop('id', None)
+            deep_update(child.metadata, {k: parent_meta})
+        # upload metadata
+        child.upload_metadata()
+        return child
+
