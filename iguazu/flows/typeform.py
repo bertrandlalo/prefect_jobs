@@ -83,12 +83,9 @@ FROM   metadata
 WHERE  base->>'state' = 'READY'                -- No temporary files
 AND    base->>'filename' LIKE '%.json'         -- Only JSON files
 AND    protocol->>'name' = 'vr-questionnaire'  -- From the VR questionnaire (typeform) protocol
--- AND    protocol->>'extra'->'form_id' = '...'      -- Only from the VR questionnaire (TODO: think about this)
-AND    ( 
-           iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL         -- That has not already been succesfully processed by this flow
-       OR  COALESCE(iguazu->'flows'->'{REGISTRY_NAME}'->>'version', '')  -- or if has been processed but by an outdated version
-            < '{__version__}'
-       )
+AND    (   iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL   -- That has not already been succesfully processed by this flow
+       OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL  -- ... see next line (this replaces a COALESCE)
+       OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}' ) -- or if has been processed but by an outdated version
 ORDER BY id                                    -- always in the same order
 """
 
@@ -134,7 +131,7 @@ ORDER BY id                                    -- always in the same order
             form = read_form()
             responses = read_json.map(file=json_files, upstream_tasks=[create_noresult])
             scores = extract_scores.map(parent=json_files, response=responses, form=unmapped(form))
-            update_noresult = update_flow_metadata.map(parent=json_files, child=scores)
+            _ = update_flow_metadata.map(parent=json_files, child=scores)
 
     @staticmethod
     def click_options():
