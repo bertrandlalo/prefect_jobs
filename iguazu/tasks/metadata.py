@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Dict, NoReturn, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import prefect
 
@@ -15,7 +15,7 @@ class CreateFlowMetadata(iguazu.Task):
         super().__init__(**kwargs)
         self.flow_name = flow_name
 
-    def run(self, *, parent: FileAdapter) -> NoReturn:
+    def run(self, *, parent: FileAdapter) -> None:
         journal_family = self.meta.metadata_journal_family
         new_meta = {
             journal_family: {
@@ -38,7 +38,7 @@ class UpdateFlowMetadata(iguazu.Task):
         super().__init__(**kwargs)
         self.flow_name = flow_name
 
-    def run(self, *, parent: FileAdapter, child: FileAdapter) -> NoReturn:
+    def run(self, *, parent: FileAdapter, child: FileAdapter) -> None:
         journal_family = self.meta.metadata_journal_family
         new_meta = {
             journal_family: {
