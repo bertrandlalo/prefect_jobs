@@ -103,7 +103,8 @@ class ExtractPZTFeatures(iguazu.Task):
             features = respiration_sequence_features(signals, events)
         except NoRespirationPeaks:
             # generate empty dataframe with features
-            raise GracefulFailWithResults
+            raise GracefulFailWithResults('Could not find peaks/trough in PZT signal, '
+                                          'which is reflects a bad signal . ')
 
         if not features.empty:
             features.loc[:, 'file_id'] = parent.id
