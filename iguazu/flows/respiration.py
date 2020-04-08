@@ -28,11 +28,9 @@ class RespirationFeaturesFlow(PreparedFlow):
     AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
     AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
     AND    (iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL 
-           OR   
-            (
-                iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+            OR iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
             OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
-        ))                      
+           )                    
     ORDER BY id                                     -- always in the same order
         """
 
