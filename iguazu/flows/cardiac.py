@@ -15,23 +15,23 @@ class CardiacFeaturesFlow(PreparedFlow):
     """Extract all  cardiac features from a file dataset"""
     REGISTRY_NAME = 'features_cardiac'
     DEFAULT_QUERY = f"""
-        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename,  -- this is just to help the human debugging this
-               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-        AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
-        AND    standard->'signals' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
-        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    
-            (
-            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
-            OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < {__version__}
-            )
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'signals' ? '/iguazu/signal/ppg/standard' -- containing the PPG signal
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND (
+         iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
+)
         ORDER BY id                                     -- always in the same order
 """
 

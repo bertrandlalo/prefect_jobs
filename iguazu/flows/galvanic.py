@@ -34,6 +34,7 @@ class GalvanicFeaturesFlow(PreparedFlow):
             OR iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
             OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
            )                  
+
     ORDER BY id                                     -- always in the same order
         """
 
