@@ -1,0 +1,81 @@
+[tool.poetry]
+name = "iguazu"
+version = "0.4.0"
+description = "OpenMind innovation Python jobs platform"
+authors = ["Raphaëlle Bertrand-Lalo <raphaelle@omind.me>", "David Ojeda <david@omind.me>"]
+readme = "README.rst"
+homepage = "https://github.com/OpenMindInnovation/iguazu"
+repository = "https://github.com/OpenMindInnovation/iguazu"
+include = [
+    "iguazu/functions/templates/**/*"
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+# Iguazu core dependencies
+prefect = "^0.10.2"
+graphviz = "^0.13.2"
+quetzal-client = "^0.5.2"
+docker = "^4.2.0"
+click = "^7.1.1"
+psutil = "^5.7.0"
+requests = "^2.23.0"
+colorlog = "^4.1.0"
+pendulum = "^2.1.0"
+# Note on pyyaml: it is important to avoid pyyaml version 5.2, because it is
+# incompatible with a conda + pip package mix: dsu, and possibly other conda
+# packages require pyyaml, and at the same time prefect and quetzal-client
+# (which are pip packages) require pyyaml too. They way pyyaml is distributed
+# makes it fail when pip and conda are mixed. This does not happen on previous
+# versions of pyyaml.
+pyyaml = ">=5.1.2,<5.2"
+
+# Data processing libraries
+dsu = { git = "https://github.com/OpenMindInnovation/datascience_utils.git", tag = "v0.5.0"}
+numpy = "^1.18"
+pandas = "^0.25.3"
+tables = "^3.6.1"
+scikit-learn = "^0.22.1"
+scipy = "^1.4.1"
+# Note: pandas in conda is strange, it needs to explicitly add these two:
+simplegeneric = "^0.8.1"
+tzlocal = "^2.0.0"
+# Task-specific libraries
+mne = "^0.20.0"
+neurokit2 = "^0.0.18"
+statsmodels = "^0.11.0"
+nolds = "^0.5.2"
+pyentrp = "^0.6.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.4.1"
+pytest-mock = "^3.0.0"
+sphinx = "^3.0.1"
+sphinx-rtd-theme = "^0.4.3"
+poetry2conda = "^0.1.0"
+sphinx-autodoc-typehints = "^1.10.3"
+coverage = "^5.1"
+pytest-cov = "^2.8.1"
+
+[tool.poetry.scripts]
+iguazu = "iguazu.cli.main:cli"
+
+[tool.poetry2conda]
+name = "iguazu-env"
+
+[tool.poetry2conda.dependencies]
+prefect = { channel = "conda-forge" }
+colorlog = { channel = "conda-forge" }
+graphviz = { channel = "pip" }
+docker = { name = "docker-py" }
+quetzal-client = { channel = "pip" }
+neurokit2 = { channel = "pip" }
+tables = { name = "pytables" }
+nolds = { channel = "pip" }
+pyentrp = { channel = "pip" }
+mne = { channel = "conda-forge" }
+
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
