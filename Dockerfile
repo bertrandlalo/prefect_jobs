@@ -1,13 +1,60 @@
 ################################################################################
-# Preliminary stage where OMI private projects will be installed
-# This is a preliminary image in order to avoid saving sensitive information on
-# the final docker image. For example, the git credentials.
-FROM python:3.7-slim as intermediate
+# Multi-stage poetry python installation based on
+# https://github.com/python-poetry/poetry/issues/1879#issuecomment-59213351
 
-# Additional packages not included in the base image
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git openssh-client build-essential \
-    && rm -rf /var/lib/apt/lists/*
+################################################################################
+# Stage 1: python-base
+#          Used as a base Python image with the environment variables set for
+#          Python and poetry
+FROM python:3.7-slim AS python-base
+
+ENV \
+    # Python-related environment variables
+    PYTHONUNBUFFERED=1 \
+    # prevents python creating .pyc files
+    PYTHONDONTWRITEBYTECODE=1 \
+    \
+    # pip-related environment variables
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100 \
+    PIP_VERSION="20.0.2" \
+    \
+    # poetry-related environment variables
+    # https://python-poetry.org/docs/configuration/#using-environment-variables
+    POETRY_VERSION=1.0.5 \
+    # make poetry install to this location
+    POETRY_HOME="/opt/poetry" \
+    # make poetry create the virtual environment in the project's root
+    # it gets named `.venv`
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    # do not ask any interactive question
+    POETRY_NO_INTERACTION=1 \
+    \
+    # paths-related environment variables
+    # this is where our requirements + virtual environment will live
+    PYSETUP_PATH="/opt/pysetup" \
+    VENV_PATH="/opt/pysetup/.venv"
+
+# prepend poetry and venv to path
+ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
+################################################################################
+
+################################################################################
+# Stage 2: builder-base
+#          Used to build all dependencies. This step may need some compilation
+#          tools (like build-essential), which can be quite large, but we don't
+#          want to distribute an image with these temporary tools
+#          In this preliminary stage, OMI private projects will be installed.
+#          This is a preliminary image in order to avoid saving sensitive
+#          information on the final docker image, such as the git credentials.
+FROM python-base AS builder-base
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        # deps for installing poetry
+        curl \
+        # deps for building python deps
+        git openssh-client build-essential
 
 RUN mkdir /root/.ssh/
 # You need to generate these secret files, check the README
@@ -17,35 +64,39 @@ ADD conf/github.pub /root/.ssh/id_rsa.pub
 RUN touch /root/.ssh/known_hosts
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-# install all OMI requirements as wheels
-RUN mkdir /tmp/wheels
-WORKDIR /tmp
-ADD requirements.txt .
-RUN pip install --upgrade pip==20.0.2 && \
-    pip wheel --wheel-dir /tmp/wheels -r requirements.txt
+# Install poetry - respects $POETRY_VERSION and $POETRY_HOME
+RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
 
+# copy project requirement files here to ensure they will be cached.
+WORKDIR $PYSETUP_PATH
+COPY README.rst pyproject.toml ./
+
+# Install all requirements, including the OMI private ones, in the poetry
+# environment, but do not install iguazu (hence the --no-root)
+RUN sed -i -e "s/https:\/\//ssh:\/\/git@/g" pyproject.toml && \
+    poetry install --no-dev --no-root
 ################################################################################
-FROM python:3.7-slim
 
-# Additional packages not included in the base image
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
+#################################################################################
+## Stage 3: iguazu
+FROM python-base AS iguazu
 
-# Install dependencies from wheels generated in intermediate image
-COPY --from=intermediate /tmp/wheels /tmp/wheels
-RUN pip install --upgrade pip==20.0.2 && \
-    pip install /tmp/wheels/*.whl
+# copy in our built environment
+COPY --from=builder-base $POETRY_HOME $POETRY_HOME
+COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
 
-# Copy and install iguazu
-RUN mkdir /code
+# Add dask configuration
+RUN mkdir -p /home/root/.config/dask
+COPY dask-config.yaml /home/root/.config/dask/distributed.yaml
+
+# will become mountpoint of our code
 WORKDIR /code
-COPY setup.cfg setup.py MANIFEST.in ./
+# Copy all source code except the iguazu package, so that there is
+# no rebuild for each new modification
+COPY pyproject.toml README.rst ./
 COPY iguazu ./iguazu
-RUN pip install .
 
-RUN useradd --create-home --home-dir /home/iguazu iguazu && chown -R iguazu /code
-USER iguazu
-RUN mkdir -p /home/iguazu/.config/dask
-COPY dask-config.yaml /home/iguazu/.config/dask/distributed.yaml
-
+# Finally, install iguazu (which will install the iguazu command line).
+# This should be fast because all dependencies are already installed
+RUN pip install -q .
+#################################################################################
