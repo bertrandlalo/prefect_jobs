@@ -35,13 +35,68 @@ using ``bump2version``:
    # Bumps the patch version because we are fixing a bug
    $ bump2version --verbose patch
    current version=0.4.0
+   ...
    new_version=0.4.1
 
    # or...
    $ bump2version --verbose minor
    current_version=0.4.1
+   ...
    new_version=0.5.0
 
 
 You will notice that if your local git repository is **dirty** (i.e. it has
-uncommited chages), this command will fail
+uncommited chages), this command will fail. You will need to commit your changes
+first or use the ``--allow-dirty`` flag. Prefer the former.
+
+After ``bump2version`` succeeds, you will notice that some files have been
+automatically updated:
+
+.. code-block:: bash
+
+   $ git status
+    On branch blabla
+    Changes not staged for commit:
+      (use "git add <file>..." to update what will be committed)
+      (use "git checkout -- <file>..." to discard changes in working directory)
+
+            modified:   .bumpversion.cfg
+            modified:   helm/iguazu/Chart.yaml
+            modified:   helm/iguazu/values.yaml
+            modified:   iguazu/__init__.py
+            modified:   pyproject.toml
+
+Review the changes with ``git diff`` and you will see that the version string
+has been updated on all relevant places. You can add more files on the
+``.bumpversion.cfg`` configuration file, but this will rarely be necessary.
+
+You can now commit and tag. Or, you can reset your changes. Or, you can
+reset your changes and let ``bump2version`` do the commit and tag automatically:
+
+.. code-block:: bash
+
+   # Reset the changes introduced just before. CAREFUL, if you have more
+   # changes, you will lose them!
+   $ git reset --hard HEAD
+
+   # Use bump2version automatic commit and tag:
+   $ bump2version --commit --tag minor
+
+   # Use git to verify your commit and tag:
+   $ git log --pretty=oneline --abbrev-commit
+   2575233 Bump version: 0.4.0 → 0.5.0
+
+   # Use git to push and push the tags
+   git push --tags
+
+Some final notes:
+
+* Avoid pushing tags for build versions. This is useful for development, but not
+  for our git repository.
+* You will almost never bump the major version, unless there is a major change
+  that affects everything.
+* You will not need to change the version on all of the files that use it or
+  declare it, but do review these changes before pushing, just in case.
+* Ultimately, the version number that sets all the other ones should be one
+  on the ``.bumpversion.cfg`` file. If the ``bump2version`` command fails, it
+  is probably the ``current_version`` property is incorrect.
