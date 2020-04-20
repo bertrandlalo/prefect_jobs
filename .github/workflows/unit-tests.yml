@@ -56,4 +56,5 @@ jobs:
     - name: Test with pytest
       run: |
         export PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
-        pytest -v
+        python -m pip list
+        python -m pytest -v
