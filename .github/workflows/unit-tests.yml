@@ -24,21 +24,34 @@ jobs:
         git config --global --add url."https://${{ secrets.ACCESS_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
     - name: Install dependencies
-      # Note that there is sed -ie to change from git+ssh to git+https because
-      # our Docker image requires git, but the github workflow requires https
+      env:
+        # Python-related environment variables
+        PYTHONUNBUFFERED: "1"
+        # prevents python creating .pyc files
+        PYTHONDONTWRITEBYTECODE: "1"
+        # pip-related environment variables
+        PIP_NO_CACHE_DIR: "off"
+        PIP_DISABLE_PIP_VERSION_CHECK: "on"
+        PIP_DEFAULT_TIMEOUT: "100"
+        PIP_VERSION: "20.0.2"
+        # poetry-related environment variables
+        # https://python-poetry.org/docs/configuration/#using-environment-variables
+        POETRY_VERSION: "1.0.5"
+        # make poetry install to this location
+        POETRY_HOME: "/opt/poetry"
+        # make poetry create the virtual environment in the project's root
+        # it gets named `.venv`
+        POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        # do not ask any interactive question
+        POETRY_NO_INTERACTION: "1"
+        # paths-related environment variables
+        # this is where our requirements + virtual environment will live
+        PYSETUP_PATH: "/opt/pysetup"
+        VENV_PATH: "/opt/pysetup/.venv"
       run: |
-        export POETRY_HOME=/opt/poetry
         curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
-        source $POETRY_HOME/env
+        export PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
         poetry install
-
-#     - name: Lint with flake8
-#       run: |
-#         pip install flake8
-#         # stop the build if there are Python syntax errors or undefined names
-#         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-#         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-#         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
       run: |
