@@ -5,7 +5,7 @@
 iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-  tag: 0.3.0-dev-raph-007
+  tag: 0.3.0-dev-raph-008
   pullPolicy: Always
 
 
@@ -116,6 +116,8 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_galvanic",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/galvanic",
            # Flow name
            "features_galvanic",
            # Flow options
@@ -140,6 +142,8 @@ jobs:
            "--executor-type", "dask",
            "--executor-address", "dask-scheduler:8786",
            "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_galvanic",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/galvanic",
            # Flow name
            "summarize_galvanic",
            # Flow options
