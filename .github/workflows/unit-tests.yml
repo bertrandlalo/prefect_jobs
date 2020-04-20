@@ -52,12 +52,10 @@ jobs:
         curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
         export PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
         poetry install
-        which python
-        python -m pip list
-        which pytest
 
     - name: Test with pytest
+      env:
+        VENV_PATH: "/opt/pysetup/.venv"
       run: |
-        export PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
-        python -m pip list
-        python -m pytest -v
+        export PATH="$VENV_PATH/bin:$PATH"
+        pytest -v
