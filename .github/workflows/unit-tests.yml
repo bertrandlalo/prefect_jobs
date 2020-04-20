@@ -27,11 +27,8 @@ jobs:
       # Note that there is sed -ie to change from git+ssh to git+https because
       # our Docker image requires git, but the github workflow requires https
       run: |
-        sed -ie "s/git+ssh:\/\/git@/git+https:\/\//g" requirements.txt
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt
-        pip install .
+        curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+        poetry install
 
 #     - name: Lint with flake8
 #       run: |
