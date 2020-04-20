@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "iguazu"
-version = "0.4.0"
+version = "0.4.0"  # DO NOT CHANGE HERE. Use bump2version
 description = "OpenMind innovation Python jobs platform"
 authors = ["Raphaëlle Bertrand-Lalo <raphaelle@omind.me>", "David Ojeda <david@omind.me>"]
 readme = "README.rst"
