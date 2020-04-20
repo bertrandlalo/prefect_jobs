@@ -27,7 +27,9 @@ jobs:
       # Note that there is sed -ie to change from git+ssh to git+https because
       # our Docker image requires git, but the github workflow requires https
       run: |
+        export POETRY_HOME=/opt/poetry
         curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+        export PATH=$POETRY_HOME:$PATH
         poetry install
 
 #     - name: Lint with flake8
