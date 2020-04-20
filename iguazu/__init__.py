@@ -1,4 +1,4 @@
-__version__ = '0.3.0-dev-raph-009'
+__version__ = '0.4.0'
 
 from . import utils  # Needed for a circular dependency resolution
 from .core.files import FileAdapter
