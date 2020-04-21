@@ -7,7 +7,7 @@ from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.common import LoadDataframe, LoadJSON, MergeDataframes, SlackTask
 from iguazu.tasks.metadata import (
-    AddDynamicMetadata, AddStaticMetadata, CreateFlowMetadata, UpdateFlowMetadata
+    AddDynamicMetadata, AddStaticMetadata, CreateFlowMetadata, PropagateMetadata, UpdateFlowMetadata
 )
 from iguazu.tasks.typeform import (
     ExtractScores, FetchResponses, GetForm, GetUserHash, Report, SaveResponse,
@@ -123,7 +123,7 @@ ORDER BY id                                    -- always in the same order
             output_hdf5_key='/iguazu/features/typeform/subject',
         )
         # TODO: propagate metadata when the branch that has that task is merged
-        # propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
+        propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
         with self:
@@ -131,7 +131,8 @@ ORDER BY id                                    -- always in the same order
             form = read_form()
             responses = read_json.map(file=json_files, upstream_tasks=[create_noresult])
             scores = extract_scores.map(parent=json_files, response=responses, form=unmapped(form))
-            _ = update_flow_metadata.map(parent=json_files, child=scores)
+            scores_with_metadata = propagate_metadata.map(parent=json_files, child=scores)
+            _ = update_flow_metadata.map(parent=json_files, child=scores_with_metadata)
 
     @staticmethod
     def click_options():
