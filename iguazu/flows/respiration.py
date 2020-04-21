@@ -1,22 +1,19 @@
 import logging
 
 from iguazu import __version__
-from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.functions.galvanic import GSRArtifactCorruption
 from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
-from iguazu.tasks.galvanic import CleanGSRSignal, ApplyCVX, DetectSCRPeaks, Downsample, ExtractGSRFeatures
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
+from iguazu.tasks.respiration import CleanPZTSignal, ExtractPZTFeatures
 from iguazu.tasks.standards import Report
 
 logger = logging.getLogger(__name__)
 
 
-class GalvanicFeaturesFlow(PreparedFlow):
-    """Extract all galvanic features from a file dataset"""
-
-    REGISTRY_NAME = 'features_galvanic'
+class RespirationFeaturesFlow(PreparedFlow):
+    """Extract all  respiration features from a file dataset"""
+    REGISTRY_NAME = 'features_respiration'
     DEFAULT_QUERY = f"""
     SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
            base->>'filename' AS filename,  -- this is just to help the human debugging this
@@ -27,14 +24,13 @@ class GalvanicFeaturesFlow(PreparedFlow):
     AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
     AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
     AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
-    AND    standard->'signals' ? '/iguazu/signal/gsr/standard' -- containing the GSR signal
+    AND    standard->'signals' ? '/iguazu/signal/pzt/standard' -- containing the PZT signal
     AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
     AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
     AND    (iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL 
             OR iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
             OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
-           )                  
-
+           )                    
     ORDER BY id                                     -- always in the same order
         """
 
@@ -58,75 +54,45 @@ class GalvanicFeaturesFlow(PreparedFlow):
             kwargs['query'] = self.DEFAULT_QUERY
             kwargs['dialect'] = 'postgresql_json'
 
-        # The galvanic features flow requires an upstream dataset flow in order
+        # The cardiac features flow requires an upstream dataset flow in order
         # to provide the input files. Create one and deduce the tasks to
-        # plug the galvanic flow to the output of the dataset flow
+        # plug the cardiac flow to the output of the dataset flow
         dataset_flow = GenericDatasetFlow(**kwargs)
         raw_signals = dataset_flow.terminal_tasks().pop()
         events = raw_signals
         self.update(dataset_flow)
 
         create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
-
         # Instantiate tasks
-        clean = CleanGSRSignal(
-            signals_hdf5_key='/iguazu/signal/gsr/standard',
+        clean = CleanPZTSignal(
+            signals_hdf5_key='/iguazu/signal/pzt/standard',
             events_hdf5_key='/iguazu/events/standard',
-            output_hdf5_key='/iguazu/signal/gsr/clean',
-            graceful_exceptions=(GSRArtifactCorruption,
-                                 SoftPreconditionFailed)
-        )
-        downsample = Downsample(
-            signals_hdf5_key='/iguazu/signal/gsr/clean',
-            output_hdf5_key='/iguazu/signal/gsr/downsampled',
-        )
-        cvx = ApplyCVX(
-            signals_hdf5_key='/iguazu/signal/gsr/downsampled',
-            output_hdf5_key='/iguazu/signal/gsr/cvx',
-        )
-        scrpeaks = DetectSCRPeaks(
-            signals_hdf5_key='/iguazu/signal/gsr/cvx',
-            output_hdf5_key='/iguazu/signal/gsr/scrpeaks',
+            output_hdf5_key='/iguazu/signal/pzt/clean',
         )
 
-        extract_features = ExtractGSRFeatures(
-            cvx_hdf5_key='/iguazu/signal/gsr/cvx',
-            scrpeaks_hdf5_key='/iguazu/signal/gsr/scrpeaks',
+        extract_features = ExtractPZTFeatures(
+            signals_hdf5_key='/iguazu/signal/pzt/clean',
             events_hdf5_key='/iguazu/events/standard',
-            output_hdf5_key='/iguazu/features/gsr/sequence',
+            output_hdf5_key='/iguazu/features/pzt/sequence',
         )
         propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
-
         update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(preamble='Galvanic feature extraction finished.\n'
+        notify = SlackTask(preamble='Respiration feature extraction finished\n'
                                     'Task report:')
         with self:
             create_noresult = create_flow_metadata.map(parent=raw_signals)
             # Signal processing branch
-            clean_signals = clean.map(signals=raw_signals,
-                                      annotations=raw_signals,
-                                      events=events,
-                                      upstream_tasks=[create_noresult])
-            downsample_signals = downsample.map(signals=clean_signals,
-                                                annotations=clean_signals,
-                                                upstream_tasks=[create_noresult])
-            cvx_signals = cvx.map(signals=downsample_signals,
-                                  annotations=downsample_signals,
-                                  upstream_tasks=[create_noresult])
-            scr_peaks = scrpeaks.map(signals=cvx_signals,
-                                     annotations=cvx_signals,
-                                     upstream_tasks=[create_noresult])
-
+            clean_signals = clean.map(signals=raw_signals, events=events, upstream_tasks=[create_noresult])
             # Feature extraction
-            features = extract_features.map(cvx=cvx_signals,
-                                            scrpeaks=scr_peaks,
+            features = extract_features.map(signals=clean_signals,
                                             events=events,
                                             parent=raw_signals)
+
+            # Send slack notification
             features_with_metadata = propagate_metadata.map(parent=raw_signals, child=features)
             update_noresult = update_flow_metadata.map(parent=raw_signals, child=features_with_metadata)
-            # Send slack notification
-            message = report(files=features_with_metadata, upstream_tasks=[update_noresult])
+            message = report(files=features, upstream_tasks=[update_noresult])
             notify(message=message)
 
         logger.debug('Built flow %s with tasks %s', self, self.tasks)
@@ -136,10 +102,10 @@ class GalvanicFeaturesFlow(PreparedFlow):
         return GenericDatasetFlow.click_options()
 
 
-class GalvanicSummaryFlow(PreparedFlow):
-    """Collect all  galvanic features in a single CSV file"""
+class RespirationSummaryFlow(PreparedFlow):
+    """Collect all  respiration features in a single CSV file"""
 
-    REGISTRY_NAME = 'summarize_galvanic'
+    REGISTRY_NAME = 'summarize_respiration'
     DEFAULT_QUERY = f"""
     SELECT
            base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
@@ -148,24 +114,19 @@ class GalvanicSummaryFlow(PreparedFlow):
     WHERE  base->>'state' = 'READY'                -- No temporary files
     AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
     AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-    AND    standard->'features' ? '/iguazu/features/gsr/sequence' -- containing the GSR signal
-    ORDER BY id -- always in the same order
+    AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
+    AND    standard->'features' ? '/iguazu/features/pzt/sequence' -- containing the PPG features
+    ORDER BY id -- always in the same order         always in the same order
     """
 
-    def _build(self,
-               **kwargs):
-
-        # Manage parameters
-        kwargs = kwargs.copy()
-        # Propagate workspace name because we captured it on kwargs
-        # kwargs['workspace_name'] = workspace_name
+    def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
         # families: (nb: None means "latest" version)
         required_families = dict(
             iguazu=None,
             omind=None,
             standard=None,
-            protocol=None
+            protocol=None,
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -187,13 +148,13 @@ class GalvanicSummaryFlow(PreparedFlow):
         # E: read features from HDF5 file
         # T and L: merge features into a single dataframe, then save as CSV
         read_features = LoadDataframe(
-            key='/iguazu/features/gsr/sequence',
+            key='/iguazu/features/pzt/sequence',
         )
         merge_features = MergeDataframes(
-            filename='galvanic_summary.csv',
+            filename='respiration_summary.csv',
             path='datasets',
         )
-        notify = SlackTask(message='Galvanic feature summarization finished!')
+        notify = SlackTask(message='Respiration feature summarization finished!')
 
         with self:
             feature_dataframes = read_features.map(file=features_files)

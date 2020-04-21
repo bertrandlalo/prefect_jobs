@@ -3,8 +3,8 @@ from typing import Optional
 import pandas as pd
 import prefect
 
-from iguazu.functions.unity import extract_sequences
 from iguazu.core.files import FileAdapter
+from iguazu.functions.unity import extract_sequences
 from iguazu.helpers.states import SKIPRESULT
 from iguazu.helpers.tasks import get_base_meta, task_upload_result, task_fail
 
@@ -75,5 +75,3 @@ class ExtractSequences(prefect.Task):
         except Exception as ex:
             # Manage output, save to file
             task_fail(self, ex, output, output_group)
-
-
