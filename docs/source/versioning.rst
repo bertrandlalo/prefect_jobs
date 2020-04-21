@@ -5,7 +5,11 @@ Versioning
 ==========
 
 If you are developing on Iguazu, please follow these guidelines on how to
-organize versions.
+organize versions. Read the general guidelines below, then read the proposed
+workflow at the end of this document.
+
+General versioning guidelines
+=============================
 
 Iguazu follows a SemVer versioning scheme. That means that versions have
 MAJOR, MINOR and PATCH part, and they look like look like ``1.5.2``. In this
@@ -28,7 +32,8 @@ file among the set of all files that need to be changed. To address this, we
 are using ``bump2version``. Use it as explained below.
 
 When developing of a new feature of Iguazu, **bump** the version accordingly
-using ``bump2version``:
+using ``bump2version``. Do read the workflow at the end of this document for
+more guidelines.
 
 .. code-block:: bash
 
@@ -43,7 +48,6 @@ using ``bump2version``:
    current_version=0.4.1
    ...
    new_version=0.5.0
-
 
 You will notice that if your local git repository is **dirty** (i.e. it has
 uncommited chages), this command will fail. You will need to commit your changes
@@ -100,3 +104,38 @@ Some final notes:
 * Ultimately, the version number that sets all the other ones should be one
   on the ``.bumpversion.cfg`` file. If the ``bump2version`` command fails, it
   is probably the ``current_version`` property is incorrect.
+
+
+Versioning workflow
+===================
+
+Use the following workflow as a guideline on your developments:
+
+1. Start by creating a branch for your new work.
+
+2. Bump the *build* version, but do not commit or tag yet.
+
+3. Develop your code.
+
+4. Test locally. Repeat until you are satisfied (is your code stable?).
+
+5. Build Iguazu (i.e. create the images, etc.) so you can test on the
+   development cluster. If there are errors or problems, repeat steps 2-5.
+
+   When your code has been tested on the development servers, then it is
+   ready for production.
+
+6. Commit all your changes, and request a pull request. Repeat the previous
+   steps if the pull request reviewer comments require it.
+
+Production versioning guideline:
+
+1. Depending on the final scope of the changes (was it just a bug fix or a
+   new feature?), bump the patch or minor version. Your version string should
+   now be only a ``MAJOR.MINOR.PATCH`` string, that is, no build part is
+   present.
+
+2. Commit and tag the changes. Do not use *dirty* git repositories for the next
+   steps.
+
+3. Build and deploy.
