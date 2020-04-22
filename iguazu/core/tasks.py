@@ -515,7 +515,9 @@ class Task(ManagedTask):
 
         # Handle filenames, path, prefixes, etc
         parent_ids = []
+        search_path = path or ''
         if parent is not None:
+            search_path = path or '/'.join([url_object.path, parent.dirname])
             path = path or parent.dirname
             tmp = pathlib.Path(filename or parent.basename)
             filename = tmp.stem
@@ -532,7 +534,7 @@ class Task(ManagedTask):
                 match_meta[journal_family][k] = default_meta[journal_family][k]
 
         new_file = file_class.find(filename=filename,
-                                   path=path,
+                                   path=search_path,
                                    metadata=match_meta,
                                    **find_kwargs)
         if self.forced:
