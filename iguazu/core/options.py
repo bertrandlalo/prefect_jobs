@@ -5,11 +5,12 @@ This module is intended to separate and isolate the options that a
 :py:class:`iguazu.core.Task` supports.
 """
 
+import os
 from dataclasses import dataclass, field, fields
 from typing import Mapping, Optional, Tuple, Type
 
 from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResults
-#from iguazu.helpers.states import GRACEFULFAIL
+from iguazu.utils import str2bool
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,12 @@ class TaskOptions:
 
     managed_inputs_exception_type: Optional[Type] = SoftPreconditionFailed
     """Exception type that will be raised if the automatic input management fails"""
+
+    auto_clean_files: bool = str2bool(os.environ.get('IGUAZU_AUTO_CLEAN_FILES', '0'))
+    """Delete input and output files when this tasks finishes.
+    This is useful to avoid filling the disk, specially on a cluster. You can
+    set the default value of this task option for ALL tasks with the 
+    environment variable IGUAZU_AUTO_CLEAN_FILES"""
 
 
 ALL_OPTIONS = tuple(f.name for f in fields(TaskOptions))
