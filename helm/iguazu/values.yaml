@@ -26,6 +26,8 @@ defaultJob:
       value: "0"
     - name: IGUAZU_WORKSPACE
       value: "iguazu-vr-v1"
+    - name: IGUAZU_AUTO_CLEAN_FILES
+      value: "1"
   envFromSecret:
     - name: QUETZAL_API_KEY
       key: api_key
