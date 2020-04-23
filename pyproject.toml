@@ -10,10 +10,12 @@ include = [
     "iguazu/functions/templates/**/*"
 ]
 
+# Note: Remember to update the environment.yaml file when changing these
+# dependencies. Use poetry2conda for this.
 [tool.poetry.dependencies]
 python = "^3.7"
 # Iguazu core dependencies
-prefect = "^0.10.2"
+prefect = "^0.10.4"
 graphviz = "^0.13.2"
 quetzal-client = "^0.5.2"
 docker = "^4.2.0"
