@@ -5,6 +5,7 @@ import os
 import pathlib
 import tempfile
 import traceback
+import sys
 
 import click
 import pandas as pd
