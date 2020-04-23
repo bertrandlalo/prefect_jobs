@@ -1,0 +1,2 @@
+class TypeformException(Exception):
+    pass
