@@ -9,10 +9,14 @@ UC3: retrieve file for reading
 
 """
 
+import logging
 import pathlib
 import urllib.parse
 from dataclasses import dataclass
 from typing import Optional, Union
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,6 +40,7 @@ class QuetzalURL:
 
 
 def parse_data_url(url: str) -> Union[LocalURL, QuetzalURL]:
+    logger.debug('Parsing URL %s', url)
     parsed = urllib.parse.urlparse(url)
 
     if parsed.scheme == 'quetzal':

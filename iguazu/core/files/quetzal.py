@@ -263,10 +263,11 @@ class QuetzalFile(FileAdapter):
         base_metadata = self.metadata.get('base', {})
         fid = base_metadata.get('id', 'unindentified')
         filename = base_metadata.get('filename', None)
-        if not filename and self._local_path is not None:
-            filename = self._local_path.name
-        else:
-            filename =  'unnamed'
+        if not filename:
+            if self._local_path is not None:
+                filename = self._local_path.name
+            else:
+                filename = 'unnamed'
         return f'QuetzalFile<id={fid}, filename={filename}>'
 
     def __eq__(self, other):

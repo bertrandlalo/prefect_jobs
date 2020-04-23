@@ -8,6 +8,7 @@ import traceback
 
 import click
 import pandas as pd
+import prefect
 from prefect.engine.executors import LocalExecutor, SynchronousExecutor, DaskExecutor
 
 from iguazu.core.files import parse_data_url
@@ -166,46 +167,45 @@ def run_group(ctx, temp_url, output_url, temp_dir, executor_type, executor_addre
         'temp_url': temp_url,
         'output_url': output_url,
         'temp_dir': temp_dir,
-        # 'data_source_backend': data_source_backend,
-        # 'data_target_backend': data_target_backend,
-        # 'data_target_backend_parameters': data_target_backend_parameters,
-        # 'data_backend': data_backend,
-        # 'data_backend_workspace_id': None,
-        # 'temp_dir': temp_dir,
-        # 'output_dir': output_dir,
         'executor_type': executor_type,
         'executor_address': executor_address,
-        # 'csv_report': report,
         'force': force,
         'cache': cache,
         'allow_flow_failure': allow_flow_failure,
     }
-    # if data_backend == 'quetzal':
-    #     click.echo(f'Using Quetzal as data backend for default results, '
-    #                f'determining workspace id of workspace "{default_workspace}..."')
-    #     client = helpers.get_client()
-    #     details, total = helpers.workspace.list_(client,
-    #                                              name=default_workspace,
-    #                                              deleted=False)
-    #     if total == 0:
-    #         ctx.fail(f'No workspace named "{default_workspace}" was found')
-    #     elif total > 1:
-    #         ctx.fail(f'Workspace "{default_workspace}" is not unique, there were '
-    #                  f'{total} workspaces with the same name')
-    #     opts['data_backend_workspace_id'] = details[0]['id']
 
     ctx.obj.update(opts)
 
 
-def run_flow(flow_class, **kwargs):
-    # Preparations before running the flow
-
-    # Prepare executor
+def prepare_prefect_context_args():
     ctx = click.get_current_context()
     ctx.obj = ctx.obj or {}
-    executor_type = ctx.obj.get('executor_type', None)
-    executor_address = ctx.obj.get('executor_address', None)
-    executor = prepare_executor(executor_type, executor_address)
+
+    # Prepare context arguments
+    context_args = dict(
+        secrets={},
+    )
+    # Handle --force
+    forced_tasks = ctx.obj.get('force', [])
+    if forced_tasks:
+        if 'all' in forced_tasks:
+            context_args['forced_tasks'] = 'all'
+        else:
+            context_args['forced_tasks'] = forced_tasks
+
+    # Handle secrets:
+    # - Slack secret
+    if 'SLACK_WEBHOOK_URL' in os.environ:
+        context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+
+    # - Quetzal secret
+    quetzal_kws = dict(
+        url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
+        username=os.getenv('QUETZAL_USER', None),
+        password=os.getenv('QUETZAL_PASSWORD', None),
+        api_key=os.getenv('QUETZAL_API_KEY', None))
+    quetzal_kws = {k: v for (k, v) in quetzal_kws.items() if v is not None}
+    context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
 
     # Manage non-trivial defaults
     temp_dir = ctx.obj.get('temp_dir', None)
@@ -221,44 +221,33 @@ def run_flow(flow_class, **kwargs):
             logger.info('--temp-url was not set by command-line, using %s', temp_url)
         if not output_url:
             output_url = (tmpdir / 'output').as_uri()
-            logger.info('--output-url was not set by command-line, using %s', output_url.path)
-    temp_url = parse_data_url(temp_url)
-    output_url = parse_data_url(output_url)
+            logger.info('--output-url was not set by command-line, using %s', output_url)
 
-    # Prepare context arguments
-    context_args = dict(
-        temp_dir=temp_dir,
-        temp_url=temp_url,
-        output_url=output_url,
-        # data_dir=ctx.obj.get('data_dir', None) or get_data_dir(), # TODO: consider this
-        # temp_dir=ctx.obj.get('temp_dir', None) or tempfile.mkdtemp(),
-        # output_dir=ctx.obj.get('output_dir', None) or tempfile.mkdtemp(),
-        # quetzal_logs_workspace_name=ctx.obj.get('quetzal_logs',
-        #                                         kwargs.get('workspace_name', None)),
-        # data_backend=ctx.obj.get('data_backend', None),
-        # data_backend_workspace_id=ctx.obj.get('data_backend_workspace_id', None),
-    )
+    # Set the temp and output url. This needs a prefect context to retrieve
+    # the quetzal credentials.
+    with prefect.context(**context_args):
+        temp_url = parse_data_url(temp_url)
+        output_url = parse_data_url(output_url)
 
-    # Handle --force
-    forced_tasks = ctx.obj.get('force', [])
-    if forced_tasks:
-        if 'all' in forced_tasks:
-            context_args['forced_tasks'] = 'all'
-        else:
-            context_args['forced_tasks'] = forced_tasks
+    context_args['temp_dir'] = temp_dir
+    context_args['temp_url'] = temp_url
+    context_args['output_url'] = output_url
 
-    # Handle secrets
-    context_args.setdefault('secrets', {})
-    if 'SLACK_WEBHOOK_URL' in os.environ:
-        context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+    return context_args
 
-    quetzal_kws = dict(
-        url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
-        username=os.getenv('QUETZAL_USER', None),
-        password=os.getenv('QUETZAL_PASSWORD', None),
-        api_key=os.getenv('QUETZAL_API_KEY', None))
-    quetzal_kws = {k: v for (k, v) in quetzal_kws.items() if v is not None}
-    context_args['secrets']['QUETZAL_CLIENT_KWARGS'] = quetzal_kws
+
+def run_flow(flow_class, **kwargs):
+    # Preparations before running the flow
+
+    # Prepare executor
+    ctx = click.get_current_context()
+    ctx.obj = ctx.obj or {}
+    executor_type = ctx.obj.get('executor_type', None)
+    executor_address = ctx.obj.get('executor_address', None)
+    executor = prepare_executor(executor_type, executor_address)
+
+    # Prepare prefect context
+    context_args = prepare_prefect_context_args()
 
     ###
     # Flow execution
