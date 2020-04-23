@@ -9,7 +9,6 @@ from dataclasses import dataclass, field, fields
 from typing import Mapping, Optional, Tuple, Type
 
 from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResults
-#from iguazu.helpers.states import GRACEFULFAIL
 
 
 @dataclass(frozen=True)

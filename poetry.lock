@@ -273,6 +273,7 @@ tables = "*"
 reference = "dcb39762f76d126bcba268c820b80310a2689239"
 type = "git"
 url = "https://github.com/OpenMindInnovation/datascience_utils.git"
+
 [[package]]
 category = "main"
 description = "Clean single-source support for Python 3 and 2"
@@ -367,6 +368,14 @@ name = "joblib"
 optional = false
 python-versions = "*"
 version = "0.14.1"
+
+[[package]]
+category = "main"
+description = "An implementation of JSON Reference for Python"
+name = "jsonref"
+optional = false
+python-versions = "*"
+version = "0.2"
 
 [[package]]
 category = "main"
@@ -1307,7 +1316,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "b19c6e98099610958714eb677bcd2357732889066632a26528fbab526a596139"
+content-hash = "2e1032998eccc0cd97f3f28e4c9551ad5001a0201f58f4e136212002610a2621"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -1507,6 +1516,10 @@ jinja2 = [
 joblib = [
     {file = "joblib-0.14.1-py2.py3-none-any.whl", hash = "sha256:bdb4fd9b72915ffb49fde2229ce482dd7ae79d842ed8c2b4c932441495af1403"},
     {file = "joblib-0.14.1.tar.gz", hash = "sha256:0630eea4f5664c463f23fbf5dcfc54a2bc6168902719fa8e19daf033022786c8"},
+]
+jsonref = [
+    {file = "jsonref-0.2-py3-none-any.whl", hash = "sha256:b1e82fa0b62e2c2796a13e5401fe51790b248f6d9bf9d7212a3e31a3501b291f"},
+    {file = "jsonref-0.2.tar.gz", hash = "sha256:f3c45b121cf6257eafabdc3a8008763aed1cd7da06dbabc59a9e4d2a5e4e6697"},
 ]
 kiwisolver = [
     {file = "kiwisolver-1.2.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:443c2320520eda0a5b930b2725b26f6175ca4453c61f739fef7a5847bd262f74"},

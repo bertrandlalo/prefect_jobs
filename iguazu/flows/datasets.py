@@ -1,7 +1,7 @@
 import logging
+from typing import Optional
 
 import click
-
 from prefect import Parameter
 from prefect.engine.cache_validators import never_use
 from prefect.tasks.control_flow import switch
@@ -21,13 +21,17 @@ class LocalDatasetFlow(PreparedFlow):
 
     REGISTRY_NAME = 'dataset_local'
 
-    def _build(self, *, base_dir: str = None, **kwargs):
+    def _build(self, *,
+               base_dir: str = None,
+               pattern: str = '*/**.hdf5',
+               limit: Optional[int] = None,
+               **kwargs):
 
         # Manage parameters
         # ... not needed for this flow ...
 
         # Instantiate tasks
-        list_files = ListFiles(as_file_adapter=True)
+        list_files = ListFiles(as_file_adapter=True, pattern=pattern, limit=limit)
 
         with self:
             directory = Parameter('base_dir', default=base_dir, required=False)
@@ -44,6 +48,9 @@ class LocalDatasetFlow(PreparedFlow):
             click.option('--base-dir', required=False,
                          type=click.Path(dir_okay=True, file_okay=False),
                          help='Local data directory'),
+            click.option('--pattern', required=False, type=click.STRING,
+                         default='**/*.hdf5',
+                         help='Pattern for files on a local dataset')
         )
 
 
@@ -51,10 +58,6 @@ class QuetzalDatasetFlow(PreparedFlow):
     """Create a file dataset from a Quetzal query"""
 
     REGISTRY_NAME = 'dataset_quetzal'
-
-    # def __init__(self, **kwargs):
-    #     kwargs.setdefault('name', 'quetzal_dataset_flow')
-    #     super().__init__(**kwargs)
 
     def _build(self, *,
                families=None,
@@ -107,7 +110,6 @@ class QuetzalDatasetFlow(PreparedFlow):
 
         # Define flow and its task connections
         with self:
-            #with Flow('quetzal_dataset_flow') as flow:
             sql = Parameter('sql', default=sql, required=False)
             sql_dialect = Parameter('dialect', default=dialect, required=False)
             upstream = AlwaysSucceed(name='trigger')
@@ -148,10 +150,6 @@ class GenericDatasetFlow(PreparedFlow):
     """Create a file dataset from a local directory or Quetzal query"""
 
     REGISTRY_NAME = 'dataset_generic'
-
-    # def __init__(self, **kwargs):
-    #     kwargs.setdefault('name', 'generic_dataset_flow')
-    #     super().__init__(**kwargs)
 
     def _build(self, *, data_source=None, **kwargs):
         local_flow = LocalDatasetFlow(**kwargs)

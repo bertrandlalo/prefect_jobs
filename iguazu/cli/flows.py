@@ -42,8 +42,8 @@ def list_():
     for name, klass in REGISTRY.items():
         doc = getattr(klass, '__doc__', None) or f'Not documented! Please add a docstring to {klass.__name__}'
         doc = doc.split('\n', 1)[0].strip()
-        records.append({'NAME': name, 'DESCRIPTION': doc})
-    df = pd.DataFrame.from_records(records).set_index('NAME').sort_index()
+        records.append({'FLOW_NAME': name, 'DESCRIPTION': doc})
+    df = pd.DataFrame.from_records(records).set_index('FLOW_NAME').sort_index()
 
     click.secho('List of registered flows', fg='blue')
     with pd.option_context('display.width', 120, 'display.max_rows', None, 'display.max_colwidth', 120):
@@ -251,6 +251,9 @@ def run_flow(flow_class, **kwargs):
     context_args.setdefault('secrets', {})
     if 'SLACK_WEBHOOK_URL' in os.environ:
         context_args['secrets']['SLACK_WEBHOOK_URL'] = os.environ['SLACK_WEBHOOK_URL']
+
+    if 'TYPEFORM_TOKEN' in os.environ:
+        context_args['secrets']['TYPEFORM_TOKEN'] = os.environ['TYPEFORM_TOKEN']
 
     quetzal_kws = dict(
         url=os.getenv('QUETZAL_URL', 'https://local.quetz.al/api/v1'),
