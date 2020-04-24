@@ -19,18 +19,22 @@ class BehaviorFeaturesFlow(PreparedFlow):
     REGISTRY_NAME = 'features_behavior'
 
     DEFAULT_QUERY = f"""\
-        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename,  -- this is just to help the human debugging this
-               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    COALESCE (iguazu->'flows'->'features_behavior' ->> 'version', '') <  '{__version__}'
-        ORDER BY id                                    -- always in the same order
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND (
+         iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
+)    ORDER BY id                                    -- always in the same order
     """
 
     def _build(self, **kwargs):
@@ -100,10 +104,10 @@ class BehaviorSummaryFlow(PreparedFlow):
         WHERE  base->>'state' = 'READY'                -- No temporary files
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    standard->'features' ? '/iguazu/features/behavior' -- containing the behavioral features
-        ORDER BY id -- always in the same order
+        AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
+        AND    standard->'features' ? '/iguazu/features/ppg/sequence' -- containing the PPG features
+        ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
     """
-
     def _build(self,
                **kwargs):
 
