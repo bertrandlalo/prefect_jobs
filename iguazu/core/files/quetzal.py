@@ -110,6 +110,8 @@ class QuetzalFile(FileAdapter):
 
     @staticmethod
     def retrieve(*, file_id, workspace_id=None) -> Optional['QuetzalFile']:
+        logger.debug('Attempting to retrieve Quetzal file %s from workspace %s',
+                     file_id, workspace_id)
         client = quetzal_client_from_secret()
         meta = helpers.file.metadata(client, file_id, wid=workspace_id)
         filename = meta['base']['filename']
@@ -204,6 +206,7 @@ class QuetzalFile(FileAdapter):
             logger.debug('File was successfully uploaded and now is id=%s', self._file_id)
 
     def upload_metadata(self):
+        logger.debug('Uploading metadata of file %s', self._file_id)
         metadata = copy.deepcopy(self.metadata)
         for family in metadata:
             if 'id' in metadata[family]:
@@ -228,7 +231,18 @@ class QuetzalFile(FileAdapter):
             self._file_id = None
         self._metadata.clear()
 
+    def clean(self):
+        logger.debug('Cleaning file %s from disk', self)
+        if self._local_path.exists():
+            logger.debug('Deleting file %s', self._local_path.resolve())
+            self._local_path.unlink()
+        else:
+            logger.debug('No need to delete file %s : it does not exist',
+                         self._local_path.resolve())
+
     def download_data(self):
+        if self._file_id is not None:  # Just a debug message
+            logger.debug('Attempting to download file %s', self._file_id)
         if self._file_id is not None and not self._local_path.exists():
             # File exists in quetzal
             logger.debug('Downloading %s -> %s', self._file_id, self._local_path)

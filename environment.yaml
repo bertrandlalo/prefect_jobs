@@ -23,6 +23,7 @@ dependencies:
   - tzlocal>=2.0,<3.0
   - dsu>=0.4.0,<0.5
   - requests>=2.22,<2.23
+  - marshmallow>=3.5.0,<3.5.1
   # Requirements for plot-related tasks
   - Jinja2>=2.10.1,<2.11
   - plotly>=4.5.2,<4.6
@@ -43,8 +44,9 @@ dependencies:
   - pip
   - pip:
     - graphviz>=0.11.1,<0.12.0
-    - prefect>=0.9.4,<0.9.5
+    - prefect>=0.9.7,<0.9.8
     - pendulum>=2.0.5,<2.1
     - pyentrp>=0.5.0,<0.6
     - nolds>=0.5.2,<0.6
-    - quetzal-client==0.5.1rc2
+    - quetzal-client>=0.5.2,<0.6
+    - jsonref>=0.2,<0.3
