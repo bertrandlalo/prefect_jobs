@@ -5,9 +5,7 @@ import logging
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from scipy.stats import linregress
 from sklearn.metrics import auc
-
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +138,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                             feat = [pd.DataFrame()]
                             for column in columns:
                                 tmp_col = tmp[column].dropna()
-                                if tmp_col.empty:
+                                if len(tmp_col) < 2:
                                     slope, intercept, r, r2, pvalue = [empty_policy] * 5
                                 else:
                                     x = tmp_col.index
@@ -169,6 +167,7 @@ def signal_to_feature(data, sequences_report, *, feature_definitions, sequences=
                                 feat.append(pd.DataFrame(index=[feature_name],
                                                          data=[auc_value], columns=[column]))
                             feat = pd.concat(feat, axis=0, sort=True).T
+
                     else:
                         raise ValueError(f'Unknown custom definition "{custom}"')
                 else:

@@ -207,6 +207,15 @@ class FileAdapter(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def clean(self):
+        """Clean any local data associated to this file
+
+        Use this method sparingly. This method deletes the local contents of a
+        file, but **it does not delete the file from the underlying backend**.
+        This function is intended for reducing the disk footprint of files.
+        """
+
     def checksum(self, stream):
         """Check if the file metadata match the contents of a stream"""
         size = self.metadata['base']['size']

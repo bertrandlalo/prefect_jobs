@@ -312,6 +312,9 @@ class LocalFile(FileAdapter):
             self._file_id = None
         self._metadata.clear()
 
+    def clean(self):
+        logger.debug('Clean on local file is a no-op')
+
     def download_data(self):
         if self._file_id is not None and not self._local_path.exists():
             # File exists in quetzal
