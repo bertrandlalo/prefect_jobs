@@ -72,6 +72,9 @@ class ManagedTask(prefect.Task):
             # Add a prefect context so that any derived class can get the
             # run keyword arguments
             stack.enter_context(prefect.context(run_kwargs=inputs.copy()))
+            self._log_prefect_context()
+
+            # Add all task context objects
             for ctx in self.contexts():
                 stack.enter_context(ctx)
 
@@ -86,6 +89,14 @@ class ManagedTask(prefect.Task):
             prepared_outputs = self._safe_handle_outputs(outputs)
 
             return prepared_outputs
+
+    def _log_prefect_context(self, level=logging.DEBUG):
+        ctx_string = []
+        for k, v in prefect.context.items():
+            if k == 'secrets':
+                v = 'REDACTED'
+            ctx_string.append(f'{k} = {v}')
+        self.logger.log(level, 'Prefect context is:\n%s', '\n\t'.join(ctx_string))
 
     def _safe_prepare_inputs(self, safe_excs, **kws):
         return self._generic_safe(functools.partial(self.prepare_inputs, **kws),
@@ -532,7 +543,9 @@ class Task(ManagedTask):
 
         # Handle filenames, path, prefixes, etc
         parent_ids = []
+        search_path = path or ''
         if parent is not None:
+            search_path = path or '/'.join([url_object.path, parent.dirname])
             path = path or parent.dirname
             tmp = pathlib.Path(filename or parent.basename)
             filename = tmp.stem
@@ -549,7 +562,7 @@ class Task(ManagedTask):
                 match_meta[journal_family][k] = default_meta[journal_family][k]
 
         new_file = file_class.find(filename=filename,
-                                   path=path,
+                                   path=search_path,
                                    metadata=match_meta,
                                    **find_kwargs)
         if self.forced:
