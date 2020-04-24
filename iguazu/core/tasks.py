@@ -6,7 +6,7 @@ import logging
 import os
 import pathlib
 from typing import (
-    Any, Callable, Container, ContextManager, Iterable, Mapping, NoReturn,
+    Any, Callable, Container, ContextManager, Iterable, List, Mapping, NoReturn,
     Optional,
 )
 
@@ -72,6 +72,9 @@ class ManagedTask(prefect.Task):
             # Add a prefect context so that any derived class can get the
             # run keyword arguments
             stack.enter_context(prefect.context(run_kwargs=inputs.copy()))
+            self._log_prefect_context()
+
+            # Add all task context objects
             for ctx in self.contexts():
                 stack.enter_context(ctx)
 
@@ -86,6 +89,14 @@ class ManagedTask(prefect.Task):
             prepared_outputs = self._safe_handle_outputs(outputs)
 
             return prepared_outputs
+
+    def _log_prefect_context(self, level=logging.DEBUG):
+        ctx_string = []
+        for k, v in prefect.context.items():
+            if k == 'secrets':
+                v = 'REDACTED'
+            ctx_string.append(f'{k} = {v}')
+        self.logger.log(level, 'Prefect context is:\n%s', '\n\t'.join(ctx_string))
 
     def _safe_prepare_inputs(self, safe_excs, **kws):
         return self._generic_safe(functools.partial(self.prepare_inputs, **kws),
@@ -209,6 +220,7 @@ class Task(ManagedTask):
                             f'iguazu.TaskOptions field, nor a '
                             f'prefect.Task keyword argument')
         self._meta = TaskOptions(**kwargs)
+        self._auto_clean_context = AutoCleanContext(self)
 
         # Manage iguazu TaskOptions that update prefect kwargs:
         #
@@ -233,6 +245,10 @@ class Task(ManagedTask):
         if pandas_mode in (None, 'warn', 'raise'):
             self.logger.debug('Setting pandas context mode.chained_assignment to %s', pandas_mode)
             ctxs.append(pd.option_context('mode.chained_assignment', pandas_mode))
+
+        # Always add the auto clean context; it will check the meta option when
+        # it is activated.
+        ctxs.append(self._auto_clean_context)
 
         return tuple(ctxs)
 
@@ -306,6 +322,13 @@ class Task(ManagedTask):
         pass
 
     def prepare_inputs(self, **inputs) -> Mapping:
+
+        # Add inputs that are file adapters so they can be auto-cleaned when
+        # the task ends. Do this before calling preconditions because we want
+        # to register these objects even if preconditions raises an exception.
+        for name, obj in inputs.items():
+            if isinstance(obj, FileAdapter):
+                self._auto_clean_context.add(obj)
 
         # Verify preconditions
         self.preconditions(**inputs)
@@ -390,6 +413,11 @@ class Task(ManagedTask):
         meta = self.default_metadata(None, **prefect.context.run_kwargs)
         for output in _iterate(outputs):
             if isinstance(output, FileAdapter):
+                # Add outputs that are file adapters so they can be auto-cleaned when
+                # the task ends. Do this before calling postconditions because we want
+                # to register these objects even if postconditions raises an exception.
+                self._auto_clean_context.add(output)
+
                 # If the underlying task did not generate anything,
                 # create an empty file
                 file = output.file
@@ -515,7 +543,9 @@ class Task(ManagedTask):
 
         # Handle filenames, path, prefixes, etc
         parent_ids = []
+        search_path = path or ''
         if parent is not None:
+            search_path = path or '/'.join([url_object.path, parent.dirname])
             path = path or parent.dirname
             tmp = pathlib.Path(filename or parent.basename)
             filename = tmp.stem
@@ -532,7 +562,7 @@ class Task(ManagedTask):
                 match_meta[journal_family][k] = default_meta[journal_family][k]
 
         new_file = file_class.find(filename=filename,
-                                   path=path,
+                                   path=search_path,
                                    metadata=match_meta,
                                    **find_kwargs)
         if self.forced:
@@ -636,6 +666,34 @@ class Task(ManagedTask):
             endrun.state = new_state
 
         raise endrun
+
+
+class AutoCleanContext:
+    """Context manager that deletes file adapters
+
+    Used to implement the auto clean file feature: when a task finishes its
+    work, it cleans any local file created when downloading said file from its
+    backend to a local directory. This download is usually managed by the
+    quetzal client, but it may end up taking a lot of space on disk.
+    """
+
+    def __init__(self, task: Task):
+        self._task = task
+        self._files: List[FileAdapter] = []
+
+    def add(self, file: FileAdapter) -> None:
+        self._files.append(file)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        logger.debug('Managing auto_clean for task %s', self._task)
+        if not self._task.meta.auto_clean_files:
+            logger.debug('Task %s does not have auto_clean_files enabled', self._task)
+            return
+        for file in self._files:
+            file.clean()
 
 
 def _iterate(obj_or_tup):
