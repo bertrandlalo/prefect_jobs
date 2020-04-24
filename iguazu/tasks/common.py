@@ -244,7 +244,7 @@ class MergeHDF5(iguazu.Task):
 
         return output_file
 
-    def preconditions(self, **inputs):
+    def preconditions(self, *, parent, **inputs):
         # Implicit preconditions implemented in iguazu.Task:
         # - Previous output does not exist or task is forced
         # - Inputs are *not* marked as a failed result from a previous task

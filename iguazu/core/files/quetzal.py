@@ -231,6 +231,15 @@ class QuetzalFile(FileAdapter):
             self._file_id = None
         self._metadata.clear()
 
+    def clean(self):
+        logger.debug('Cleaning file %s from disk', self)
+        if self._local_path.exists():
+            logger.debug('Deleting file %s', self._local_path.resolve())
+            self._local_path.unlink()
+        else:
+            logger.debug('No need to delete file %s : it does not exist',
+                         self._local_path.resolve())
+
     def download_data(self):
         if self._file_id is not None:  # Just a debug message
             logger.debug('Attempting to download file %s', self._file_id)
