@@ -1,6 +1,9 @@
 import pandas as pd
 
 
+class NoSurveyReport(Exception):
+    pass
+
 def item_to_feature(report):
     feature = pd.DataFrame([[report['answer_final'], 'answerFinal', 's.u'],
                             [report['answer_time'], 'answerDuration', 's']],
@@ -24,7 +27,8 @@ def event_to_feature(event):
 
 def extract_report_features(events):
     events_survey_reports = events[events.id.str.contains('survey_reports')]
-    # todo: raise exception if `events_survey_reports` is empty
+    if events_survey_reports.empty:
+        raise NoSurveyReport('No `survey_reports` found in events')
     list_survey_features = []
     for _, survey_event in events_survey_reports.iterrows():
         list_survey_features.append(event_to_feature(survey_event))

@@ -1,8 +1,10 @@
 import logging
 
 from iguazu import __version__
+from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
+from iguazu.functions.surveys import NoSurveyReport
 from iguazu.tasks.common import SlackTask, LoadDataframe, MergeDataframes
 from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.standards import Report
@@ -73,6 +75,8 @@ class SurveysFeaturesFlow(PreparedFlow):
         survey_meta = ExtractMetaFeatures(
             features_hdf5_key='/iguazu/features/survey_report',
             output_hdf5_key='/iguazu/features/survey_meta',
+            graceful_exceptions=(NoSurveyReport,
+                                 SoftPreconditionFailed)
         )
 
         propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
