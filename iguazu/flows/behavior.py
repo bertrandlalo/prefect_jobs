@@ -105,7 +105,7 @@ class BehaviorSummaryFlow(PreparedFlow):
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
         AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
-        AND    standard->'features' ? '/iguazu/features/ppg/sequence' -- containing the PPG features
+        AND    standard->'features' ? '/iguazu/features/behavior' -- containing the PPG features
         ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
     """
     def _build(self,
