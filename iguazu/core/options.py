@@ -13,6 +13,7 @@ from iguazu.core.exceptions import SoftPreconditionFailed, GracefulFailWithResul
 from iguazu.utils import str2bool
 
 
+
 @dataclass(frozen=True)
 class TaskOptions:
     graceful_exceptions: Tuple[Type] = (SoftPreconditionFailed, GracefulFailWithResults)

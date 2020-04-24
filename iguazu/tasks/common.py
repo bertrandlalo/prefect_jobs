@@ -1,8 +1,9 @@
-import copy
+import json
+import json
 import logging
 import os
 import pathlib
-from typing import Dict, Iterable, NoReturn, Optional, List, Mapping
+from typing import Dict, Iterable, List, Mapping, NoReturn, Optional, Union
 
 import pandas as pd
 import prefect
@@ -14,7 +15,6 @@ from iguazu.core.files import FileAdapter, LocalFile
 from iguazu.functions.specs import infer_standard_groups
 from iguazu.helpers.states import GRACEFULFAIL
 from iguazu.helpers.tasks import get_base_meta
-from iguazu.utils import deep_update
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +33,23 @@ class ListFiles(prefect.Task):
     files: a list of files matching the specified pattern.
     """
 
-    def __init__(self, as_file_adapter: bool = False, limit: Optional[int] = None, **kwargs):
+    def __init__(self, *,
+                 as_file_adapter: bool = False,
+                 pattern: str = '**/*.hdf5',
+                 limit: Optional[int] = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self._as_file_adapter = as_file_adapter
+        self._pattern = pattern
         self._limit = limit
 
-    def run(self, basedir: str, pattern: str = '**/*.hdf5'):
+    def run(self, basedir: str) -> Union[List[str], List[FileAdapter]]:
         if not basedir:
             return []
         path = pathlib.Path(basedir)
         # regex = re.compile(regex)
         # files = [file for file in path.glob('**/*') if regex.match(file.name)]
-        files = [file.relative_to(path) for file in path.glob(pattern)]
+        files = [file.relative_to(path) for file in path.glob(self._pattern)]
         if self._limit is not None:
             files = files[:self._limit]
         # files.sort()
@@ -52,8 +57,7 @@ class ListFiles(prefect.Task):
                          basedir, len(files))
 
         if self._as_file_adapter:
-            adapters = [LocalFile.retrieve(file_id=str(f), root=basedir) for f in files]  # todo: handle `temporary`
-            return adapters
+            files = [LocalFile.retrieve(file_id=str(f), root=basedir) for f in files]  # todo: handle `temporary`
 
         return files
 
@@ -281,20 +285,6 @@ class MergeHDF5(iguazu.Task):
         return output
 
 
-class AddSourceMetadata(prefect.Task):
-
-    def __init__(self, *, new_meta: Dict, **kwargs):
-        super().__init__(**kwargs)
-        self.new_meta = new_meta
-
-    def run(self, *, file: FileAdapter) -> NoReturn:
-        new_meta = copy.deepcopy(self.new_meta)
-        deep_update(file.metadata, new_meta)
-        # TODO: for quetzal, we are going to need a .upload_metadata method
-        #       so we don't download the file for nothing
-        file.upload()
-
-
 class SlackTask(prefect.tasks.notifications.SlackTask):
     """Extension of prefect's SlackTask that can gracefully fail"""
 
@@ -380,3 +370,10 @@ class MergeDataframes(iguazu.Task):
         parents = kwargs['parents']
         if len(parents) == 0:
             raise PreconditionFailed('Cannot summarize an empty dataset')
+
+
+class LoadJSON(iguazu.Task):
+    """Read a file that contains JSON data"""
+    def run(self, *, file: FileAdapter) -> Dict:
+        with file.file.open(mode='r') as f:
+            return json.load(f)
