@@ -3,8 +3,8 @@ import logging
 from iguazu import __version__
 from iguazu.core.flows import PreparedFlow
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.tasks.common import SlackTask, PropagateMetadata, LoadDataframe, MergeDataframes
-from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.tasks.common import SlackTask, LoadDataframe, MergeDataframes
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.standards import Report
 from iguazu.tasks.surveys import ExtractReportFeatures, ExtractMetaFeatures
 
@@ -16,18 +16,23 @@ class SurveysFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_surveys'
     DEFAULT_QUERY = f"""
-        SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
-               base->>'filename' AS filename,  -- this is just to help the human debugging this
-               omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
-               iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
-        FROM   metadata
-        WHERE  base->>'state' = 'READY'                -- No temporary files
-        AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
-        AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
-        AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
-        AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
---         AND    COALESCE (iguazu->'flows'->'features_surveys' ->> 'version', '') <  '{__version__}'
-        ORDER BY id                            -- always in the same order
+    SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
+           base->>'filename' AS filename,  -- this is just to help the human debugging this
+           omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
+           iguazu->>'version' AS version   -- this is just to help the openmind human debugging this
+    FROM   metadata
+    WHERE  base->>'state' = 'READY'                -- No temporary files
+    AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files
+    AND    protocol->>'name' = 'bilan-vr'          -- Files from the VR bilan protocol
+    AND    protocol->'extra' ->> 'legacy' = 'false'  -- Files that are not legacy
+    AND    standard->'events' ? '/iguazu/events/standard'     -- containing standardized events
+    AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
+    AND (
+         iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
+     OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
+    )
+    ORDER BY id                            -- always in the same order
     """
 
     def _build(self, *, plot=False, **kwargs):
