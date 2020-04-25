@@ -17,7 +17,8 @@ class BehaviorFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_behavior'
 
-    def _build(self,
+    def _build(self, *,
+               force=False, workspace_name=None, query=None, alt_query=None,
                **kwargs):
 
         # Manage parameters
