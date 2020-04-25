@@ -37,7 +37,7 @@ class SurveysFeaturesFlow(PreparedFlow):
     ORDER BY id                            -- always in the same order
     """
 
-    def _build(self, *, plot=False, **kwargs):
+    def _build(self, **kwargs):
         # Force required families: Quetzal workspace must have the following
         # families: (nb: None means "latest" version)
         required_families = dict(

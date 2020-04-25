@@ -3,10 +3,10 @@ import logging
 
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.core.flows import PreparedFlow
+from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.behavior import SpaceStressParticipantActions, SpaceStressSpawnsStimulations, SpaceStressScores
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
-from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,7 @@ class BehaviorFeaturesFlow(PreparedFlow):
 
     REGISTRY_NAME = 'features_behavior'
 
-    def _build(self, *,
-               force=False, workspace_name=None, query=None, alt_query=None,
+    def _build(self,
                **kwargs):
 
         # Manage parameters
