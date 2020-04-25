@@ -71,12 +71,12 @@ class SurveysFeaturesFlow(PreparedFlow):
         survey_report = ExtractReportFeatures(
             events_hdf5_key='/iguazu/events/standard',
             output_hdf5_key='/iguazu/features/survey_report',
+            graceful_exceptions=(NoSurveyReport,
+                                 SoftPreconditionFailed)
         )
         survey_meta = ExtractMetaFeatures(
             features_hdf5_key='/iguazu/features/survey_report',
-            output_hdf5_key='/iguazu/features/survey_meta',
-            graceful_exceptions=(NoSurveyReport,
-                                 SoftPreconditionFailed)
+            output_hdf5_key='/iguazu/features/survey_meta'
         )
 
         propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
