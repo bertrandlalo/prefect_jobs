@@ -93,7 +93,7 @@ def _logging_handler(task, old_state, new_state):
                 file_adapter.upload()
                 # change path in base metadata and upload them
                 original_path = pathlib.Path(file_adapter.metadata['base']['path'])
-                new_path = original_path.parents[0] / state_name / file_adapter.basename
+                new_path = original_path.parents[0] / state_name
                 file_adapter.metadata['base']['path'] = str(new_path)
                 file_adapter.upload_metadata()
 

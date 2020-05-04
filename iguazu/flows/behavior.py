@@ -3,10 +3,10 @@ import logging
 
 from iguazu.cache_validators import ParametrizedValidator
 from iguazu.core.flows import PreparedFlow
+from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.flows.datasets import GenericDatasetFlow
 from iguazu.tasks.behavior import SpaceStressParticipantActions, SpaceStressSpawnsStimulations, SpaceStressScores
 from iguazu.tasks.common import MergeFilesFromGroups, SlackTask
-from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.tasks.summarize import SummarizePopulation
 
 logger = logging.getLogger(__name__)
