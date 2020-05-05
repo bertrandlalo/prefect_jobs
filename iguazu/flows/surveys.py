@@ -3,24 +3,21 @@ import logging
 from iguazu import __version__
 from iguazu.core.exceptions import SoftPreconditionFailed
 from iguazu.core.flows import PreparedFlow
-from iguazu.core.handlers import garbage_collect_handler, logging_handler
 from iguazu.flows.datasets import GenericDatasetFlow
-from iguazu.functions.behavior import SequenceNotFound
-from iguazu.tasks.behavior import SpaceStressFeatures
-from iguazu.tasks.common import LoadDataframe, MergeDataframes, SlackTask
-from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata
+from iguazu.functions.surveys import NoSurveyReport
+from iguazu.tasks.common import SlackTask, LoadDataframe, MergeDataframes
+from iguazu.tasks.metadata import CreateFlowMetadata, UpdateFlowMetadata, PropagateMetadata
 from iguazu.tasks.standards import Report
-
+from iguazu.tasks.surveys import ExtractReportFeatures, ExtractMetaFeatures
 
 logger = logging.getLogger(__name__)
 
 
-class BehaviorFeaturesFlow(PreparedFlow):
-    """Extract all behavior features from a file dataset"""
+class SurveysFeaturesFlow(PreparedFlow):
+    """Extract all surveys features from a file dataset"""
 
-    REGISTRY_NAME = 'features_behavior'
-
-    DEFAULT_QUERY = f"""\
+    REGISTRY_NAME = 'features_surveys'
+    DEFAULT_QUERY = f"""
     SELECT base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
            base->>'filename' AS filename,  -- this is just to help the human debugging this
            omind->>'user_hash' AS user_hash, -- this is just to help the openmind human debugging this
@@ -36,15 +33,18 @@ class BehaviorFeaturesFlow(PreparedFlow):
          iguazu->'flows'->'{REGISTRY_NAME}'->>'status' IS NULL
      OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' IS NULL
      OR  iguazu->'flows'->'{REGISTRY_NAME}'->>'version' < '{__version__}'
-)    ORDER BY id                                    -- always in the same order
+    )
+    ORDER BY id                            -- always in the same order
     """
 
     def _build(self, **kwargs):
+        # Force required families: Quetzal workspace must have the following
+        # families: (nb: None means "latest" version)
         required_families = dict(
             iguazu=None,
             omind=None,
             standard=None,
-            protocol=None,
+            protocol=None
         )
         families = kwargs.get('families', {}) or {}  # Could be None by default args
         for name in required_families:
@@ -61,30 +61,44 @@ class BehaviorFeaturesFlow(PreparedFlow):
         # to provide the input files. Create one and deduce the tasks to
         # plug the cardiac flow to the output of the dataset flow
         dataset_flow = GenericDatasetFlow(**kwargs)
-        raw_events = dataset_flow.terminal_tasks().pop()
+        raw_signals = dataset_flow.terminal_tasks().pop()
+        events = raw_signals
         self.update(dataset_flow)
+
         create_flow_metadata = CreateFlowMetadata(flow_name=self.REGISTRY_NAME)
 
-        behavior_features = SpaceStressFeatures(
-            name='SpaceStressFeatures',
+        # Instantiate tasks
+        survey_report = ExtractReportFeatures(
             events_hdf5_key='/iguazu/events/standard',
-            output_hdf5_key='/iguazu/features/behavior',
-            graceful_exceptions=(SequenceNotFound, SoftPreconditionFailed)
+            output_hdf5_key='/iguazu/features/survey_report',
+            graceful_exceptions=(NoSurveyReport,
+                                 SoftPreconditionFailed)
+        )
+        survey_meta = ExtractMetaFeatures(
+            features_hdf5_key='/iguazu/features/survey_report',
+            output_hdf5_key='/iguazu/features/survey_meta'
         )
 
-        update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
+        propagate_metadata = PropagateMetadata(propagate_families=['omind', 'protocol'])
 
+        update_flow_metadata = UpdateFlowMetadata(flow_name=self.REGISTRY_NAME)
         report = Report()
-        notify = SlackTask(preamble='Behavior feature extraction flow status finished.\n'
+
+        notify = SlackTask(preamble='Survey feature extraction finished\n'
                                     'Task report:')
 
-        # Build flow
         with self:
-            create_noresult = create_flow_metadata.map(parent=raw_events)
-            features_files = behavior_features.map(parent=raw_events, events=raw_events,
-                                                   upstream_tasks=[create_noresult])
-            update_noresult = update_flow_metadata.map(parent=raw_events, child=features_files)
-            message = report(files=features_files, upstream_tasks=[update_noresult])
+
+            create_noresult = create_flow_metadata.map(parent=events)
+            # Feature extraction
+            features_reports = survey_report.map(events=events, upstream_tasks=[create_noresult])
+            features_metas = survey_meta.map(features=features_reports, parent=raw_signals,
+                                             upstream_tasks=[create_noresult])
+
+            features_with_metadata = propagate_metadata.map(parent=raw_signals, child=features_metas)
+            update_noresult = update_flow_metadata.map(parent=raw_signals, child=features_with_metadata)
+            # Send slack notification
+            message = report(files=features_with_metadata, upstream_tasks=[update_noresult])
             notify(message=message)
 
         logger.debug('Built flow %s with tasks %s', self, self.tasks)
@@ -94,10 +108,10 @@ class BehaviorFeaturesFlow(PreparedFlow):
         return GenericDatasetFlow.click_options()
 
 
-class BehaviorSummaryFlow(PreparedFlow):
+class SurveysSummaryFlow(PreparedFlow):
     """Collect all  cardiac features in a single CSV file"""
 
-    REGISTRY_NAME = 'summarize_behavior'
+    REGISTRY_NAME = 'summarize_surveys'
     DEFAULT_QUERY = f"""
         SELECT
                base->>'id'       AS id,        -- id is the bare minimum needed for the query task to work
@@ -106,10 +120,11 @@ class BehaviorSummaryFlow(PreparedFlow):
         WHERE  base->>'state' = 'READY'                -- No temporary files
         AND    base->>'filename' LIKE '%.hdf5'         -- Only HDF5 files TODO: remove _gsr_features hack
         AND    iguazu->>'status' = 'SUCCESS'           -- Files that were successfully standardized
-        AND    iguazu->>'version' = '{__version__}'           -- Files from latest version 
-        AND    standard->'features' ? '/iguazu/features/behavior' -- containing the PPG features
-        ORDER BY id -- always in the same order                              -- always in the same order                              -- always in the same order
+        AND    standard->'features' ? '/iguazu/features/survey_meta' -- containing the behavioral features
+        AND    iguazu->>'version' = '{__version__}'
+        ORDER BY id -- always in the same order
     """
+
     def _build(self,
                **kwargs):
 
@@ -145,14 +160,14 @@ class BehaviorSummaryFlow(PreparedFlow):
         # E: read features from HDF5 file
         # T and L: merge features into a single dataframe, then save as CSV
         read_features = LoadDataframe(
-            key='/iguazu/features/behavior',
+            key='/iguazu/features/survey_meta',
         )
         merge_features = MergeDataframes(
-            filename='behavior_summary.csv',
+            filename='surveys_summary.csv',
             path='datasets',
         )
 
-        notify = SlackTask(message='Behavioral features summarization finished!')
+        notify = SlackTask(message='VR surveys features summarization finished!')
 
         with self:
             feature_dataframes = read_features.map(file=features_files)
