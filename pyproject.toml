@@ -57,7 +57,8 @@ pytest = "^5.4.1"
 pytest-mock = "^3.0.0"
 sphinx = "^3.0.1"
 sphinx-rtd-theme = "^0.4.3"
-poetry2conda = "^0.1.0"
+#poetry2conda = "^0.2.0"
+poetry2conda = { git = "https://github.com/dojeda/poetry2conda.git", rev = "f197d9d" }
 sphinx-autodoc-typehints = "^1.10.3"
 coverage = "^5.1"
 pytest-cov = "^2.8.1"
@@ -81,6 +82,7 @@ nolds = { channel = "pip" }
 pyentrp = { channel = "pip" }
 mne = { channel = "conda-forge" }
 jsonref = {channel = "conda-forge" }
+dsu = { channel = "omind", version = "0.5.0" }
 
 
 [build-system]
