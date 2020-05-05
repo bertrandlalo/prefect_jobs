@@ -45,6 +45,8 @@ hence the name:
    hdf5
    developing_tasks
    developing_flows
+   versioning
+   changelog
 
 .. toctree::
    :maxdepth: 1

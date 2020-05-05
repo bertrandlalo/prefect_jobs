@@ -7,6 +7,25 @@ This document lists all important changes to iguazu.
 Iguazu version numbers follow
 `semantic versioning <http://semver.org>`_.
 
+0.4.0 (05-05-2020)
+------------------
+
+From this version onwards, we are going to adhere to a more strict version
+numbering. We are also going to use bump2version to help us.
+
+* Major rewrite and rewrite of several flows to use standardized data.
+* Standardization flow.
+* PPG (cardiac) flow.
+* PZT (respiration) flow.
+* Behavior flow.
+* Typeform flow.
+* Surveys flow.
+* Changes on all queries for a new metadata organization of flow status.
+* Improved file handling.
+* Changed from setupptols to poetry for package management.
+* Added bump2version for version management.
+
+
 0.2.0 (unreleased)
 ------------------
 

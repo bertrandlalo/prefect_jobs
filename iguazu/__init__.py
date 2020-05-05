@@ -1,4 +1,5 @@
-__version__ = '0.3.0-dev-david-001'
+__version__ = '0.4.0'  # DO NOT CHANGE HERE. Use bump2version
+# Please read the docs/source/versioning.rst document on how to update the version number
 
 
 from . import utils  # Needed for a circular dependency resolution

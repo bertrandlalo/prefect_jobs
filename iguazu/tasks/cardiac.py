@@ -8,7 +8,7 @@ from dsu.pandas_helpers import estimate_rate, reorder_columns
 from iguazu.core.exceptions import PostconditionFailed, SoftPreconditionFailed
 from iguazu.core.tasks import Task
 from iguazu.functions.cardiac import detect_ssf_peaks, hrv_features, nn_interpolation, peak_to_nn, ssf
-from iguazu.functions.ppg_report import render_ppg_report
+# from iguazu.functions.ppg_report import render_ppg_report
 from iguazu.functions.specs import (
     check_feature_specification, check_signal_specification
 )
@@ -216,72 +216,72 @@ class ExtractHRVFeatures(Task):  # TODO: add standard preconditions
             check_feature_specification(dataframe)
 
 
-class PPGReport(Task):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        # self.auto_manage_input_dataframe('raw', '/nexus/signal/nexus_signal_raw')
-        # self.auto_manage_input_dataframe('clean', '/iguazu/signal/ppg/clean')
-        # self.auto_manage_input_dataframe('rr', '/iguazu/signal/ppg/RR')
-        # self.auto_manage_input_dataframe('rri', '/iguazu/signal/ppg/RRi')
-
-    def run(self, *,
-            original: FileAdapter,
-            raw: FileAdapter,
-            clean: FileAdapter,
-            rr: FileAdapter,
-            rri: FileAdapter) -> FileAdapter:
-
-        metadata = original.metadata
-
-        raw, raw_meta = self.get_dataframe(raw, '/nexus/signal/nexus_signal_raw')
-        clean, clean_meta = self.get_dataframe(clean, '/iguazu/signal/ppg/clean')
-        rr, rr_meta = self.get_dataframe(rr, '/iguazu/signal/ppg/RR')
-        rri, rri_meta = self.get_dataframe(rri, '/iguazu/signal/ppg/RRi')
-
-        try:
-            fs = int(estimate_rate(clean))
-        except:
-            self.logger.warning('Could not estimate sampling rate, assuming 1Hz')
-            fs = 1
-
-        raw_signal = clean_signal = pd.DataFrame()
-        if 'G' in raw:
-            raw_signal = raw[['G']]
-        if 'G_filtered' in clean:
-            clean_signal = clean[['G_filtered']]
-
-        html = render_ppg_report(raw_signal, clean_signal, rr, rri,
-                                 raw_meta, clean_meta, rr_meta, rri_meta,
-                                 fs=fs)
-
-        output = self.default_outputs()
-        with open(output.file, 'w', encoding='utf-8') as f:
-            f.write(html)
-
-        return output
-
-    def default_outputs(self, **kwargs):
-        original_kws = prefect.context.run_kwargs
-        clean = original_kws['raw']
-        output = clean.make_child(path='html_reports/ppg', extension='.html')
-        return output
-
-    def get_dataframe(self, file: FileAdapter, key: str) -> Tuple[pd.DataFrame, Mapping]:
-        metadata = file.metadata
-        journal = metadata.get(self.meta.metadata_journal_family, {})
-        status = journal.get('status', None)
-        if status != 'SUCCESS':
-            dataframe = pd.DataFrame()
-        else:
-            try:
-                with pd.HDFStore(str(file.file.resolve()), 'r') as store:
-                    obj = pd.read_hdf(store, key)
-                    assert isinstance(obj, pd.DataFrame)
-                    dataframe = obj
-            except:
-                self.logger.warning('Failed to read HDF5 key %s of %s',
-                                    key, file, exc_info=True)
-                dataframe = None
-
-        return dataframe, journal
+# class PPGReport(Task):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#
+#         # self.auto_manage_input_dataframe('raw', '/nexus/signal/nexus_signal_raw')
+#         # self.auto_manage_input_dataframe('clean', '/iguazu/signal/ppg/clean')
+#         # self.auto_manage_input_dataframe('rr', '/iguazu/signal/ppg/RR')
+#         # self.auto_manage_input_dataframe('rri', '/iguazu/signal/ppg/RRi')
+#
+#     def run(self, *,
+#             original: FileAdapter,
+#             raw: FileAdapter,
+#             clean: FileAdapter,
+#             rr: FileAdapter,
+#             rri: FileAdapter) -> FileAdapter:
+#
+#         metadata = original.metadata
+#
+#         raw, raw_meta = self.get_dataframe(raw, '/nexus/signal/nexus_signal_raw')
+#         clean, clean_meta = self.get_dataframe(clean, '/iguazu/signal/ppg/clean')
+#         rr, rr_meta = self.get_dataframe(rr, '/iguazu/signal/ppg/RR')
+#         rri, rri_meta = self.get_dataframe(rri, '/iguazu/signal/ppg/RRi')
+#
+#         try:
+#             fs = int(estimate_rate(clean))
+#         except:
+#             self.logger.warning('Could not estimate sampling rate, assuming 1Hz')
+#             fs = 1
+#
+#         raw_signal = clean_signal = pd.DataFrame()
+#         if 'G' in raw:
+#             raw_signal = raw[['G']]
+#         if 'G_filtered' in clean:
+#             clean_signal = clean[['G_filtered']]
+#
+#         html = render_ppg_report(raw_signal, clean_signal, rr, rri,
+#                                  raw_meta, clean_meta, rr_meta, rri_meta,
+#                                  fs=fs)
+#
+#         output = self.default_outputs()
+#         with open(output.file, 'w', encoding='utf-8') as f:
+#             f.write(html)
+#
+#         return output
+#
+#     def default_outputs(self, **kwargs):
+#         original_kws = prefect.context.run_kwargs
+#         clean = original_kws['raw']
+#         output = clean.make_child(path='html_reports/ppg', extension='.html')
+#         return output
+#
+#     def get_dataframe(self, file: FileAdapter, key: str) -> Tuple[pd.DataFrame, Mapping]:
+#         metadata = file.metadata
+#         journal = metadata.get(self.meta.metadata_journal_family, {})
+#         status = journal.get('status', None)
+#         if status != 'SUCCESS':
+#             dataframe = pd.DataFrame()
+#         else:
+#             try:
+#                 with pd.HDFStore(str(file.file.resolve()), 'r') as store:
+#                     obj = pd.read_hdf(store, key)
+#                     assert isinstance(obj, pd.DataFrame)
+#                     dataframe = obj
+#             except:
+#                 self.logger.warning('Failed to read HDF5 key %s of %s',
+#                                     key, file, exc_info=True)
+#                 dataframe = None
+#
+#         return dataframe, journal
