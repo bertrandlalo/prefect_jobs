@@ -5,7 +5,7 @@
 iguazu:
   # Use these as the default repository and tag
   repository: eu.gcr.io/quetzal-omind/iguazu/iguazu
-  tag: 0.3.0-dev-raph-009
+  tag: 0.3.0-dev-raph-034
   pullPolicy: Always
 
 
@@ -21,7 +21,7 @@ defaultJob:
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: QUETZAL_URL
-      value: "https://dev.omind.quetz.al/api/v1" # "https://quetzal.omind.me/api/v1"
+      value: "https://dev.quetzal.omind.me/api/v1" # "https://dev.omind.quetz.al/api/v1" # " "https://dev.quetzal.omind.me/api/v1""
     - name: QUETZAL_INSECURE
       value: "0"
     - name: IGUAZU_WORKSPACE
