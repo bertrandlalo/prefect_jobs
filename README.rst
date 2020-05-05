@@ -22,6 +22,13 @@ Installation
 For development
 ^^^^^^^^^^^^^^^
 
+Before you start, create a virtual environment and activate ti.
+Make sure you have the latest pip version!
+
+.. code-block:: bash
+
+   $ pip install --upgrade pip
+
 If you want to develop Iguazu, the recommended approach is to
 `install poetry <https://python-poetry.org/docs/#installation>`_, clone this
 repository and install it:
@@ -41,7 +48,14 @@ As a library
 ^^^^^^^^^^^^
 
 Installing Iguazu as a library only needs you to add the following line to
-your ``requirements.txt``:
+your ``pyproject.toml`` when you are using poetry:
+
+.. code-block:: toml
+
+   [tool.poetry.dependencies]
+   iguazu = { git = "https://github.com/OpenMindInnovation/iguazu.git" tag = "vX.Y.Z" }
+
+or, alternatively, to your ``requirements.txt``:
 
 .. code-block:: text
 
