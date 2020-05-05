@@ -21,7 +21,7 @@ defaultJob:
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: QUETZAL_URL
-      value: "https://dev.omind.quetz.al/api/v1" # "https://quetzal.omind.me/api/v1"
+      value: "https://dev.quetzal.omind.me/api/v1" # "https://dev.omind.quetz.al/api/v1" # " "https://dev.quetzal.omind.me/api/v1""
     - name: QUETZAL_INSECURE
       value: "0"
     - name: IGUAZU_WORKSPACE
@@ -305,6 +305,59 @@ jobs:
            "--data-source", "quetzal",
            "--workspace-name", "$(IGUAZU_WORKSPACE)",
     ]
+
+  ##############################################################################
+  # Surveys features
+  - name: surveys-features
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 2 * * *"       # In human: every day at exactly 2 am
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+      # General iguazu options
+           "--log-level", "DEBUG",
+      # Action
+           "flows", "run",
+      # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_surveys",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/surveys",
+      # Flow name
+           "features_surveys",
+      # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+      #"--limit", "100", "--shuffle",
+    ]
+  ##############################################################################
+  # Surveys summary
+  - name: surveys-summary
+    # imageRepository: ...      # Use to override the default on iguazu.repository
+    # imageTag: ...             # Use to override the default on iguazu.tag
+    # imagePullPolicy: ..       # Use to override the default on iguazu.pullPolicy
+    schedule: "0 14 * * *"      # In human: every day at exactly 2 pm
+    # suspend: false            # Put this on true to suspend this task
+    args: ["iguazu",
+      # General iguazu options
+           "--log-level", "DEBUG",
+      # Action
+           "flows", "run",
+      # Action options
+           "--executor-type", "dask",
+           "--executor-address", "dask-scheduler:8786",
+           "--allow-flow-failure",
+           "--temp-url", "quetzal://$(IGUAZU_WORKSPACE)/temp_surveys",
+           "--output-url", "quetzal://$(IGUAZU_WORKSPACE)/surveys",
+      # Flow name
+           "summarize_surveys",
+      # Flow options
+           "--data-source", "quetzal",
+           "--workspace-name", "$(IGUAZU_WORKSPACE)",
+    ]
+
 dask_scheduler:
   name: dask-scheduler
   image:
